@@ -49,18 +49,18 @@ self.assertEqual(Panel.objects.get(pk=record['id']).get_api_key(), 'test-key')
 
 ## 任务 2：资源读取及八类操作适配器
 
-- [ ] `test_operations.py` 先验证 8 个操作码、严格参数校验、跨面板网站 ID 重新解析、同版本已符合、SSL pending 不成功、伪静态失败恢复、软件队列关联、未知版本拒绝变更及禁止旧 UpdatePanel 预检。
+- [x] `test_operations.py` 先验证 9 个操作码、严格参数校验、跨面板网站 ID 重新解析、同版本已符合、SSL pending 不成功、伪静态失败恢复、软件队列关联、未知版本拒绝变更及禁止旧 UpdatePanel 预检。
 
 ```python
-result = operation.verify(client, frozen_target, remote_result)
+result = operation.reconcile(client, frozen_target, remote_result)
 self.assertNotEqual(result['state'], 'success')  # pending SSL order
 ```
 
-- [ ] 定义统一协议：`validate(params)` 返回净化参数；`preflight(client, params)` 返回 `{items, summary}`；每项有稳定目标、before 和执行计划；`execute(client, item)` 完成下发及读回，或返回可监控的 remote 元数据；`reconcile(client, item, remote)` 仅查询核实。结果仅含允许字段。
-- [ ] 操作码为 `panel_upgrade`、`site_add`、`site_basedir`、`site_rewrite`、`ssl_apply`、`ssl_renew`、`software_install`、`php_extension_install`、`software_uninstall`；SSL 两个子操作归一类，页面显示八类。
-- [ ] 实现 resources.py 查询网站、软件商店、PHP 分支/扩展、模板、SSL 及升级选项；适配 11.7.0/13.1.0 的已核对响应结构。内部软件标识取服务端列表后再校验，不允许任意脚本参数。
-- [ ] 分文件实现操作，以研究文档的官方源码为依据；软件异步队列与 task_list 分开，原始日志不透传。配置失败报告逐网站结果并恢复已有规则。证书采用 HTTP 文件验证、签发/续签、部署、读回完整流程。
-- [ ] 测试异常投递、配置不适用和前后状态，再提交 `feat: add versioned Baota operation adapters`。
+- [x] 定义统一协议：`validate(params)` 返回净化参数；`preflight(client, params)` 返回 `{items, summary}`；每项有稳定目标、before 和执行计划；`execute(client, item)` 完成下发及读回，或返回可监控的 remote 元数据；`reconcile(client, item, remote)` 仅查询核实。结果仅含允许字段。
+- [x] 操作码为 `panel_upgrade`、`site_add`、`site_basedir`、`site_rewrite`、`ssl_apply`、`ssl_renew`、`software_install`、`php_extension_install`、`software_uninstall`；SSL 两个子操作归一类，页面显示八类。
+- [x] 实现 resources.py 查询网站、软件商店、PHP 分支/扩展、模板、SSL 及升级选项；适配 11.7.0/13.1.0 的已核对响应结构。内部软件标识取服务端列表后再校验，不允许任意脚本参数。
+- [x] 分文件实现操作，以研究文档的官方源码为依据；软件异步队列与 task_list 分开，原始日志不透传。配置失败报告逐网站结果，核对面板自身回滚；不自动恢复或重复加载。证书采用 HTTP 文件验证、签发/续签、部署、读回完整流程。
+- [x] 测试异常投递、配置不适用和前后状态，再提交 `feat: add versioned Baota operation adapters`。
 
 ## 任务 3：持久任务、API 和 worker
 
