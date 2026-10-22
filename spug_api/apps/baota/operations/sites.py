@@ -226,23 +226,33 @@ class Rewrite(Operation):
         return clean
 
     @staticmethod
+    def expected_file(client, site, server):
+        if server == 'nginx':
+            return '/www/server/panel/vhost/rewrite/' + site['name'] + '.conf'
+        if server == 'apache':
+            run = client.request('/site', 'GetSiteRunPath', {'id': site['id']}).get('runPath')
+            if (not isinstance(run, str) or len(run) > 512 or not re.fullmatch(r'/[A-Za-z0-9_./-]*', run)
+                    or '..' in run.split('/')):
+                raise PanelAPIError('运行目录无效')
+            # The official resolver concatenates '/public' + '.htaccess', producing an
+            # inactive sibling file. Reject nested Apache roots until a dedicated adapter
+            # verifies DocumentRoot and AllowOverride; a matching digest is insufficient.
+            if run != '/':
+                raise PanelAPIError('Apache 子目录运行路径尚未完成生效配置适配')
+            return site['path'].rstrip('/') + '/.htaccess'
+        raise PanelAPIError('网站服务器类型尚未完成伪静态适配')
+
+    @staticmethod
     def resolve(client, site, server):
+        # Reject unsupported Apache roots BEFORE calling the official resolver, because
+        # that resolver would create the inactive public.htaccess file as a side effect.
+        expected = Rewrite.expected_file(client, site, server)
         # Official resolver may create a missing empty rewrite file; documented cache-like side effect.
         data = client.request('/site', 'GetRewriteLists', {'site_ids': json.dumps([site['id']]), 'site_type': 'PHP'})
         if not isinstance(data, dict): raise PanelAPIError('伪静态文件解析失败')
         matches = [v for v in data.get('site_rewrites', []) if isinstance(v, dict) and v.get('id') == site['id']
                    and v.get('name') == site['name']]
         if len(matches) != 1: raise PanelAPIError('伪静态文件归属不明')
-        if server == 'nginx':
-            expected = '/www/server/panel/vhost/rewrite/' + site['name'] + '.conf'
-        else:
-            run = client.request('/site', 'GetSiteRunPath', {'id': site['id']}).get('runPath')
-            if (not isinstance(run, str) or len(run) > 512 or not re.fullmatch(r'/[A-Za-z0-9_./-]*', run)
-                    or '..' in run.split('/')):
-                raise PanelAPIError('运行目录无效')
-            # Match the exact official resolver: its PHP path concatenates runPath and
-            # '.htaccess' directly (nested '/public' becomes '/public.htaccess').
-            expected = (site['path'] + run + '.htaccess').replace('//', '/')
         if matches[0].get('file') != expected:
             raise PanelAPIError('伪静态文件不在已验证的网站路径内')
         return expected, data.get('template_rewrites', [])
@@ -271,9 +281,11 @@ class Rewrite(Operation):
 
     def _dispatch(self, client, item, phase, remote):
         self.phase(phase)
-        self.guard(client, item, site=True)
+        site = self.guard(client, item, site=True)
         if r.webserver(client) != item['before']['webserver']:
             raise PanelAPIError('网站服务器类型已变化')
+        if self.expected_file(client, site, item['before']['webserver']) != item['plan']['file']:
+            raise PanelAPIError('伪静态文件或运行目录已变化')
         if digest(file_body(client, item['plan']['file'])) != item['before']['rewrite_digest']:
             raise PanelAPIError('伪静态内容已变化')
         response = client.request('/site', 'SetRewriteLists', {'sites': json.dumps([{
@@ -284,12 +296,15 @@ class Rewrite(Operation):
         return self.reconcile(client, item, {'phase': 'apply', 'rejected': rejected})
 
     def _reconcile(self, client, item, remote):
-        self.guard(client, item, site=True)
+        site = self.guard(client, item, site=True)
+        if (r.webserver(client) != item['before']['webserver'] or
+                self.expected_file(client, site, item['before']['webserver']) != item['plan']['file']):
+            raise PanelAPIError('伪静态生效文件或运行目录已变化')
         actual = digest(file_body(client, item['plan']['file']))
-        if actual == item['plan']['digest']:
-            return result('success', '伪静态规则已读回确认', {'digest': actual})
         if remote.get('rejected'):
             restored = actual == item['before']['rewrite_digest']
             return result('failed', 'Web 配置检查未通过，已核对面板回滚结果', {'rollback_verified': restored, 'digest': actual})
+        if actual == item['plan']['digest']:
+            return result('success', '伪静态规则已读回确认', {'digest': actual})
         return result('uncertain' if remote.get('ambiguous') else 'failed',
                       '伪静态内容未符合目标，不会自动重发或恢复', {'digest': actual}, remote)

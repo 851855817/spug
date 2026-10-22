@@ -207,6 +207,20 @@ class OperationTests(TestCase):
         self.assertEqual(len(self.mutations()), 1)
         self.assertNotIn('REMOTE_SECRET', json.dumps(result))
 
+    def test_rejected_rewrite_remains_failed_when_rollback_left_desired_text(self):
+        op, item = self.item('site_rewrite', {'sites': [1], 'mode': 'custom', 'webserver': 'nginx', 'rules': 'invalid;\n'})
+        original = self.client.request
+        def request(path, action=None, params=None, mutating=False, **kwargs):
+            if action == 'SetRewriteLists':
+                original(path, action, params, mutating, **kwargs)
+                return [{'id': 1, 'status': False, 'msg': 'invalid directive and backup restore failed'}]
+            return original(path, action, params, mutating, **kwargs)
+        self.client.request = request
+        result = op.execute(self.client, item)
+        self.assertEqual(result['state'], 'failed')
+        self.assertFalse(result['evidence']['rollback_verified'])
+        self.assertEqual(len(self.mutations()), 1)
+
     def test_addsite_has_no_implicit_ftp_database_and_verifies_domains(self):
         op, item = self.item('site_add', {'entries': [{'domains': ['new.example.com', 'www.new.example.com'],
             'path': '/www/wwwroot/new.example.com', 'php_version': '00'}]})
@@ -447,7 +461,7 @@ class OperationTests(TestCase):
         self.assertNotIn('reuse_index', item['plan'])
         self.assertNotEqual(op.execute(self.client, item)['state'], 'success')
 
-    def test_apache_nested_run_path_uses_exact_official_resolver_path(self):
+    def test_apache_nested_run_path_rejects_official_inactive_file(self):
         self.client.webserver = 'apache'
         path = '/www/wwwroot/example.com/public.htaccess'
         self.client.rules[path] = ''
@@ -459,8 +473,45 @@ class OperationTests(TestCase):
             return original(route, action, params, mutating, **kwargs)
         self.client.request = request
         op, item = self.item('site_rewrite', {'sites': [1], 'webserver': 'apache', 'mode': 'custom', 'rules': 'RewriteEngine On\n'})
+        self.assertEqual(item['state'], 'failed')
+        self.assertNotEqual(op.execute(self.client, item)['state'], 'success')
+        self.assertEqual(self.mutations(), [])
+
+    def test_apache_nested_rewrite_does_not_block_ssl_resources_or_create_inactive_file(self):
+        self.client.webserver = 'apache'
+        original = self.client.request
+        def request(route, action=None, params=None, mutating=False, **kwargs):
+            if action == 'GetSiteRunPath': return {'runPath': '/public'}
+            if action == 'GetRewriteLists':
+                self.fail('Nested Apache resolver must never be called: it creates an inactive file')
+            return original(route, action, params, mutating, **kwargs)
+        self.client.request = request
+        resources = importlib.import_module('apps.baota.resources')
+        options = resources.get_resource(self.client, 'site_options', site_id=1)['site_options']
+        self.assertEqual(options['domains'], [{'name': 'example.com', 'port': 80}])
+        self.assertEqual(options['ssl']['enabled'], False)
+        self.assertEqual(options['rewrite_templates'], [])
+        self.assertFalse(options['rewrite_available'])
+
+    def test_apache_run_path_drift_blocks_previously_ready_dispatch(self):
+        self.client.webserver = 'apache'
+        self.client.rules['/www/wwwroot/example.com/.htaccess'] = ''
+        original = self.client.request
+        run = '/'
+        def request(route, action=None, params=None, mutating=False, **kwargs):
+            if action == 'GetSiteRunPath': return {'runPath': run}
+            if action == 'GetRewriteLists':
+                return {'site_rewrites': [{'id': 1, 'name': 'example.com', 'file': '/www/wwwroot/example.com/.htaccess'}],
+                        'template_rewrites': []}
+            return original(route, action, params, mutating, **kwargs)
+        self.client.request = request
+        op, item = self.item('site_rewrite', {'sites': [1], 'webserver': 'apache', 'mode': 'custom', 'rules': 'RewriteEngine On\n'})
         self.assertEqual(item['state'], 'ready')
-        self.assertEqual(op.execute(self.client, item)['state'], 'success')
+        run = '/public'
+        self.assertEqual(op.execute(self.client, item)['state'], 'failed')
+        self.assertEqual(self.mutations(), [])
+        self.client.rules['/www/wwwroot/example.com/.htaccess'] = item['plan']['rules']
+        self.assertNotEqual(op.reconcile(self.client, item, {'phase': 'apply'})['state'], 'success')
 
     def test_malformed_resource_fields_cannot_be_stringified_into_preview(self):
         resources = importlib.import_module('apps.baota.resources')

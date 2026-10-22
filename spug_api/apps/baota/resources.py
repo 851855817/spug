@@ -224,9 +224,16 @@ def site_options(client, site_id):
     if site is None:
         raise ValueError('网站不属于当前面板')
     server = webserver(client)
-    options = {'id': site_id, 'domains': domains(client, site_id), 'rewrite_templates': [], 'webserver': server}
+    options = {'id': site_id, 'domains': domains(client, site_id), 'rewrite_templates': [],
+               'webserver': server, 'rewrite_available': False}
     if site['project_type'] == 'PHP' and server in ('nginx', 'apache'):
-        _, templates = Rewrite.resolve(client, site, server)
+        options['ssl'] = ssl_snapshot(client, site)
+        try:
+            _, templates = Rewrite.resolve(client, site, server)
+        except (PanelAPIError, ValueError):
+            options['rewrite_message'] = '该网站伪静态路径尚未完成适配或无法核实'
+            return options
+        options['rewrite_available'] = True
         for value in templates:
             if not isinstance(value, dict): continue
             try:
@@ -236,7 +243,6 @@ def site_options(client, site_id):
             expected = '/www/server/panel/rewrite/' + server + '/' + name + '.conf'
             if value.get('file') == expected:
                 options['rewrite_templates'].append(name)
-        options['ssl'] = ssl_snapshot(client, site)
     return options
 
 
@@ -247,7 +253,8 @@ def get_resource(client, kind, *, site_id=None, php_version=None):
     php_versions -> {compatibility,php_versions}; webserver -> {compatibility,webserver};
     php_extensions requires php_version -> {compatibility,php_extensions};
     site_options requires site_id -> {compatibility,site_options:{id,domains,
-      rewrite_templates:[NAMES ONLY],webserver,ssl:{enabled,certificate,index,auth_type,type}}};
+      rewrite_templates:[NAMES ONLY],rewrite_available,webserver,
+      ssl:{enabled,certificate,index,auth_type,type}}};
     upgrade_versions -> {compatibility,current_version,versions:[offered supported targets]}.
     No request can submit a file path, arbitrary action, or read another panel's site.
     The rewrite resolver may create a missing empty rule file, as documented by Baota.
