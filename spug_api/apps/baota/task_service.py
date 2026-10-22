@@ -34,6 +34,23 @@ def bounded(value, maximum=MAX_JSON_BYTES):
     return copy.deepcopy(value)
 
 
+def preflight_summary(children):
+    counts = {name: sum(child['state'] == name for child in children)
+              for name in ('ready', 'already', 'skipped', 'failed')}
+    return {**counts, 'total': len(children)}
+
+
+def check_preflight_size(targets):
+    # Count the stored child envelopes too, not only adapter items. Reserve the
+    # zero summary of unfinished targets so later failures cannot exceed the cap.
+    payload = [{'children': target.children, 'summary': target.summary or preflight_summary([])}
+               for target in targets]
+    try:
+        bounded(payload)
+    except ValueError:
+        raise ValueError('整个任务预检快照超过 1 MiB，请缩小批次') from None
+
+
 def permission(user, name):
     if not user.has_perms(['exec.panel.' + name]):
         raise PermissionError('权限拒绝')
@@ -182,6 +199,7 @@ def start(user, task_id, data):
         targets = list(task.targets.select_for_update().select_related('panel'))
         if sum(len(t.children) for t in targets) > MAX_CHILDREN:
             raise ValueError('单次最多处理 200 个子项')
+        check_preflight_size(targets)
         if sorted(codes) != required_acks(targets):
             raise ValueError('请明确确认全部冻结计划要求的确认项')
         for target in targets:

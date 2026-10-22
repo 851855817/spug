@@ -207,17 +207,23 @@ class PanelWorker:
             task, current = locked_target(target.pk)
             if current.state != 'preflighting':
                 return
-            existing_count = sum(len(v) for v in task.targets.exclude(pk=target.pk).values_list('children', flat=True))
+            # The task row lock serializes concurrent panel preflight completions.
+            existing = list(task.targets.exclude(pk=target.pk))
+            existing_count = sum(len(value.children) for value in existing)
             if existing_count + len(children) > s.MAX_CHILDREN:
                 children, state, message = [], 'failed', '整个任务最多 200 个子项，请缩小范围'
-            current.children, current.message = children, message
-            current.summary = {name: sum(c['state'] == name for c in children)
-                               for name in ('ready', 'already', 'skipped', 'failed')}
-            current.summary['total'] = len(children)
+            current.children, current.summary = children, s.preflight_summary(children)
             if task.cancel_requested:
                 for child in children:
                     if child['state'] == 'ready':
                         child['state'] = 'cancelled'
+            try:
+                s.check_preflight_size([*existing, current])
+            except ValueError as exc:
+                children, state, message = [], 'failed', str(exc)
+                current.children, current.summary = children, s.preflight_summary(children)
+            current.message = message
+            if task.cancel_requested:
                 state = 'cancelled'
             current.state = state
             current.save(update_fields=['children', 'summary', 'message', 'state', 'updated_at'])

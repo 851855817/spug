@@ -318,6 +318,141 @@ class PanelTaskTests(TransactionTestCase):
             with self.assertRaises(ValueError):
                 self.prepare(panel, **changes)
 
+    def large_rewrite_task(self):
+        from .test_operations import PanelFixture
+        from .worker import PanelWorker
+        service = importlib.import_module('apps.baota.task_service')
+        first = self.configured(name='first')
+        second = self.configured(name='second', group_id=models.PanelGroup.objects.first().pk)
+        protocols = {}
+        for panel in (first, second):
+            protocol = PanelFixture()
+            protocol.sites = [{**protocol.sites[0], 'id': index, 'name': str(index) + '.example.com',
+                               'path': '/www/wwwroot/' + str(index) + '.example.com'} for index in range(1, 11)]
+            protocol.rules = {'/www/server/panel/vhost/rewrite/' + site['name'] + '.conf': ''
+                              for site in protocol.sites}
+            protocol.file_bodies['/www/server/panel/rewrite/nginx/wordpress.conf'] = '#' * 60000
+            protocols[panel['id']] = protocol
+        class Client(FixtureClient):
+            def request(self, *args, **kwargs):
+                return protocols[self.panel.pk].request(*args, **kwargs)
+            def read_rewrite_template(self, *args, **kwargs):
+                return protocols[self.panel.pk].read_rewrite_template(*args, **kwargs)
+        task = service.prepare(self.admin, {'operation': 'site_rewrite',
+                               'panel_ids': [first['id'], second['id']],
+                               'params': {'all_sites': True, 'webserver': 'nginx',
+                                          'mode': 'template', 'template': 'wordpress'}})
+        return service, PanelWorker(client_factory=Client), task, protocols
+
+    def test_preflight_json_limit_is_shared_across_panels_and_preserves_earlier_snapshot(self):
+        service, worker, task, protocols = self.large_rewrite_task()
+        self.assertTrue(worker.run_once())
+        first, second = list(task.targets.all())
+        frozen = copy.deepcopy(first.children)
+        self.assertEqual(first.state, 'prepared')
+        self.assertEqual(len(frozen), 10)
+        self.assertLess(len(json.dumps(frozen, ensure_ascii=False).encode('utf-8')), service.MAX_JSON_BYTES)
+        self.assertGreater(2 * len(json.dumps(frozen, ensure_ascii=False).encode('utf-8')), service.MAX_JSON_BYTES)
+        self.assertTrue(worker.run_once())
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(second.state, 'failed')
+        self.assertIn('整个任务预检快照', second.message)
+        self.assertIn('缩小批次', second.message)
+        self.assertEqual(second.children, [])
+        self.assertEqual(first.children, frozen)
+        service.start(self.admin, task.pk, {'acknowledgements': []})
+        self.assertEqual(task.targets.get(pk=first.pk).state, 'queued')
+        self.assertFalse(models.PanelLock.objects.exists())
+        for protocol in protocols.values():
+            self.assertEqual([call for call in protocol.calls if call[3]], [])
+            self.assertEqual(protocol.file_writes, [])
+            self.assertEqual(protocol.directory_writes, [])
+
+    def test_start_rejects_legacy_aggregate_preflight_json_over_limit(self):
+        service, worker, task, _ = self.large_rewrite_task()
+        self.assertTrue(worker.run_once())
+        first, second = list(task.targets.all())
+        # Model a task prepared before the aggregate limit existed, without
+        # relying on the current worker to allow the invalid second snapshot.
+        second.children, second.summary, second.state = copy.deepcopy(first.children), first.summary, 'prepared'
+        second.save(update_fields=['children', 'summary', 'state'])
+        models.PanelTask.objects.filter(pk=task.pk).update(state='prepared')
+        self.assertGreater(sum(len(json.dumps(target.children, ensure_ascii=False).encode('utf-8'))
+                               for target in task.targets.all()), service.MAX_JSON_BYTES)
+        with self.assertRaisesRegex(ValueError, '整个任务预检快照.*缩小批次'):
+            service.start(self.admin, task.pk, {'acknowledgements': []})
+        task.refresh_from_db()
+        self.assertEqual(task.state, 'prepared')
+        self.assertEqual(list(task.targets.values_list('state', flat=True)), ['prepared', 'prepared'])
+        self.assertEqual([entry['action'] for entry in task.audit], ['prepare'])
+        self.assertFalse(models.PanelLock.objects.exists())
+
+    def test_preflight_json_limit_counts_frozen_child_envelopes_and_summary(self):
+        self.services()
+        self.op.count = 200
+        original = self.op.preflight
+        def preflight(client, params):
+            preview = original(client, params)
+            for item in preview['items']:
+                item['plan']['rules'] = ''
+            overhead = len(json.dumps(preview, ensure_ascii=False).encode('utf-8'))
+            padding = (self.service.MAX_JSON_BYTES - overhead) // len(preview['items'])
+            for item in preview['items']:
+                item['plan']['rules'] = '#' * padding
+            self.assertLessEqual(len(json.dumps(preview, ensure_ascii=False).encode('utf-8')),
+                                 self.service.MAX_JSON_BYTES)
+            return preview
+        self.op.preflight = preflight
+        task = self.prepare()
+        self.assertTrue(self.worker.run_once())
+        target = task.targets.get()
+        self.assertEqual(target.state, 'failed')
+        self.assertIn('整个任务预检快照', target.message)
+        self.assertEqual(target.children, [])
+        self.assertEqual(target.summary['total'], 0)
+
+    def test_preflight_child_limit_is_still_shared_across_panels(self):
+        self.services()
+        self.op.count = 101
+        first = self.configured(name='first')
+        second = self.configured(name='second', group_id=models.PanelGroup.objects.first().pk)
+        task = self.prepare(first, panel_ids=[first['id'], second['id']])
+        self.assertTrue(self.worker.run_once())
+        self.assertTrue(self.worker.run_once())
+        first_target, second_target = list(task.targets.all())
+        self.assertEqual(first_target.state, 'prepared')
+        self.assertEqual(len(first_target.children), 101)
+        self.assertEqual(second_target.state, 'failed')
+        self.assertIn('200', second_target.message)
+        self.assertEqual(second_target.children, [])
+
+    def test_preflight_json_budget_counts_final_cancelled_child_states(self):
+        self.services()
+        self.op.count = 200
+        panel = self.configured()
+        baseline = self.prepared(panel=panel).targets.get()
+        for child in baseline.children:
+            child['snapshot']['plan']['rules'] = ''
+        overhead = len(json.dumps([{'children': baseline.children, 'summary': baseline.summary}],
+                                  ensure_ascii=False).encode('utf-8'))
+        padding = (self.service.MAX_JSON_BYTES - overhead) // len(baseline.children)
+        task = self.prepare(panel=panel)
+        original = self.op.preflight
+        def preflight(client, params):
+            preview = original(client, params)
+            for item in preview['items']:
+                item['plan']['rules'] = '#' * padding
+            self.service.cancel(self.admin, task.pk)
+            return preview
+        self.op.preflight = preflight
+        self.assertTrue(self.worker.run_once())
+        target = task.targets.get()
+        self.assertEqual(target.state, 'cancelled')
+        stored = json.dumps([{'children': target.children, 'summary': target.summary}], ensure_ascii=False)
+        self.assertLessEqual(len(stored.encode('utf-8')), self.service.MAX_JSON_BYTES)
+        self.assertEqual(target.children, [])
+
     def test_unconfigured_panel_is_a_per_target_preflight_error(self):
         self.services()
         valid = self.configured()
