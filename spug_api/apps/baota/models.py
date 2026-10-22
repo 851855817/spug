@@ -23,18 +23,30 @@ class Panel(models.Model, ModelMixin):
     url = models.CharField(max_length=2048)
     username = models.CharField(max_length=100)
     password_ciphertext = models.TextField()
+    api_base_url = models.CharField(max_length=2048, blank=True, default='')
+    api_key_ciphertext = models.TextField(blank=True, default='')
+    tls_ca = models.TextField(blank=True, default='')
+    tls_fingerprint = models.CharField(max_length=64, blank=True, default='')
+    api_checked_at = models.CharField(max_length=20, blank=True, default='')
+    api_version = models.CharField(max_length=64, blank=True, default='')
+    api_config_revision = models.PositiveIntegerField(default=0)
     group = models.ForeignKey(PanelGroup, on_delete=models.PROTECT, related_name='panels')
     desc = models.CharField(max_length=500, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='+')
     created_at = models.CharField(max_length=20, default=human_datetime)
 
     def to_view(self):
-        data = self.to_dict(excludes=('password_ciphertext',))
+        data = self.to_dict(excludes=('password_ciphertext', 'api_key_ciphertext', 'tls_ca'))
         data['has_password'] = bool(self.password_ciphertext)
+        data['has_api_key'] = bool(self.api_key_ciphertext)
+        data['has_tls_ca'] = bool(self.tls_ca)
         return data
 
     def get_password(self):
         return decrypt_secret(self.password_ciphertext)
+
+    def get_api_key(self):
+        return decrypt_secret(self.api_key_ciphertext) if self.api_key_ciphertext else ''
 
     class Meta:
         db_table = 'baota_panels'

@@ -7,3 +7,4 @@ CHANNEL_LAYERS = {'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}
 ALLOWED_HOSTS = ['testserver', '127.0.0.1', 'localhost']
 INSTALLED_APPS = [*INSTALLED_APPS, 'apps.baota'] if 'apps.baota' not in INSTALLED_APPS else INSTALLED_APPS
 PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
+ROOT_URLCONF = 'spug.test_urls'

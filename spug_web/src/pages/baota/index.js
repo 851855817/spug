@@ -59,6 +59,12 @@ export default function BaotaIndex() {
     {title: '登录账户', dataIndex: 'username', width: 140, ellipsis: true},
     {title: '密码', dataIndex: 'has_password', width: 100,
       render: value => <Tag color={value ? 'green' : 'default'}>{value ? '已加密保存' : '未设置'}</Tag>},
+    {title: 'API 连接', key: 'api', width: 190, render: (_, panel) => <div>
+      <Tag color={panel.api_checked_at ? 'green' : panel.has_api_key && panel.api_base_url ? 'orange' : 'default'}>
+        {panel.api_checked_at ? `宝塔 ${panel.api_version}` : panel.has_api_key && panel.api_base_url ? '待验证' : '未配置'}
+      </Tag>
+      {panel.api_checked_at && <div><Typography.Text type="secondary">{panel.api_checked_at}</Typography.Text></div>}
+    </div>},
     {title: '所属分组', dataIndex: 'group_id', width: 130,
       render: id => groups.find(group => group.id === id)?.name || '—'},
     {title: '备注', dataIndex: 'desc', width: 150, ellipsis: true},
@@ -93,7 +99,7 @@ export default function BaotaIndex() {
             {ready && !groups.length && <Typography.Paragraph type="secondary">
               {hasPermission('baota.group.manage') ? '先点击左侧“＋”新建分组，再添加宝塔面板。' : '请联系管理员创建分组后再添加面板。'}
             </Typography.Paragraph>}
-            <Table rowKey="id" columns={columns} dataSource={rows} loading={loading} scroll={{x: 1420}}
+            <Table rowKey="id" columns={columns} dataSource={rows} loading={loading} scroll={{x: 1610}}
                    locale={{emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={search ? '没有匹配的面板' : '还没有宝塔面板'}/>}}
                    pagination={{current: page, pageSize, showSizeChanger: true, total: rows.length,
                      showTotal: total => `共 ${total} 个面板`, onChange: (value, size) => { setPage(value); setPageSize(size); }}}/>
@@ -102,7 +108,7 @@ export default function BaotaIndex() {
         </Col>
       </Row>
       {record && <PanelForm record={record} groups={groups} selectedGroup={selected} onCancel={() => setRecord(null)}
-                            onSaved={() => { setRecord(null); refresh(); }}/ >}
+                            onChecked={refresh} onSaved={() => { setRecord(null); refresh(); }}/ >}
     </AuthDiv>
   );
 }
