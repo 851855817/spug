@@ -74,6 +74,8 @@ self.assertTrue(PanelLock.objects.filter(panel=target.panel).exists())
 
 - [ ] models.py 添加 PanelTask、PanelTaskTarget、PanelLock；任务固定参数及目标快照，面板外键 PROTECT。目标 JSON 保存逐网站/扩展结果及远端关联，持久锁由事务与唯一约束保证。
 - [ ] task_service.py 提供 prepare、start、cancel、reconcile、resolve；读取目录及资源路由分别检查权限。普通用户只访问自有任务；manage 可处理全部任务。管理员解除待核实锁必须记录理由及核实结果。
+
+预检也交给专用 worker，在 prepare 时保存校验后的参数和去重面板清单并立即返回任务 ID，避免多台面板依次请求超过 HTTP 超时。页面轮询到固定预览后才开放 start；准备或预检完成本身均不授权下发。重启可以重做未完成的只读预检，但不能重发已保存变更意图的子项。
 - [ ] DB worker 默认 2 个线程，每线程单独连接；网络调用不占用数据库事务。领取排队面板时先抢持久锁，标记 dispatching 后才发送；进程恢复时该状态直接转待核实，查询结果后再释放锁。
 - [ ] runpanelworker 命令使用单进程锁防止重复启动；轮询数据库，关闭时停止领取，不能删除队列；超时不重复发送变更。
 - [ ] 测试通过、分两阶段审查后提交 `feat: persist and execute Baota panel tasks`。
