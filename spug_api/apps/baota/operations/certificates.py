@@ -9,6 +9,7 @@ import datetime
 import json
 import posixpath
 import re
+import shlex
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
@@ -48,7 +49,9 @@ def public_inventory(client):
     scanned = all_sites[:MAX_SSL_INVENTORY_SITES]
     records = []
     for site in scanned:
-        snapshot = ssl_snapshot(client, site)
+        # This inventory deliberately describes GetSSL's canonical copies, not
+        # configured deployment. Unselected Node/Java configs use other names.
+        snapshot = ssl_snapshot(client, site, verify_main=False)
         if snapshot['certificate']:
             records.append({'site_id': site['id'], 'site_name': site['name'], 'enabled': snapshot['enabled'],
                             'certificate': snapshot['certificate']})
@@ -96,7 +99,176 @@ def certificate_info(pem, require_valid=True):
         raise PanelAPIError('证书格式、域名或有效期不符合要求') from None
 
 
-def ssl_snapshot(client, site):
+def _nginx_directives(text):
+    """Small fail-closed main-file reader, not a replacement nginx parser.
+
+    Quoted delimiters/comments remain data; unquoted # starts a comment. Escapes
+    are kept verbatim so a path can never normalize into an allowed certificate.
+    Only the single, top-level server form generated for PHP sites is supported.
+    """
+    stack, words, word, directives, servers = [], [], '', [], 0
+    quote, comment, active, quoted = '', False, False, False
+    for character in text:
+        if comment:
+            if character == '\n': comment = False
+            continue
+        if quote:
+            if character == quote: quote = ''
+            else: word += character
+            continue
+        if quoted and not (character.isspace() or character in ';{}#'):
+            raise PanelAPIError('网站主配置引号边界无法核实')
+        if character in ('"', "'"):
+            if active: raise PanelAPIError('网站主配置引号边界无法核实')
+            quote = character
+            active, quoted = True, True
+            continue
+        if character == '#' and not active:
+            comment = True
+            continue
+        if character.isspace() or character in ';{}':
+            if active:
+                words.append(word)
+                word, active, quoted = '', False, False
+            if character == '{':
+                if not words: raise PanelAPIError('网站主配置语法无法核实')
+                section = words[0]
+                if section.startswith('ssl_'):
+                    raise PanelAPIError('网站 SSL 包含尚未适配的动态证书区块')
+                if not stack:
+                    if words != ['server']: raise PanelAPIError('仅支持单个标准网站 server 配置')
+                    servers += 1
+                stack.append(section)
+                words = []
+            elif character == '}':
+                if words or not stack: raise PanelAPIError('网站主配置语法无法核实')
+                stack.pop()
+            elif character == ';':
+                if not words: raise PanelAPIError('网站主配置语法无法核实')
+                directives.append((tuple(stack), words))
+                words = []
+        else:
+            word += character
+            active = True
+    if quote or active or words or stack or servers != 1:
+        raise PanelAPIError('仅支持单个完整的网站 server 配置')
+    return directives
+
+
+def _apache_directives(text):
+    stack, directives, hosts = [], [], 0
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith('#'): continue
+        if line.endswith('\\'):
+            raise PanelAPIError('Apache SSL 主配置不支持续行语法')
+        if line.startswith('<'):
+            if not line.endswith('>'): raise PanelAPIError('Apache 主配置语法无法核实')
+            content = line[1:-1]
+            if content.startswith('/'):
+                if not stack or content[1:].lower() != stack[-1][0]:
+                    raise PanelAPIError('Apache 主配置区块无法核实')
+                stack.pop()
+            else:
+                parts = shlex.split(content)
+                if not parts: raise PanelAPIError('Apache 主配置语法无法核实')
+                kind = parts[0].lower()
+                if kind == 'virtualhost':
+                    if '\\' in content or stack or not 2 <= len(parts) <= 3 or any(
+                            not re.fullmatch(r'(?:\*|\[::\]|[0-9.]+):[0-9]{1,5}', v) for v in parts[1:]):
+                        raise PanelAPIError('仅支持标准 Apache VirtualHost 配置')
+                    hosts += 1
+                stack.append((kind, hosts))
+            continue
+        parts = shlex.split(line)
+        if parts:
+            name = parts[0].lower()
+            # POSIX shlex would erase backslashes that Apache ap_getword_conf
+            # preserves. Never turn an unknown certificate/include/host path into
+            # an allowed one. Other directives may legitimately contain regexes.
+            if '\\' in line and (name.startswith('ssl') or name in (
+                    'include', 'includeoptional', 'servername', 'serveralias')):
+                raise PanelAPIError('Apache SSL 证书、引用或网站标识不支持反斜杠语法')
+            directives.append((tuple(stack), [name, *parts[1:]]))
+    if stack or not 1 <= hosts <= 2:
+        raise PanelAPIError('仅支持标准 HTTP 与单个 TLS VirtualHost 配置')
+    return directives
+
+
+def main_ssl_configuration(client, site, server):
+    """9.2 GetSSL is canonical-only: independently inspect fixed main config.
+
+    Standard includes are recognized, never traversed. Their presence explicitly
+    prevents complete configuration verification. Any other include, certificate
+    path, extra TLS block or unknown certificate provider fails before a mutation.
+    No config text, private key, include contents or arbitrary path is returned.
+    """
+    text = client.read_site_web_config(server, site['name'])
+    if not isinstance(text, str) or len(text.encode('utf-8')) > 256 * 1024 or '\x00' in text:
+        raise PanelAPIError('网站主配置内容无效')
+    base = '/www/server/panel/vhost/'
+    cert = base + 'cert/' + site['name'] + '/fullchain.pem'
+    key = base + 'cert/' + site['name'] + '/privkey.pem'
+    branch = r.php_branch(site.get('php_version'))
+    includes = {base + server + '/extension/' + site['name'] + '/*.conf'}
+    if server == 'nginx':
+        includes |= {base + 'nginx/well-known/' + site['name'] + '.conf',
+                     base + 'rewrite/' + site['name'] + '.conf', 'enable-php-' + branch + '.conf'}
+        directives = _nginx_directives(text)
+        certificate_name, key_name, include_names = 'ssl_certificate', 'ssl_certificate_key', ('include',)
+    elif server == 'apache':
+        directives = _apache_directives(text)
+        certificate_name, key_name, include_names = 'sslcertificatefile', 'sslcertificatekeyfile', ('include', 'includeoptional')
+    else:
+        raise PanelAPIError('网站 SSL 主配置服务器类型尚未适配')
+    certificates, keys, names, tls_hosts, host_names = [], [], set(), set(), {}
+    has_includes = False
+    for context, words in directives:
+        name, arguments = words[0], words[1:]
+        # OpenSSL configuration commands can replace Certificate/PrivateKey even
+        # when the visible canonical certificate directives remain unchanged.
+        # Reject the whole escape hatch rather than guessing each command's effect.
+        if name.lower() in ('sslopensslconfcmd', 'ssl_conf_command'):
+            raise PanelAPIError('网站 SSL 包含尚未适配的 OpenSSL 配置命令')
+        direct = (context == ('server',)) if server == 'nginx' else (
+            len(context) == 1 and context[0][0] == 'virtualhost')
+        if name in include_names:
+            if not direct or len(arguments) != 1 or arguments[0] not in includes:
+                raise PanelAPIError('网站 SSL 包含未适配的配置引用；只允许标准站点 include')
+            has_includes = True
+        if name.startswith('ssl_certificate') or name.startswith('sslcertificate'):
+            if name not in (certificate_name, key_name) or not direct or len(arguments) != 1:
+                raise PanelAPIError('网站 SSL 证书指令不唯一或尚未适配')
+            if arguments[0] != (cert if name == certificate_name else key):
+                raise PanelAPIError('网站 SSL 主配置未指向本站固定证书目录')
+            (certificates if name == certificate_name else keys).append(context)
+        if direct and name in ('server_name', 'servername', 'serveralias'):
+            names.update(arguments)
+            host_names.setdefault(context, set()).update(arguments)
+        if server == 'nginx' and name == 'listen' and 'ssl' in arguments:
+            if not direct: raise PanelAPIError('网站 SSL 监听配置无法核实')
+            tls_hosts.add(context)
+        if server == 'apache' and name == 'sslengine':
+            if not direct or arguments not in (['On'], ['on']):
+                raise PanelAPIError('Apache SSL 启用条件无法核实')
+            tls_hosts.add(context)
+    if (site['name'] not in names or len(certificates) > 1 or len(keys) > 1
+            or certificates != keys or len(tls_hosts) > 1
+            or (certificates and (set(certificates) != tls_hosts or
+                                 any(site['name'] not in host_names.get(host, set()) for host in certificates)))
+            or (not certificates and tls_hosts)):
+        raise PanelAPIError('网站 SSL 主配置身份、监听或证书路径无法唯一核实')
+    return {'digest': digest(text), 'enabled': bool(certificates),
+            'certificate_path': cert if certificates else '', 'includes_present': has_includes,
+            'included_configuration_verified': not has_includes}
+
+
+def ssl_snapshot(client, site, *, version=None, server=None, verify_main=True):
+    if verify_main:
+        version = version or r.system_info(client)['version']
+    configuration = None
+    if verify_main and version == '9.2.0':
+        configuration = main_ssl_configuration(client, site, server or r.webserver(client))
     data = client.request('/site', 'GetSSL', {'siteName': site['name']}, allow_status_false=True)
     if not isinstance(data, dict) or type(data.get('status')) is not bool:
         raise PanelAPIError('网站 SSL 状态格式无效')
@@ -105,9 +277,22 @@ def ssl_snapshot(client, site):
         certificate = certificate_info(data['csr'], require_valid=False)
     index = data.get('index', '')
     if index: index = order_index(index)
+    if configuration is not None:
+        if configuration['enabled'] != data['status']:
+            raise PanelAPIError('GetSSL 与网站主配置的 SSL 状态不一致')
+        if configuration['enabled']:
+            downloaded = certificate_info(client.read_site_public_certificate(site['name']), require_valid=False)
+            if not certificate or certificate != downloaded:
+                raise PanelAPIError('GetSSL 与网站固定公开证书摘要不一致')
+        # Detect a change during the separate GetSSL/public-file reads as well as
+        # the persisted preflight/dispatch comparison. This is not an atomic lock.
+        reread = client.read_site_web_config(server or r.webserver(client), site['name'])
+        if not isinstance(reread, str) or digest(reread) != configuration['digest']:
+            raise PanelAPIError('网站 SSL 主配置在公开证书读取期间变化')
     return {'enabled': data['status'], 'certificate': certificate, 'index': index,
             'auth_type': data.get('auth_type') if data.get('auth_type') in ('http', 'dns', 'tls') else '',
-            'type': data.get('type') if type(data.get('type')) is int else -1}
+            'type': data.get('type') if type(data.get('type')) is int else -1,
+            **({'main_configuration': configuration} if configuration is not None else {})}
 
 
 def orders(client):
@@ -174,9 +359,29 @@ class CertificateOperation(Operation):
     readback_failure_state = 'uncertain'
 
     @staticmethod
-    def deployment_evidence(cert):
-        return {'certificate': cert, 'selected_site_configuration_verified': True, 'live_tls_verified': False,
-                'panel_sync_outcome_verified': False, 'ssl_scope_policy': 'baota_acme_panel_sync_v1'}
+    def deployment_evidence(cert, snapshot):
+        configuration = snapshot.get('main_configuration')
+        return {'certificate': cert,
+                'selected_site_configuration_verified': (
+                    configuration['included_configuration_verified'] if configuration else True),
+                'live_tls_verified': False,
+                'panel_sync_outcome_verified': False, 'ssl_scope_policy': 'baota_acme_panel_sync_v1',
+                **({'selected_site_main_configuration_verified': True,
+                    'main_configuration_digest': configuration['digest'],
+                    'included_configuration_verified': configuration['included_configuration_verified']}
+                   if configuration else {})}
+
+    @staticmethod
+    def deployment_message(snapshot):
+        if snapshot.get('main_configuration'):
+            return '目标网站已签发证书与主配置固定路径的公开证书摘要一致；include 内容、实际 TLS 连接及其他同步位置未核验'
+        return '目标网站公开证书配置的域名、有效期及指纹已读回确认；实际 TLS 连接及其他同步位置未核验'
+
+    @staticmethod
+    def guard_main_configuration(item, snapshot):
+        before = item['before']['ssl'].get('main_configuration')
+        if before and snapshot.get('main_configuration', {}).get('digest') != before['digest']:
+            raise PanelAPIError('网站 SSL 主配置在预检后变化，请重新核实')
 
     def validate(self, params):
         strict(params, ('sites', 'all_sites', 'domains'))
@@ -212,7 +417,7 @@ class CertificateOperation(Operation):
             if not set(requested).issubset(available):
                 raise PanelAPIError('请求域名不属于当前网站')
             auth_to = run_path(client, site)
-            snapshot = ssl_snapshot(client, site)
+            snapshot = ssl_snapshot(client, site, version=info['version'], server=server)
             item['before'].update(ssl=snapshot, domains=bound, webserver=server,
                                   order_ids=[v['index'] for v in all_orders])
             plan = item['plan'] = {'domains': requested, 'auth_to': auth_to, 'renewal': self.renewal,
@@ -228,7 +433,10 @@ class CertificateOperation(Operation):
             if snapshot['enabled'] and current and set(requested).issubset(current['domains']):
                 expires = datetime.datetime.fromisoformat(current['expires_at'])
                 if expires > datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30):
-                    item.update(state='already', message='网站已部署覆盖目标域名且有效期超过 30 天的证书')
+                    item.update(state='already', message=(
+                        '网站主配置已指向覆盖目标域名且有效期超过 30 天的公开证书；include 与实际 TLS 未核验'
+                        if snapshot.get('main_configuration') else
+                        '网站已部署覆盖目标域名且有效期超过 30 天的证书'))
                     return
             if not self.renewal:
                 matching_orders = [v for v in all_orders if matches(v, plan)]
@@ -261,7 +469,8 @@ class CertificateOperation(Operation):
                 or plan.get('required_acknowledgements') != ['ssl_panel_sync']):
             raise PanelAPIError('缺少冻结的面板证书同步范围，请重新预检')
         site = self.guard_site(client, item)
-        current = ssl_snapshot(client, site)
+        current = ssl_snapshot(client, site, version=item['before']['panel_version'], server=item['before']['webserver'])
+        self.guard_main_configuration(item, current)
         if phase == 'apply':
             if current != item['before']['ssl']:
                 raise PanelAPIError('网站 SSL 配置在预检后变化')
@@ -296,8 +505,7 @@ class CertificateOperation(Operation):
             raise PanelAPIError('签发证书在部署前发生变化')
         if current != item['before']['ssl']:
             if current['enabled'] and current['certificate'].get('fingerprint') == cert['fingerprint']:
-                return result('success', '目标网站公开证书配置已读回确认；实际 TLS 连接及其他同步位置未核验',
-                              self.deployment_evidence(cert))
+                return result('success', self.deployment_message(current), self.deployment_evidence(cert, current))
             raise PanelAPIError('网站 SSL 配置在部署前发生变化')
         client.request('/acme', 'SetCertToSite', {'index': index, 'siteName': site['name']}, mutating=True)
         return self.reconcile(client, item, {'phase': 'deploy', 'index': index, 'certificate': cert})
@@ -332,10 +540,11 @@ class CertificateOperation(Operation):
         if self.renewal and (cert['fingerprint'] == previous.get('fingerprint') or
                 cert['expires_at'] <= previous.get('expires_at', '')):
             return result('remote', '仍读取到续签前的旧证书，等待新证书', remote=remote)
-        current = ssl_snapshot(client, site)
+        current = ssl_snapshot(client, site, version=item['before']['panel_version'], server=item['before']['webserver'])
+        if remote.get('phase') != 'deploy':
+            self.guard_main_configuration(item, current)
         if current['enabled'] and current['certificate'].get('fingerprint') == cert['fingerprint']:
-            return result('success', '目标网站公开证书配置的域名、有效期及指纹已读回确认；实际 TLS 连接及其他同步位置未核验',
-                          self.deployment_evidence(cert))
+            return result('success', self.deployment_message(current), self.deployment_evidence(cert, current))
         if remote.get('phase') == 'deploy':
             return result('uncertain' if remote.get('ambiguous') else 'remote',
                           '证书已签发，但网站尚未读回相同证书；不会自动再次部署',

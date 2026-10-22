@@ -4,6 +4,7 @@ export const OPERATION_LABELS = {
   panel_upgrade: '升级面板', site_add: '批量建站', site_basedir: '防跨站设置', site_rewrite: '伪静态设置',
   ssl_apply: '申请免费 SSL', ssl_renew: '续签免费 SSL', software_install: '安装软件',
   php_extension_install: '安装 PHP 扩展', software_uninstall: '卸载软件',
+  php_update: '更新 PHP（同分支）',
 };
 export const STATE_LABELS = {
   preflight_queued: '等待预检', preflighting: '预检中', prepared: '预检完成', ready: '待执行',
@@ -30,7 +31,7 @@ export function parseSiteRows(text) {
 export function panelBlocker(panel) {
   if (panel.api_configured === false) return 'API 尚未配置，请先在面板管理中配置 API 并测试连接';
   if (panel.api_checked === false) return 'API 尚未通过连接测试';
-  if (panel.api_checked === true && !['11.7.0', '13.1.0'].includes(panel.api_version)) return '面板版本未知或未适配，禁止变更；仅支持 11.7.0 / 13.1.0';
+  if (panel.api_checked === true && !['9.2.0', '11.7.0', '13.1.0'].includes(panel.api_version)) return '面板版本未知或未适配；已适配 9.2.0 / 11.7.0 / 13.1.0，请重新测试连接';
   return '';
 }
 
@@ -101,7 +102,12 @@ export function buildTaskRequest(operation, panels, values, rows = [], resources
         if (Object.keys(domains).length) params.domains = domains;
       }
     } else if (operation === 'panel_upgrade') {
-      params = {version: required(value.version, '升级目标版本')};
+      const mode = resources[panel.id]?.upgrade_mode;
+      if (!['legacy_stable', 'exact'].includes(mode)) throw new Error(`请先展开面板 ${panel.name} 并读取升级信息`);
+      params = mode === 'legacy_stable' ? {channel: required(value.channel, '官方升级通道')} : {version: required(value.version, '升级目标版本')};
+    } else if (operation === 'php_update') {
+      params = {php_version: required(value.php_version, '待更新的 PHP 分支'), m_version: required(value.m_version, 'PHP 主版本'),
+        min_version: required(value.min_version, 'PHP 预计补丁版本'), install_type: '0'};
     } else if (operation === 'software_install') {
       params = {name: required(value.name, '软件'), m_version: required(value.m_version, '主版本'),
         min_version: required(value.min_version, '子版本'), install_type: value.install_type || '0'};

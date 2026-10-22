@@ -90,7 +90,10 @@ class TaskOptionsView(TaskBaseView):
                               'groups': [g.to_view() for g in PanelGroup.objects.all()],
                               'operations': operation_descriptors(),
                               'limits': {'panels': s.MAX_PANELS, 'children': s.MAX_CHILDREN, 'parallel': 2},
-                              'acknowledgements': {'ssl_panel_sync': '宝塔会自动同步同域名证书至面板内其他符合条件的位置（包括未选网站、孤立副本和面板 TLS），并可能重载 Web 服务；续签还可能临时调整强制 HTTPS。冻结清单不完整。'}})
+                              'acknowledgements': {
+                                  'ssl_panel_sync': '宝塔会自动同步同域名证书至面板内其他符合条件的位置（包括未选网站、孤立副本和面板 TLS），并可能重载 Web 服务；续签还可能临时调整强制 HTTPS。冻结清单不完整。',
+                                  'legacy_panel_upgrade': '确认按宝塔官方稳定通道升级：9.2 接口由后台决定实际版本，无法锁定预检候选；升级期间面板会暂时断开，结果需重新连接核实。',
+                                  'php_update_restart': '确认在当前 PHP 分支内执行官方更新：补丁由在线官方脚本决定，预检目标是预计值；相关 PHP 服务可能重启，使用此分支的网站可能暂时中断，结果需核实。'}})
 
 
 class TaskResourcesView(TaskBaseView):

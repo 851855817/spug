@@ -7,7 +7,8 @@ from .validation import is_linux_system, positive_id
 
 
 # Official update-package protocol inspection; runtime evidence is recorded separately.
-SUPPORTED_VERSIONS = frozenset(('11.7.0', '13.1.0'))
+SUPPORTED_VERSIONS = frozenset(('9.2.0', '11.7.0', '13.1.0'))
+EXACT_UPGRADE_TARGETS = frozenset(('11.7.0', '13.1.0'))
 MAX_RESOURCES = 5000
 PAGE_SIZE = 100
 TOKEN = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.+-]{0,63}\Z')
@@ -160,8 +161,14 @@ def software_option(data):
     installed = data.get('version', '')
     if not isinstance(installed, str) or (installed and not TOKEN.fullmatch(installed)):
         raise PanelAPIError('软件实际版本格式无效')
-    return {'name': name, 'title': name, 'installed': data.get('setup') is True,
-            'installed_version': installed, 'versions': versions}
+    title = data.get('title')
+    if not isinstance(title, str) or not title.strip() or len(title) > 100 or any(ord(c) < 32 for c in title):
+        title = name
+    supported = type(data.get('type')) is int and data['type'] == 5 and type(data.get('price')) in (int, float) and data['price'] == 0
+    return {'name': name, 'title': title, 'installed': data.get('setup') is True,
+            'installed_version': installed, 'versions': versions,
+            'install_supported': supported,
+            'install_message': '' if supported else '该插件类型或授权尚未适配批量安装，请在宝塔软件商店处理'}
 
 
 def software_catalog(client):
@@ -231,8 +238,13 @@ def get_resources(client, php_version=None, site_id=None):
 def get_upgrade_resources(client):
     from .operations.upgrade import UpgradePanel, version_tuple
     info = system_info(client)
-    return {'current_version': info['version'], 'versions': sorted(
-        (v for v in UpgradePanel.offered(client) if v in SUPPORTED_VERSIONS
+    if info['version'] == '9.2.0':
+        candidate = UpgradePanel.legacy_candidate(client)
+        return {'current_version': info['version'], 'upgrade_mode': 'legacy_stable',
+                'versions': [], 'checked_version': candidate['checked_version'],
+                'candidate_update_time': candidate['update_time'], 'notice': UpgradePanel.LEGACY_NOTICE}
+    return {'current_version': info['version'], 'upgrade_mode': 'exact', 'versions': sorted(
+        (v for v in UpgradePanel.offered(client) if v in EXACT_UPGRADE_TARGETS
          and version_tuple(v) > version_tuple(info['version'])), key=version_tuple)}
 
 
@@ -281,12 +293,15 @@ def get_resource(client, kind, *, site_id=None, php_version=None):
     Rewrite discovery uses only singular GetRewriteList and readonly get_file_hash;
     missing files remain missing and are reported as unavailable.
     """
-    kinds = ('sites', 'software', 'php_versions', 'webserver', 'php_extensions', 'site_options', 'upgrade_versions')
+    kinds = ('sites', 'software', 'php_versions', 'webserver', 'php_extensions', 'site_options', 'upgrade_versions', 'php_updates')
     if kind not in kinds or (site_id is not None) != (kind == 'site_options') or (php_version is not None) != (kind == 'php_extensions'):
         raise ValueError('资源类型或选择参数无效')
     info = system_info(client)
     if kind == 'upgrade_versions':
         return {'compatibility': info, **get_upgrade_resources(client)}
+    if kind == 'php_updates':
+        from .operations.php_update import update_options
+        return {'compatibility': info, **update_options(client)}
     readers = {'sites': lambda: sites(client), 'software': lambda: software_catalog(client),
                'php_versions': lambda: php_versions(client), 'webserver': lambda: webserver(client),
                'php_extensions': lambda: extension_options(client, php_version),

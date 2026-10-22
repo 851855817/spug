@@ -144,7 +144,12 @@ class PanelFixture:
             self.software[p['sName']]['version'] = ''
             return {'status': True}
         if action == 'GetPHPConfig': return {'libs': copy.deepcopy(self.libs), 'ini': 'SECRET'}
-        if action == 'php_info': return {'modules': self.modules, 'phpinfo': {'modules': ' '.join(self.modules)}, 'ini': 'SECRET'}
+        if action == 'php_info':
+            branch = p['php_version']
+            return {'modules': self.modules, 'phpinfo': {'modules': ' '.join(self.modules),
+                'php_version': branch[0] + '.' + branch[1] + '.33',
+                'php_bin': '/www/server/php/' + branch + '/bin/php',
+                'php_ini': '/www/server/php/' + branch + '/etc/php.ini'}, 'ini': 'SECRET'}
         if action == 'upgrade_panel':
             if 'force' in p: return {'status': True, 'msg': 'started'}
             return {'local': {'version': self.info['version']}, 'cloud': {
@@ -175,7 +180,7 @@ def pem(domains=('example.com',), days=90):
 class OperationTests(TestCase):
     def setUp(self):
         self.api = adapters()
-        if self.api is None and self._testMethodName != 'test_registry_has_nine_codes_eight_categories':
+        if self.api is None and self._testMethodName != 'test_registry_has_ten_codes_nine_categories':
             self.skipTest('Adapters not implemented yet')
         self.client = PanelFixture()
 
@@ -186,10 +191,10 @@ class OperationTests(TestCase):
 
     def mutations(self): return [c for c in self.client.calls if c[3]]
 
-    def test_registry_has_nine_codes_eight_categories(self):
+    def test_registry_has_ten_codes_nine_categories(self):
         self.assertIsNotNone(self.api, 'Controlled operation adapters must exist')
-        self.assertEqual(len(self.api.OPERATIONS), 9)
-        self.assertEqual(len({v.category for v in self.api.OPERATIONS.values()}), 8)
+        self.assertEqual(len(self.api.OPERATIONS), 10)
+        self.assertEqual(len({v.category for v in self.api.OPERATIONS.values()}), 9)
         with self.assertRaises(ValueError): self.api.get_operation('shell')
 
     def test_validation_rejects_unknown_fields_and_shell_tokens(self):

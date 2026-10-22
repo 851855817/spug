@@ -45,6 +45,16 @@ class StopAwareClient:
             raise WorkerStopping()
         return self.client.read_issued_certificate(*args, **kwargs)
 
+    def read_site_web_config(self, *args, **kwargs):
+        if self.stop_event.is_set():
+            raise WorkerStopping()
+        return self.client.read_site_web_config(*args, **kwargs)
+
+    def read_site_public_certificate(self, *args, **kwargs):
+        if self.stop_event.is_set():
+            raise WorkerStopping()
+        return self.client.read_site_public_certificate(*args, **kwargs)
+
     def __getattr__(self, name):
         return getattr(self.client, name)
 

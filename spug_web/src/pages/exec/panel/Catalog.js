@@ -14,7 +14,7 @@ export default function Catalog() {
     return () => {valid = false;};
   }, [query]);
   return <div>
-    <Alert type="info" showIcon message={`官方接口目录 · ${data.catalog_total} 条 · 只读参考`} description="目录收录不代表已接入执行。可执行范围由新建任务中的八类操作及各面板预检确定。"/>
+    <Alert type="info" showIcon message={`官方接口目录 · ${data.catalog_total} 条 · 只读参考`} description="目录收录不代表已接入执行。可执行范围由新建任务中的操作及各面板预检确定。"/>
     <Space wrap style={{margin: '16px 0'}}>
       <Input.Search allowClear placeholder="搜索接口、说明、路径、来源" maxLength={100} onSearch={q => setQuery({...query, q, page: 1})} style={{width: 320}}/>
       <Select allowClear placeholder="分类筛选" style={{width: 200}} value={query.category} options={data.categories.map(value => ({value, label: value}))}

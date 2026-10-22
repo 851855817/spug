@@ -128,6 +128,7 @@ def requirements(client, data, params):
     # This preserves every server restriction and never uses force or an id to bypass checks.
     free = type(data.get('price')) in (int, float) and data['price'] == 0 and data.get('type') not in (8, 12, '8', '12')
     if not free: blockers.append('license')
+    if type(data.get('type')) is not int or data['type'] != 5: blockers.append('protocol')
     return {**limits, 'missing_dependencies': missing, 'mutex_conflicts': sorted(set(conflicts)),
             'license': 'free_catalog' if free else 'requires_verified_entitlement'}, blockers
 
@@ -273,9 +274,16 @@ class UninstallSoftware(Operation):
 
 def loaded_modules(client, branch):
     data = client.request('/ajax', 'php_info', {'php_version': branch})
+    info = data.get('phpinfo') if isinstance(data, dict) else None
+    version = info.get('php_version') if isinstance(info, dict) else None
+    if (not isinstance(info, dict) or not isinstance(version, str) or
+            not re.fullmatch(r'[5-9]\.[0-9]\.[0-9]{1,4}', version) or
+            ''.join(version.split('.')[:2]) != branch or
+            info.get('php_bin') != '/www/server/php/' + branch + '/bin/php' or
+            info.get('php_ini') != '/www/server/php/' + branch + '/etc/php.ini'):
+        raise PanelAPIError('PHP CLI 二进制、配置文件或实际版本与目标分支不一致')
     modules = data.get('modules') if isinstance(data, dict) else None
     if not isinstance(modules, list):
-        info = data.get('phpinfo', {}) if isinstance(data, dict) else {}
         modules = info.get('modules', '').split() if isinstance(info, dict) and isinstance(info.get('modules'), str) else None
     if not isinstance(modules, list) or len(modules) > 500 or any(not isinstance(v, str) or len(v) > 100 for v in modules):
         raise PanelAPIError('PHP 模块实际加载状态无法读取')
@@ -357,9 +365,10 @@ class InstallPHPExtension(Operation):
     def _reconcile(self, client, item, remote):
         plan = item['plan']
         snap = extension_snapshot(client, plan['php_version'], plan['name'])
-        evidence = {'configured': snap['configured'], 'loaded': snap['loaded']}
+        evidence = {'configured': snap['configured'], 'loaded': snap['loaded'],
+                    'cli_modules_verified': snap['loaded'], 'fpm_runtime_verified': False}
         if snap['configured'] and snap['loaded']:
-            return result('success', '扩展配置及目标 PHP 分支实际加载均已确认', evidence)
+            return result('success', '扩展配置和目标 PHP CLI 加载已确认；FPM 运行状态未核实', evidence)
         remote, state = queue_state(client, item, remote, plan['name'], {plan['php_version']})
         if state == 'terminal':
             return result('failed', '安装队列已结束，但扩展尚未实际加载', evidence, remote)

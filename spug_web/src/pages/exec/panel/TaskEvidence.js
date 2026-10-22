@@ -31,6 +31,14 @@ const LABELS = {
   installed: '已安装', extension: '扩展', configured: '已配置', system: '系统', panel_version: '面板版本',
   task_ids: '面板安装队列 ID', remote: '远端任务记录', required_acknowledgements: '必须确认的影响项',
   auth_type: '证书验证方式', auth_to: '证书验证目标', reuse_index: '可复用订单',
+  channel: '更新通道', checked_version: '预检候选版本', update_time: '候选发布时间', target_version: '预计目标版本',
+  target_version_frozen: '实际目标版本已锁定', patch_pinned: '补丁已锁定', update_policy: '更新策略',
+  php_service_may_restart: 'PHP 服务可能重启', website_refs: '使用此 PHP 分支的网站', impact: '影响范围',
+  runtime_scope: '运行状态核验范围', cli_modules_verified: '目标 PHP CLI 模块已核实', fpm_runtime_verified: 'FPM 运行状态已核实',
+  selected_site_main_configuration_verified: '所选网站主配置已核实', selected_site_configuration_verified: '所选网站完整配置已核实',
+  included_configuration_verified: '引用配置已核实', live_tls_verified: '线上 TLS 已核实',
+  main_configuration: '网站主配置', certificate_path: '公开证书路径', includes_present: '存在引用配置',
+  version_supported: '读回版本已适配', notice: '执行说明', install_supported: '支持批量安装', install_message: '安装限制',
 };
 
 const VALUES = {
@@ -42,6 +50,10 @@ const VALUES = {
   apply: '初次下发', deploy: '部署到所选网站', issue: '证书签发', issue_and_sync: '签发 / 续签并自动同步',
   http: 'HTTP 验证', dns: 'DNS 验证', custom: '自定义规则', template: '面板模板', clear: '清空规则',
   ssl_panel_sync: '确认面板范围内证书同步影响', official_source_reviewed: '官方协议已适配',
+  legacy_stable: '宝塔 9.2 官方稳定通道', stable: '官方稳定通道', legacy_panel_upgrade: '确认旧面板稳定通道升级影响',
+  baota_legacy_stable_v1: '后台按宝塔官方稳定通道决定版本（不锁定候选）',
+  php_update_restart: '确认 PHP 分支更新和网站短暂中断影响', official_same_branch: '官方同分支更新',
+  branch_cli_binary: '目标分支的 PHP CLI 二进制（未证明 FPM 运行状态）',
   success: '成功', failed: '失败', uncertain: '结果不确定', remote: '远端处理中',
 };
 

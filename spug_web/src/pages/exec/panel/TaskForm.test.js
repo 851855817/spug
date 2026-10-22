@@ -37,11 +37,11 @@ test('preflight submits separate panel parameters; preparing never sends start o
   expect(prepared).toHaveBeenCalledWith(9);
 });
 
-test('the operation picker shows eight categories and SSL has an explicit apply or renew choice', async () => {
-  const codes = ['panel_upgrade', 'site_add', 'site_basedir', 'site_rewrite', 'ssl_apply', 'ssl_renew', 'software_install', 'php_extension_install', 'software_uninstall'];
+test('the operation picker includes PHP updates and SSL has an explicit apply or renew choice', async () => {
+  const codes = ['panel_upgrade', 'site_add', 'site_basedir', 'site_rewrite', 'ssl_apply', 'ssl_renew', 'software_install', 'php_extension_install', 'software_uninstall', 'php_update'];
   await act(async () => {ReactDOM.render(<TaskForm options={{panels: [], groups: [], operations: codes.map(code => ({code, label: code}))}}/>, container);});
   const operation = container.querySelectorAll('select')[1];
-  expect(operation.options).toHaveLength(9); // Eight categories plus the empty choice.
+  expect(operation.options).toHaveLength(10); // Nine categories plus the empty choice.
   act(() => {operation.value = 'ssl'; Simulate.change(operation);});
   const ssl = container.querySelectorAll('select')[2];
   expect([...ssl.options].map(item => item.value)).toEqual(['', 'ssl_apply', 'ssl_renew']);

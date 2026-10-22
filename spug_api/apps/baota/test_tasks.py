@@ -228,6 +228,40 @@ class PanelTaskTests(TransactionTestCase):
             self.start(task)
         self.assertEqual(self.op.sent, [])
 
+    def test_real_php_and_legacy_upgrade_previews_require_their_own_start_ack(self):
+        from .test_php_update import PHPUpdateFixture
+        from .test_upgrade92 import LegacyUpgradeFixture
+        from .operations.php_update import UpdatePHP
+        from .operations.upgrade import UpgradePanel
+        self.services()
+        cases = [(UpdatePHP(), PHPUpdateFixture(),
+                  {'php_version': '74', 'm_version': '7.4', 'min_version': '33'}, 'php_update_restart'),
+                 (UpgradePanel(), LegacyUpgradeFixture(), {'channel': 'stable'}, 'legacy_panel_upgrade')]
+        group_id = self.group('ack integration')['id']
+        for index, (operation, client, params, code) in enumerate(cases):
+            with self.subTest(code=code):
+                panel = self.configured(name='ack panel ' + str(index), group_id=group_id)
+                task = self.prepare(panel=panel)
+                snapshot = operation.preflight(client, params)['items'][0]
+                self.assertEqual(snapshot['state'], 'ready')
+                target = task.targets.get()
+                target.children = [{'snapshot': snapshot, 'state': 'ready', 'intents': [], 'result': {}}]
+                target.state = 'prepared'
+                target.save(update_fields=['children', 'state'])
+                task.state = 'prepared'
+                task.save(update_fields=['state'])
+                for codes in ([], ['ssl_panel_sync'], [code, 'ssl_panel_sync']):
+                    with self.assertRaisesRegex(ValueError, '确认'):
+                        self.start(task, codes)
+                task.refresh_from_db()
+                self.assertEqual(task.state, 'prepared')
+                self.start(task, [code])
+                task.refresh_from_db()
+                self.assertEqual(task.acknowledgements, [code])
+                self.assertEqual(task.targets.get().state, 'queued')
+                self.assertEqual([call for call in client.calls if call[3]], [])
+                self.assertEqual(self.op.sent, [])
+
     def test_revision_change_blocks_each_later_dispatch(self):
         self.services()
         task = self.prepared()

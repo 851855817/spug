@@ -38,14 +38,14 @@ export default function TaskForm({options, onPrepared}) {
     finally {setBusy(false);}
   }
   return <div>
-    <Alert showIcon type="info" message="选面板 → 填写各面板参数 → 生成预检 → 核对冻结目标和影响范围 → 显式开始" description="最多 50 个面板、200 个子项目。预检不会授权变更。仅适配精确版本 11.7.0 / 13.1.0；其它版本禁止变更。"/>
+    <Alert showIcon type="info" message="选面板 → 填写各面板参数 → 生成预检 → 核对目标和影响范围 → 确认开始" description="支持宝塔 Linux 9.2.0 / 11.7.0 / 13.1.0，最多 50 个面板、200 个子项目。安装软件、更新 PHP、升级面板分别选择。查询可能触发宝塔内部缓存或初始化；只有确认开始后才下发所选变更。"/>
     <Form layout="vertical" style={{marginTop: 16}}>
       <Form.Item label="选择面板"><Select mode="multiple" showSearch optionFilterProp="label" placeholder="选择面板" style={{width: '100%'}} value={panelIds}
         onChange={setPanelIds} options={(options.panels || []).map(panel => ({value: panel.id, label: `${panel.name} · ${panel.group_name || '未分组'} · ${panel.api_version || '版本未知'}`}))}/></Form.Item>
       <Form.Item label="或选择分组（递归包括所有子组，与面板选择去重）"><TreeSelect multiple treeCheckable treeData={buildGroupTree(options.groups || [])}
         value={groupIds} onChange={setGroupIds} style={{width: '100%'}} placeholder="选择分组"/></Form.Item>
       <Typography.Paragraph>本次固定目标：{panels.length} 个面板 {panels.map(panel => panel.name).join('、')}</Typography.Paragraph>
-      <Form.Item label="选择操作（八类）"><Select placeholder="选择操作" value={category} onChange={code => {
+      <Form.Item label="选择操作"><Select placeholder="选择操作" value={category} onChange={code => {
         setCategory(code); changeOperation(code === 'ssl' ? 'ssl_apply' : code);
       }} options={categories}/></Form.Item>
       {category === 'ssl' && <Form.Item label="证书动作"><Select value={operation} onChange={changeOperation}

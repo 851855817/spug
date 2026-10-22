@@ -298,6 +298,34 @@ class PanelClient:
         filename = '/www/server/panel/vhost/letsencrypt/' + domain + '/fullchain.pem'
         return self._read_fixed_public_file(filename, 'fullchain.pem', 128 * 1024)
 
+    @staticmethod
+    def _ssl_site_name(name):
+        # Internal server-derived site selector, never an arbitrary filesystem path.
+        if (not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,252}', name)
+                or '..' in name or name.endswith('.')):
+            raise PanelAPIError('网站 SSL 配置标识无效')
+        return name
+
+    def read_site_web_config(self, server, site_name):
+        """Read the selected PHP site's fixed main config; missing files stay missing.
+
+        /download does not construct panelSite or use GetFileBody (which can create
+        missing rewrite files). No project-prefix fallback, glob or include expansion.
+        """
+        if self._closed or server not in ('nginx', 'apache'):
+            raise PanelAPIError('网站 SSL 配置服务器类型无效')
+        name = self._ssl_site_name(site_name)
+        filename = '/www/server/panel/vhost/' + server + '/' + name + '.conf'
+        return self._read_fixed_public_file(filename, name + '.conf', 256 * 1024)
+
+    def read_site_public_certificate(self, site_name):
+        """Only canonical public fullchain; never resolve caller/config-provided paths."""
+        if self._closed:
+            raise PanelAPIError('面板连接已关闭')
+        name = self._ssl_site_name(site_name)
+        filename = '/www/server/panel/vhost/cert/' + name + '/fullchain.pem'
+        return self._read_fixed_public_file(filename, 'fullchain.pem', 128 * 1024)
+
     def _read_fixed_public_file(self, filename, expected, maximum):
         # Internal only: callers above construct the entire path from fixed scopes.
         request_time = str(int(time.time()))

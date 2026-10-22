@@ -26,7 +26,7 @@ trusted server snapshots; never reconstruct items/remote directly from browser J
 
 Snapshot hashes detect drift; they are not backups. Never auto-restore configuration.
 Only allowlisted primitives are stored; transport JSON, PEM, keys and logs stay local.
-The fixed two-version compatibility matrix is based on official-source inspection, not
+The fixed version compatibility matrix is based on official-source inspection, not
 a claim of testing every action/distro. See docs/research for runtime evidence.
 """
 import hashlib

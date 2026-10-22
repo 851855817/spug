@@ -18,7 +18,7 @@ MAX_CHILDREN = 200
 MAX_JSON_BYTES = 1024 * 1024
 TERMINAL = frozenset(('success', 'failed', 'already', 'skipped', 'cancelled'))
 ACTIVE = frozenset(('preflighting', 'running', 'dispatching', 'reconciling'))
-ACK_CODES = frozenset(('ssl_panel_sync',))
+ACK_CODES = frozenset(('ssl_panel_sync', 'legacy_panel_upgrade', 'php_update_restart'))
 
 
 def now():
@@ -92,7 +92,7 @@ def preflight_prerequisite_error(panel):
     except ValueError as exc:
         return str(exc)
     if panel.api_version not in SUPPORTED_VERSIONS:
-        return '面板版本未知或尚未经过协议适配，禁止变更；仅支持 11.7.0 / 13.1.0'
+        return '面板版本未知或尚未经过协议适配；已适配 9.2.0 / 11.7.0 / 13.1.0，请重新测试连接'
     return ''
 
 
