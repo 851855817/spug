@@ -21,6 +21,7 @@ import {
 import HomeIndex from './pages/home';
 import DashboardIndex from './pages/dashboard';
 import HostIndex from './pages/host';
+import BaotaIndex from './pages/baota';
 import ExecTask from './pages/exec/task';
 import ExecTemplate from './pages/exec/template';
 import ExecTransfer from './pages/exec/transfer';
@@ -56,6 +57,7 @@ export default [
     component: DashboardIndex
   },
   {icon: <CloudServerOutlined/>, title: t('主机管理'), auth: 'host.host.view', path: '/host', component: HostIndex},
+  {icon: <CloudServerOutlined/>, title: t('宝塔面板管理'), auth: 'baota.panel.view', path: '/baota', component: BaotaIndex},
   {
     icon: <CodeOutlined/>, title: t('批量执行'), auth: 'exec.task.do|exec.template.view', child: [
       {title: t('执行任务'), auth: 'exec.task.do', path: '/exec/task', component: ExecTask},

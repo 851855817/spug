@@ -1,1 +1,17 @@
 /.idea/
+
+# Local dependencies, build output and runtime secrets/data
+**/node_modules/
+**/build/
+**/coverage/
+**/__pycache__/
+*.py[cod]
+.env
+.env.*
+*.key
+*.pem
+spug_api/spug/overrides.py
+spug_api/db.sqlite3
+spug_api/logs/
+spug_api/storage/
+spug_api/repos/

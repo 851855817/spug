@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'daphne',  # channels 4 起 runserver 的 WebSocket 支持由 daphne 提供，需放在最前
     'apps.account',
     'apps.host',
+    'apps.baota',
     'apps.setting',
     'apps.exec',
     'apps.schedule',
@@ -140,6 +141,7 @@ AUTHENTICATION_EXCLUDES = (
 )
 
 SPUG_VERSION = 'v4.1.1'
+BAOTA_KEY_FILE = os.environ.get('BAOTA_KEY_FILE', '/data/baota.key')
 
 # override default config
 try:
