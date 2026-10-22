@@ -35,6 +35,16 @@ class StopAwareClient:
             raise WorkerStopping()
         return self.client.request(*args, **kwargs)
 
+    def read_rewrite_template(self, *args, **kwargs):
+        if self.stop_event.is_set():
+            raise WorkerStopping()
+        return self.client.read_rewrite_template(*args, **kwargs)
+
+    def read_issued_certificate(self, *args, **kwargs):
+        if self.stop_event.is_set():
+            raise WorkerStopping()
+        return self.client.read_issued_certificate(*args, **kwargs)
+
     def __getattr__(self, name):
         return getattr(self.client, name)
 

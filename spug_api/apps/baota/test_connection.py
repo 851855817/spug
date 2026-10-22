@@ -53,6 +53,8 @@ class LocalPanel:
                     else:
                         self.send_response(owner.status)
                         self.send_header('Content-Length', str(len(payload)))
+                        for key, value in owner.headers.items():
+                            self.send_header(key, value)
                         self.end_headers()
                         wire = payload
                     try:
@@ -79,6 +81,8 @@ class LocalPanel:
 
             def log_message(self, *args):
                 pass
+
+            do_GET = do_POST
 
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         self.directory = tempfile.TemporaryDirectory()
@@ -308,6 +312,74 @@ class ConnectionAPITests(TestCase):
 
 
 class PanelTransportTests(SimpleTestCase):
+    def test_rewrite_template_reader_is_fixed_and_uses_signed_get_body(self):
+        self.assertTrue(hasattr(self.client_module.PanelClient, 'read_rewrite_template'))
+        server = self.local_panel(raw=b'# template\n', headers={
+            'Content-Type': 'application/octet-stream',
+            'Content-Disposition': 'attachment; filename=wordpress.conf'})
+        client = self.make_client(server)
+        rules = client.read_rewrite_template('nginx', 'wordpress')
+        self.assertEqual(rules, '# template\n')
+        path, body, headers = server.received[0]
+        query = parse_qs(urlsplit(path).query)
+        self.assertEqual(urlsplit(path).path, '/download')
+        self.assertEqual(query, {'filename': ['/www/server/panel/rewrite/nginx/wordpress.conf']})
+        self.assertIn('request_time', body)
+        expected = hashlib.md5((body['request_time'][0] + hashlib.md5(b'fixture-api-secret').hexdigest()).encode()).hexdigest()
+        self.assertEqual(body['request_token'], [expected])
+        self.assertNotIn('request_token', path)
+        self.assertNotIn('fixture-api-secret', path)
+        self.assertEqual(hashlib.sha1(rules.encode()).hexdigest(), hashlib.sha1(b'# template\n').hexdigest())
+        before = len(server.received)
+        for server_name, name in [('null', 'wordpress'), ('nginx', '../etc/passwd'), ('apache', '/tmp/a')]:
+            with self.assertRaises(self.client_module.PanelAPIError):
+                client.read_rewrite_template(server_name, name)
+        self.assertEqual(len(server.received), before)
+
+    def test_template_download_rejects_json_errors_redirects_and_oversize(self):
+        self.assertTrue(hasattr(self.client_module.PanelClient, 'read_rewrite_template'))
+        cases = [({'raw': b'{"status":false,"msg":"REMOTE_SECRET"}',
+                   'headers': {'Content-Type': 'application/json'}}, {}),
+                 ({'status': 302, 'headers': {'Location': 'http://untrusted.invalid'}}, {}),
+                 ({'raw': b'x' * 65537, 'headers': {'Content-Type': 'application/octet-stream',
+                   'Content-Disposition': 'attachment; filename=wordpress.conf'}}, {})]
+        for options, _ in cases:
+            server = self.local_panel(**options)
+            with self.assertRaises(self.client_module.PanelAPIError) as raised:
+                self.make_client(server).read_rewrite_template('nginx', 'wordpress')
+            self.assertNotIn('REMOTE_SECRET', str(raised.exception))
+            self.assertEqual(len(server.received), 1)
+
+    def test_public_download_reuses_tls_pin_and_total_deadline(self):
+        headers = {'Content-Type': 'application/octet-stream',
+                   'Content-Disposition': 'attachment; filename=wordpress.conf'}
+        server = self.local_panel(tls=True, raw=b'# template\n', headers=headers)
+        self.assertEqual(self.make_client(server, tls_fingerprint=server.fingerprint).read_rewrite_template(
+            'nginx', 'wordpress'), '# template\n')
+        with self.assertRaises(self.client_module.PanelAPIError):
+            self.make_client(server, tls_fingerprint='a' * 64).read_rewrite_template('nginx', 'wordpress')
+        self.assertEqual(len(server.received), 1)
+        server = self.local_panel(trickle='body', raw=b'# ' + b'x' * 60, headers=headers)
+        started = time.monotonic()
+        with patch('apps.baota.client.DEFAULT_TIMEOUT', (0.05, 0.05)):
+            with self.assertRaises(self.client_module.PanelAPIError):
+                self.make_client(server).read_rewrite_template('nginx', 'wordpress')
+        self.assertLess(time.monotonic() - started, 0.4)
+        self.assertEqual(len(server.received), 1)
+
+    def test_issued_certificate_download_scope_never_accepts_private_key_paths(self):
+        server = self.local_panel(raw=b'public certificate fixture', headers={
+            'Content-Type': 'application/octet-stream',
+            'Content-Disposition': 'attachment; filename=fullchain.pem'})
+        client = self.make_client(server)
+        self.assertEqual(client.read_issued_certificate('rewrite.example.com'), 'public certificate fixture')
+        self.assertEqual(parse_qs(urlsplit(server.received[0][0]).query), {
+            'filename': ['/www/server/panel/vhost/letsencrypt/rewrite.example.com/fullchain.pem']})
+        for name in ('../privkey.pem', 'example.com/privkey.pem', '/etc/passwd', '*.example.com'):
+            with self.assertRaises(self.client_module.PanelAPIError):
+                client.read_issued_certificate(name)
+        self.assertEqual(len(server.received), 1)
+
     def setUp(self):
         self.assertIsNotNone(importlib.util.find_spec('apps.baota.client'), 'PanelClient is not implemented')
         self.client_module = importlib.import_module('apps.baota.client')

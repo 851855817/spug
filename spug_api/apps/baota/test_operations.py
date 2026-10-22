@@ -1,8 +1,10 @@
 """Adapter contracts against a stateful, credential-free panel protocol fixture."""
 import copy
 import datetime
+import hashlib
 import importlib
 import json
+import posixpath
 from unittest import TestCase
 
 from cryptography import x509
@@ -46,6 +48,21 @@ class PanelFixture:
         self.mutation_error = None
         self.reject_rewrite = False
         self.offered = '13.1.0'
+        self.file_writes = []
+        self.missing_roots = set()
+        self.directory_writes = []
+
+    def read_rewrite_template(self, server, name):
+        filename = '/www/server/panel/rewrite/' + server + '/' + name + '.conf'
+        if filename not in self.file_bodies:
+            raise PanelAPIError('missing template')
+        return self.file_bodies[filename]
+
+    def read_issued_certificate(self, domain):
+        filename = '/www/server/panel/vhost/letsencrypt/' + domain + '/fullchain.pem'
+        if filename not in self.file_bodies:
+            raise PanelAPIError('missing certificate')
+        return self.file_bodies[filename]
 
     def request(self, path, action=None, params=None, mutating=False, **kwargs):
         p = copy.deepcopy(params or {})
@@ -59,17 +76,46 @@ class PanelFixture:
             start = (int(p.get('p', 1)) - 1) * int(p.get('limit', 100))
             return {'data': copy.deepcopy(rows[start:start + int(p.get('limit', 100))]), 'page': ''}
         if action == 'GetPHPVersion': return [{'version': '74'}, {'version': '00'}]
+        if action == 'get_file_attribute':
+            filename = p['filename']
+            if filename in self.missing_roots:
+                return {'status': False, 'msg': 'missing directory'}
+            return {'name': posixpath.basename(filename), 'path': posixpath.dirname(filename),
+                    'is_dir': True, 'is_link': False}
+        if action in ('GetDirUserINI', 'GetSiteRunPath') or (action == 'GetRewriteList' and self.webserver == 'apache'):
+            selected = next((s for s in self.sites if s['id'] == p.get('id') or s['name'] == p.get('siteName')), None)
+            if selected and selected['path'] in self.missing_roots:
+                self.missing_roots.remove(selected['path'])
+                self.directory_writes.append(selected['path'])
         if action == 'GetDirUserINI': return {'userini': self.basedir[p['id']], 'runPath': {'runPath': '/'}}
         if action == 'GetSiteRunPath': return {'runPath': '/'}
+        if action == 'GetRewriteList':
+            return {'rewrite': ['0.当前', 'wordpress'], 'sitePath': self.sites[0]['path'] + '/'}
+        if action == 'get_file_hash':
+            bodies = {**self.rules, **self.file_bodies}
+            if p['filename'] not in bodies:
+                raise PanelAPIError('file does not exist')
+            encoded = bodies[p['filename']].encode('utf-8')
+            return {'md5': hashlib.md5(encoded).hexdigest(), 'sha1': hashlib.sha1(encoded).hexdigest()}
         if action == 'multiple_basedir':
             for sid in json.loads(p['site_ids']): self.basedir[sid] = p['stat'] == 'open'
             return {'succeed': [{'id': sid}], 'errors': []}
         if action == 'GetRewriteLists':
+            # Official 11.7/13.1 creates missing files even though caller marks a read.
+            for site in self.sites:
+                if site['id'] in json.loads(p['site_ids']):
+                    filename = '/www/server/panel/vhost/rewrite/' + site['name'] + '.conf'
+                    if filename not in self.rules:
+                        self.rules[filename] = ''
+                        self.file_writes.append(filename)
             return {'site_rewrites': [{'id': s['id'], 'name': s['name'],
                     'file': '/www/server/panel/vhost/rewrite/' + s['name'] + '.conf'} for s in self.sites
                     if s['id'] in json.loads(p['site_ids'])], 'template_rewrites': [
                     {'name': 'wordpress', 'file': '/www/server/panel/rewrite/nginx/wordpress.conf'}], 'err_site': []}
         if action == 'GetFileBody':
+            if p['path'] not in {**self.rules, **self.file_bodies} and 'rewrite' in p['path']:
+                self.rules[p['path']] = ''
+                self.file_writes.append(p['path'])
             return {'status': True, 'data': {**self.rules, **self.file_bodies}[p['path']]}
         if action == 'SetRewriteLists':
             s = json.loads(p['sites'])[0]
@@ -199,6 +245,83 @@ class OperationTests(TestCase):
         op, item = self.item('site_rewrite', params)
         self.assertEqual(op.execute(self.client, item)['state'], 'uncertain')
         self.assertEqual(self.mutations()[0][2]['rewrite_data'], params['rules'])
+
+    def test_rewrite_missing_file_preflight_and_resources_never_create_it(self):
+        for version in ('11.7.0', '13.1.0'):
+            with self.subTest(version=version):
+                self.client = PanelFixture()
+                self.client.info['version'] = version
+                self.client.rules.clear()
+                options = importlib.import_module('apps.baota.resources').get_resource(
+                    self.client, 'site_options', site_id=1)['site_options']
+                op, item = self.item('site_rewrite', {'sites': [1], 'mode': 'custom',
+                                    'webserver': 'nginx', 'rules': '# desired\n'})
+                self.assertEqual(item['state'], 'failed')
+                self.assertEqual(self.client.rules, {})
+                self.assertEqual(self.client.file_writes, [])
+                self.assertFalse(options['rewrite_available'])
+                self.assertFalse(any(c[1] in ('GetRewriteLists', 'GetFileBody') for c in self.client.calls))
+
+    def test_rewrite_readonly_reconcile_never_recreates_deleted_file(self):
+        op, item = self.item('site_rewrite', {'sites': [1], 'mode': 'clear', 'webserver': 'nginx'})
+        # Already empty is not an executable child; use a prepared nonempty target.
+        op, item = self.item('site_rewrite', {'sites': [1], 'mode': 'custom', 'webserver': 'nginx', 'rules': '# new\n'})
+        self.client.rules.clear()
+        result = op.reconcile(self.client, item, {'phase': 'apply', 'ambiguous': True})
+        self.assertEqual(result['state'], 'uncertain')
+        self.assertEqual(self.client.rules, {})
+        self.assertEqual(self.client.file_writes, [])
+
+    def test_rewrite_template_removed_during_read_never_creates_blank_template(self):
+        filename = '/www/server/panel/rewrite/nginx/wordpress.conf'
+        self.client.file_bodies[filename] = '# template\n'
+        original = self.client.request
+        def request(path, action=None, params=None, **kwargs):
+            if action == 'GetFileBody' and params['path'] == filename:
+                self.client.file_bodies.pop(filename)
+            return original(path, action, params, **kwargs)
+        self.client.request = request
+        def deleted_template(*args):
+            self.client.file_bodies.pop(filename)
+            raise PanelAPIError('missing template')
+        self.client.read_rewrite_template = deleted_template
+        _, item = self.item('site_rewrite', {'sites': [1], 'mode': 'template',
+                            'webserver': 'nginx', 'template': 'wordpress'})
+        self.assertEqual(item['state'], 'failed')
+        self.assertNotIn(filename, self.client.rules)
+        self.assertEqual(self.client.file_writes, [])
+
+    def test_site_preflights_do_not_create_missing_website_root_directories(self):
+        for version in ('11.7.0', '13.1.0'):
+            for code, params in [('site_basedir', {'sites': [1], 'enabled': True}),
+                                 ('site_rewrite', {'sites': [1], 'mode': 'clear', 'webserver': 'apache'}),
+                                 ('ssl_apply', {'sites': [1]})]:
+                with self.subTest(version=version, code=code):
+                    self.client = PanelFixture()
+                    self.client.info['version'] = version
+                    self.client.webserver = 'apache'
+                    root = self.client.sites[0]['path']
+                    self.client.missing_roots.add(root)
+                    _, item = self.item(code, params)
+                    self.assertEqual(item['state'], 'failed')
+                    self.assertEqual(self.client.directory_writes, [])
+                    self.assertIn(root, self.client.missing_roots)
+                    self.assertFalse(any(c[1] in ('GetDirUserINI', 'GetSiteRunPath', 'GetRewriteList') for c in self.client.calls))
+
+    def test_ssl_missing_rewrite_named_certificate_is_readonly(self):
+        certificate_module = importlib.import_module('apps.baota.operations.certificates')
+        plan = {'domains': ['rewrite.example.com']}
+        order = {'status': 'valid', 'domains': plan['domains'], 'save_path': 'vhost/letsencrypt/rewrite.example.com'}
+        with self.assertRaises(PanelAPIError):
+            certificate_module.issued_certificate(self.client, order, plan)
+        self.assertEqual(self.client.rules, {'/www/server/panel/vhost/rewrite/example.com.conf': ''})
+        self.assertEqual(self.client.file_writes, [])
+
+    def test_rewrite_crlf_template_is_frozen_then_normalized(self):
+        self.client.file_bodies['/www/server/panel/rewrite/nginx/wordpress.conf'] = '# template\r\n'
+        _, item = self.item('site_rewrite', {'sites': [1], 'mode': 'template', 'webserver': 'nginx', 'template': 'wordpress'})
+        self.assertEqual(item['state'], 'ready')
+        self.assertEqual(item['plan']['rules'], '# template\n')
 
     def test_rejected_rewrite_checks_rollback_without_second_mutation(self):
         op, item = self.item('site_rewrite', {'sites': [1], 'mode': 'custom', 'webserver': 'nginx', 'rules': 'invalid;\n'})

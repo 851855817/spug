@@ -38,6 +38,8 @@
 - GetSystemTotal 读回 11.7.0；完全省略 force 的升级检查读回本地 11.7.0、正式版本 13.1.0、upgrade=1，没有执行升级。
 - 创建隔离 `.example.test` 静态网站并读回；使用容器已有 Debian Nginx，与 13.1.0 实验边界相同。
 - GetRewriteLists 返回网站身份及 31 个模板。完整文本应用后读回一致；故意无效的 Nginx 指令被拒绝，原规则保留，两项断言通过。
+
+上述 GetRewriteLists 是当时实验记录，不再是任务只读预检协议。后续两版本源码复核发现它及 GetFileBody 会创建缺失规则文件，现已从资源/预检/核验中移除：单数 GetRewriteList、get_file_hash 与固定 `/download` GET 替代。新增夹具按真实缺失文件/目录行为记录写入，覆盖无 execute 权限预检、文件读取竞态及只读核验；本地 HTTP 测试验证 GET form 签名、固定下载范围、TLS 指纹、总时限和拒绝 JSON/重定向。此修复没有重启生产或编译实验面板，也不补写为真实面板联调证据。
 - multiple_basedir 关闭、开启后分别读回 userini=false、true；GetSSL 未配置状态同样返回 status=false、type=-1。
 
 上述结果证明这几项请求及读回结构在两个版本上相符，不代表其他操作或所有发行版已经完成实测。

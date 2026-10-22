@@ -274,6 +274,73 @@ class PanelClient:
             finally:
                 _request_deadline.reset(deadline_token)
 
+    def read_rewrite_template(self, server, name):
+        """Only the fixed template directory, via the reviewed readonly /download route.
+
+        GetFileBody can CREATE missing paths containing 'rewrite'. Never use it,
+        even after an existence check (deletion between calls would still write).
+        Both reviewed versions authenticate /download through comm.local/get_sk;
+        get_input merges GET form body with query, so signatures need not enter URLs.
+        Server access logs may contain the non-secret fixed filename.
+        """
+        if (self._closed or server not in ('nginx', 'apache') or not isinstance(name, str)
+                or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.+-]{0,63}', name)):
+            raise PanelAPIError('伪静态模板标识无效')
+        filename = '/www/server/panel/rewrite/' + server + '/' + name + '.conf'
+        return self._read_fixed_public_file(filename, name + '.conf', 65536)
+
+    def read_issued_certificate(self, domain):
+        """Read only the selected ACME order's public fullchain; never a key file."""
+        if (self._closed or not isinstance(domain, str) or len(domain) > 253 or '.' not in domain
+                or not all(re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', label)
+                           for label in domain.split('.')) or domain.split('.')[-1].isdigit()):
+            raise PanelAPIError('公开证书域名无效')
+        filename = '/www/server/panel/vhost/letsencrypt/' + domain + '/fullchain.pem'
+        return self._read_fixed_public_file(filename, 'fullchain.pem', 128 * 1024)
+
+    def _read_fixed_public_file(self, filename, expected, maximum):
+        # Internal only: callers above construct the entire path from fixed scopes.
+        request_time = str(int(time.time()))
+        signature = {'request_time': request_time, 'request_token': hashlib.md5(
+            (request_time + hashlib.md5(self._key.encode('utf-8')).hexdigest()).encode('ascii')).hexdigest()}
+        timeout = _timeout(None)
+        deadline = _RequestDeadline(timeout)
+        deadline_token = _request_deadline.set(deadline)
+        response = None
+        try:
+            response = self.session.get(self.base_url + '/download', params={'filename': filename},
+                                        data=signature, timeout=timeout, allow_redirects=False,
+                                        verify=self.verify, stream=True)
+            disposition = response.headers.get('Content-Disposition', '')
+            if (response.status_code != 200
+                    or response.headers.get('Content-Type', '').split(';', 1)[0].lower() != 'application/octet-stream'
+                    or not re.fullmatch(r'attachment;\s*filename=(?:' + re.escape(expected)
+                                        + r'|"' + re.escape(expected) + r'")', disposition, re.I)):
+                raise PanelAPIError('公开文件只读下载失败或返回格式无效')
+            length = response.headers.get('Content-Length', '')
+            if length.isdigit() and int(length) > maximum:
+                raise PanelAPIError('公开文件超出读取限制')
+            body = bytearray()
+            for chunk in response.iter_content(chunk_size=8192):
+                body.extend(chunk)
+                if len(body) > maximum:
+                    raise PanelAPIError('公开文件超出读取限制')
+            deadline.remaining()
+            text = body.decode('utf-8')
+            if '\x00' in text:
+                raise PanelAPIError('公开文件内容格式无效')
+            return text
+        except PanelAPIError:
+            raise
+        except (requests.exceptions.RequestException, OSError, ValueError):
+            raise PanelAPIError('公开文件只读下载失败，请核对 API 和文件状态') from None
+        finally:
+            try:
+                if response is not None:
+                    response.close()
+            finally:
+                _request_deadline.reset(deadline_token)
+
 
 def inspect_certificate(base_url):
     """Inspect the public leaf without authenticating and without saving any trust decision."""

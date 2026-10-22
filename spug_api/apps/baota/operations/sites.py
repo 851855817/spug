@@ -1,10 +1,11 @@
 import json
+import hashlib
 import posixpath
 import re
 
 from .. import resources as r
 from ..client import PanelAPIError
-from .base import (Operation, boolean, child, digest, file_body, identity, preview,
+from .base import (Operation, boolean, child, digest, identity, preview,
                    result, selected_sites, selection, strict, MAX_CHILDREN)
 
 
@@ -159,6 +160,7 @@ class Basedir(Operation):
 
     @staticmethod
     def snapshot(client, site):
+        r.require_site_root(client, site)
         data = client.request('/site', 'GetDirUserINI', {'id': site['id'], 'path': site['path']})
         if not isinstance(data, dict) or type(data.get('userini')) is not bool:
             raise PanelAPIError('防跨站读回格式无效')
@@ -230,6 +232,7 @@ class Rewrite(Operation):
         if server == 'nginx':
             return '/www/server/panel/vhost/rewrite/' + site['name'] + '.conf'
         if server == 'apache':
+            r.require_site_root(client, site)
             run = client.request('/site', 'GetSiteRunPath', {'id': site['id']}).get('runPath')
             if (not isinstance(run, str) or len(run) > 512 or not re.fullmatch(r'/[A-Za-z0-9_./-]*', run)
                     or '..' in run.split('/')):
@@ -244,18 +247,39 @@ class Rewrite(Operation):
 
     @staticmethod
     def resolve(client, site, server):
-        # Reject unsupported Apache roots BEFORE calling the official resolver, because
-        # that resolver would create the inactive public.htaccess file as a side effect.
         expected = Rewrite.expected_file(client, site, server)
-        # Official resolver may create a missing empty rewrite file; documented cache-like side effect.
-        data = client.request('/site', 'GetRewriteLists', {'site_ids': json.dumps([site['id']]), 'site_type': 'PHP'})
-        if not isinstance(data, dict): raise PanelAPIError('伪静态文件解析失败')
-        matches = [v for v in data.get('site_rewrites', []) if isinstance(v, dict) and v.get('id') == site['id']
-                   and v.get('name') == site['name']]
-        if len(matches) != 1: raise PanelAPIError('伪静态文件归属不明')
-        if matches[0].get('file') != expected:
-            raise PanelAPIError('伪静态文件不在已验证的网站路径内')
-        return expected, data.get('template_rewrites', [])
+        # Only singular GetRewriteList is readonly. GetRewriteLists creates missing
+        # rule files; GetFileBody independently does the same and cannot be guarded
+        # against a deletion race by checking existence first.
+        data = client.request('/site', 'GetRewriteList', {'siteName': site['name']})
+        names = data.get('rewrite') if isinstance(data, dict) else None
+        if not isinstance(names, list) or len(names) > 500:
+            raise PanelAPIError('伪静态模板列表格式无效')
+        if server == 'apache' and data.get('sitePath', '').rstrip('/') != site['path'].rstrip('/'):
+            raise PanelAPIError('Apache 伪静态运行路径无法核实')
+        templates = []
+        for name in names:
+            try:
+                name = r.token(name)
+            except ValueError:
+                continue
+            templates.append({'name': name, 'file': '/www/server/panel/rewrite/' + server + '/' + name + '.conf'})
+        return expected, templates
+
+    @staticmethod
+    def file_hash(client, path):
+        data = client.request('/files', 'get_file_hash', {'filename': path})
+        if (not isinstance(data, dict) or not isinstance(data.get('md5'), str)
+                or not isinstance(data.get('sha1'), str)
+                or not re.fullmatch(r'[0-9a-f]{32}', data['md5'])
+                or not re.fullmatch(r'[0-9a-f]{40}', data['sha1'])):
+            raise PanelAPIError('规则文件不存在或只读摘要无法核实；不会自动创建')
+        return {'md5': data['md5'], 'sha1': data['sha1']}
+
+    @staticmethod
+    def text_hash(text):
+        body = text.encode('utf-8')
+        return {'md5': hashlib.md5(body).hexdigest(), 'sha1': hashlib.sha1(body).hexdigest()}
 
     def preflight(self, client, params):
         params, info = self.validate(params), r.system_info(client)
@@ -265,18 +289,25 @@ class Rewrite(Operation):
                 item.update(state='skipped', message='网站服务器类型与规则类型不符')
                 return
             path, templates = self.resolve(client, site, server)
-            body = file_body(client, path)
+            before_hash = self.file_hash(client, path)
             rules = params.get('rules', '')
             if params['mode'] == 'template':
                 name = params['template']
                 expected = '/www/server/panel/rewrite/' + server + '/' + name + '.conf'
                 matches = [t for t in templates if isinstance(t, dict) and t.get('name') == name and t.get('file') == expected]
                 if len(matches) != 1: raise PanelAPIError('模板不在当前服务器目录中')
-                rules = file_body(client, expected)
+                # Download never creates a missing file. Freeze the actual UTF-8 text
+                # and verify it belongs to the same readonly hash snapshot.
+                template_hash = self.file_hash(client, expected)
+                rules = client.read_rewrite_template(server, name)
+                if self.text_hash(rules) != template_hash or self.file_hash(client, expected) != template_hash:
+                    raise PanelAPIError('模板内容、编码或换行格式在预检期间发生变化')
+                rules = rules.replace('\r\n', '\n')
                 if len(rules.encode('utf-8')) > 65536: raise PanelAPIError('模板超出限制')
-            item['before'].update(rewrite_digest=digest(body), webserver=server, runtime_verified=False)
-            item['plan'] = {'file': path, 'rules': rules, 'digest': digest(rules)}
-            if body == rules: item.update(state='already', message='配置文件已符合目标，Web 服务加载状态未核实')
+            item['before'].update(rewrite_hash=before_hash, webserver=server, runtime_verified=False)
+            item['plan'] = {'file': path, 'rules': rules, 'digest': digest(rules), 'file_hash': self.text_hash(rules)}
+            if before_hash == item['plan']['file_hash']:
+                item.update(state='already', message='配置文件已符合目标，Web 服务加载状态未核实')
         return site_preflight(client, params, info, prepare)
 
     def _dispatch(self, client, item, phase, remote):
@@ -286,7 +317,7 @@ class Rewrite(Operation):
             raise PanelAPIError('网站服务器类型已变化')
         if self.expected_file(client, site, item['before']['webserver']) != item['plan']['file']:
             raise PanelAPIError('伪静态文件或运行目录已变化')
-        if digest(file_body(client, item['plan']['file'])) != item['before']['rewrite_digest']:
+        if self.file_hash(client, item['plan']['file']) != item['before']['rewrite_hash']:
             raise PanelAPIError('伪静态内容已变化')
         response = client.request('/site', 'SetRewriteLists', {'sites': json.dumps([{
             'id': item['target']['id'], 'name': item['target']['name'], 'file': item['plan']['file']}]),
@@ -309,16 +340,16 @@ class Rewrite(Operation):
         if (r.webserver(client) != item['before']['webserver'] or
                 self.expected_file(client, site, item['before']['webserver']) != item['plan']['file']):
             raise PanelAPIError('伪静态生效文件或运行目录已变化')
-        actual = digest(file_body(client, item['plan']['file']))
+        actual = self.file_hash(client, item['plan']['file'])
         if remote.get('response_status') == 'rejected':
-            restored = actual == item['before']['rewrite_digest']
-            return result('failed', 'Web 配置检查未通过，已核对面板回滚结果', {'rollback_verified': restored, 'digest': actual})
-        if actual == item['plan']['digest']:
+            restored = actual == item['before']['rewrite_hash']
+            return result('failed', 'Web 配置检查未通过，已核对面板回滚结果', {'rollback_verified': restored, 'file_hash': actual})
+        if actual == item['plan']['file_hash']:
             # Official SetRewriteLists marks status:true before serviceReload and ignores
             # its return value. The saved file cannot establish that workers loaded it.
             return result('uncertain', '配置已保存，Web服务加载结果需核实',
-                          {'digest': actual, 'configuration_saved': True, 'runtime_verified': False}, remote)
+                          {'file_hash': actual, 'configuration_saved': True, 'runtime_verified': False}, remote)
         unknown = remote.get('response_status') not in ('accepted', 'rejected')
         return result('uncertain' if remote.get('ambiguous') or unknown else 'failed',
                       '伪静态内容未符合目标，不会自动重发或恢复',
-                      {'digest': actual, 'runtime_verified': False}, remote)
+                      {'file_hash': actual, 'runtime_verified': False}, remote)

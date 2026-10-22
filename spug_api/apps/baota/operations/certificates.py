@@ -131,6 +131,7 @@ def orders(client):
 
 
 def run_path(client, site):
+    r.require_site_root(client, site)
     data = client.request('/site', 'GetSiteRunPath', {'id': site['id']})
     run = data.get('runPath') if isinstance(data, dict) else None
     if (not isinstance(run, str) or not run.startswith('/') or '..' in run.split('/')
@@ -159,8 +160,7 @@ def issued_certificate(client, order, plan, allow_expired=False):
     expected = 'vhost/letsencrypt/' + names[0]
     if order.get('save_path') not in (expected, '/www/server/panel/' + expected):
         raise PanelAPIError('已签发证书不在该订单允许的保存目录内')
-    response = client.request('/files', 'GetFileBody', {'path': '/www/server/panel/' + expected + '/fullchain.pem'})
-    pem = response.get('data') if isinstance(response, dict) else None
+    pem = client.read_issued_certificate(names[0])
     info = certificate_info(pem, require_valid=not allow_expired)
     if not set(plan['domains']).issubset(info['domains']):
         raise PanelAPIError('已签发证书未覆盖选定域名')

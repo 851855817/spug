@@ -427,6 +427,48 @@ class PanelTaskTests(TransactionTestCase):
         self.assertEqual([c[1] for c in protocol.calls if c[3]], ['multiple_basedir'])
         self.assertNotIn('SECRET', json.dumps(detail))
 
+    def test_create_only_rewrite_preflight_has_no_file_or_directory_mutations(self):
+        from .test_operations import PanelFixture
+        from .worker import PanelWorker
+        protocol = PanelFixture()
+        protocol.rules.clear()
+        class Client(FixtureClient):
+            def request(self, *args, **kwargs):
+                self_test.assertFalse(connection.in_atomic_block)
+                return protocol.request(*args, **kwargs)
+        self_test = self
+        panel = self.configured()
+        user = self.make_user('creator')
+        user.roles.create(name='create only', page_perms={'exec': {'panel': ['create', 'view']}})
+        self.authenticate(user)
+        created = self.request('post', '/baota/tasks/', {'operation': 'site_rewrite',
+                               'panel_ids': [panel['id']], 'params': {'sites': [1], 'webserver': 'nginx',
+                                                                   'mode': 'custom', 'rules': '# desired\n'}})
+        self.assertTrue(PanelWorker(client_factory=Client).run_once())
+        detail = self.request('get', '/baota/tasks/' + str(created['id']) + '/')
+        child = detail['targets'][0]['children'][0]
+        self.assertEqual(child['state'], 'failed')
+        self.assertEqual(child['intents'], [])
+        self.assertEqual(protocol.rules, {})
+        self.assertEqual(protocol.file_writes, [])
+        self.assertEqual(protocol.directory_writes, [])
+        self.assertFalse(models.PanelLock.objects.exists())
+
+    def test_stop_aware_client_blocks_new_public_downloads(self):
+        from .worker import StopAwareClient, WorkerStopping
+        class Downloads:
+            def read_rewrite_template(self, *args):
+                self.fail('download after stop')
+            def read_issued_certificate(self, *args):
+                self.fail('download after stop')
+        stopping = threading.Event()
+        stopping.set()
+        client = StopAwareClient(Downloads(), stopping)
+        with self.assertRaises(WorkerStopping):
+            client.read_rewrite_template('nginx', 'wordpress')
+        with self.assertRaises(WorkerStopping):
+            client.read_issued_certificate('example.com')
+
     def test_process_file_lock_excludes_a_second_coordinator(self):
         from django.core.management.base import CommandError
         from .management.commands.runpanelworker import ProcessLock

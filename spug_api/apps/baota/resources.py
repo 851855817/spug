@@ -1,5 +1,6 @@
 """Bounded target-panel readers. Never expose transport responses to the browser."""
 import re
+import posixpath
 
 from .client import PanelAPIError
 from .validation import is_linux_system, positive_id
@@ -84,6 +85,25 @@ def sites(client):
                        'php_version': php_branch(row.get('php_version')),
                        'status': str(status)})
     return result
+
+
+def require_site_root(client, site):
+    """Fail before official run-path readers can mkdir an already missing root.
+
+    get_file_attribute is readonly in both reviewed versions, but invokes lsattr
+    with its path: validate server data before sending it, not only browser input.
+    An administrator concurrently deleting the root between these API calls is
+    outside the atomicity available in Baota's API; no existence check can remove
+    that server-side race without replacing the underlying run-path protocol.
+    """
+    path = site.get('path')
+    if (not isinstance(path, str) or len(path) > 512 or not re.fullmatch(r'/[A-Za-z0-9_./-]+', path)
+            or '..' in path.split('/') or posixpath.normpath(path) != path):
+        raise PanelAPIError('网站根目录格式无效')
+    data = client.request('/files', 'get_file_attribute', {'filename': path})
+    if (not isinstance(data, dict) or data.get('is_dir') is not True or data.get('is_link') is not False
+            or data.get('name') != posixpath.basename(path) or data.get('path') != posixpath.dirname(path)):
+        raise PanelAPIError('网站根目录不存在或无法核实；只读预检不会创建目录')
 
 
 def domains(client, site_id):
@@ -229,7 +249,8 @@ def site_options(client, site_id):
     if site['project_type'] == 'PHP' and server in ('nginx', 'apache'):
         options['ssl'] = ssl_snapshot(client, site)
         try:
-            _, templates = Rewrite.resolve(client, site, server)
+            path, templates = Rewrite.resolve(client, site, server)
+            Rewrite.file_hash(client, path)
         except (PanelAPIError, ValueError):
             options['rewrite_message'] = '该网站伪静态路径尚未完成适配或无法核实'
             return options
@@ -257,7 +278,8 @@ def get_resource(client, kind, *, site_id=None, php_version=None):
       ssl:{enabled,certificate,index,auth_type,type}}};
     upgrade_versions -> {compatibility,current_version,versions:[offered supported targets]}.
     No request can submit a file path, arbitrary action, or read another panel's site.
-    The rewrite resolver may create a missing empty rule file, as documented by Baota.
+    Rewrite discovery uses only singular GetRewriteList and readonly get_file_hash;
+    missing files remain missing and are reported as unavailable.
     """
     kinds = ('sites', 'software', 'php_versions', 'webserver', 'php_extensions', 'site_options', 'upgrade_versions')
     if kind not in kinds or (site_id is not None) != (kind == 'site_options') or (php_version is not None) != (kind == 'php_extensions'):

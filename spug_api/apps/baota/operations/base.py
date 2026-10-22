@@ -97,14 +97,6 @@ def child(key, label, target, info, plan=None, before=None, state='ready', messa
         'panel_version': info['version'], **(before or {})}, 'plan': dict(plan or {}), 'state': state, 'message': message}
 
 
-def file_body(client, path):
-    response = client.request('/files', 'GetFileBody', {'path': path})
-    text = response.get('data') if isinstance(response, dict) else None
-    if not isinstance(text, str) or len(text.encode('utf-8')) > 128 * 1024:
-        raise PanelAPIError('配置文件读取失败或内容超出限制')
-    return text.replace('\r\n', '\n')
-
-
 class Operation:
     category = ''
     code = ''
