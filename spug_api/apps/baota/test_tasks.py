@@ -444,8 +444,7 @@ class PanelTaskTests(TransactionTestCase):
             self.skipTest('MariaDB integration check; SQLite cannot prove row-lock concurrency')
         self.services()
         panel = self.configured()
-        for _ in range(2):
-            self.start(self.prepared(panel=panel))
+        self.queue_concurrent_fixture(panel)
         barrier, results, errors = threading.Barrier(2), [], []
         def claim():
             close_old_connections()
@@ -466,6 +465,22 @@ class PanelTaskTests(TransactionTestCase):
         self.assertEqual(errors, [])
         self.assertEqual(sum(v is not None for v in results), 1)
         self.assertEqual(models.PanelLock.objects.count(), 1)
+
+    def queue_concurrent_fixture(self, panel):
+        # Complete both readonly preflights before either task becomes dispatchable.
+        # run_once follows the durable FIFO queue, not the task just created by a helper.
+        tasks = [self.prepared(panel=panel) for _ in range(2)]
+        for task in tasks:
+            self.start(task)
+        return tasks
+
+    def test_concurrency_fixture_queues_both_tasks_without_dispatch(self):
+        self.services()
+        tasks = self.queue_concurrent_fixture(self.configured())
+        self.assertEqual(list(models.PanelTaskTarget.objects.filter(
+            task__in=tasks).values_list('state', flat=True)), ['queued', 'queued'])
+        self.assertEqual(self.op.sent, [])
+        self.assertFalse(models.PanelLock.objects.exists())
 
     def test_stopped_worker_does_not_claim_new_work(self):
         self.services()
