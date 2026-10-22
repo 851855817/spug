@@ -64,6 +64,8 @@ class PanelView(View):
             return json_response(error=str(exc))
         except Panel.DoesNotExist:
             return json_response(error='面板不存在，请刷新列表后重试')
+        except ProtectedError:
+            return json_response(error='面板存在任务记录或保留锁，不能删除')
 
 
 class GroupView(View):

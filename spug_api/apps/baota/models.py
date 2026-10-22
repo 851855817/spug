@@ -51,3 +51,49 @@ class Panel(models.Model, ModelMixin):
     class Meta:
         db_table = 'baota_panels'
         ordering = ('-id',)
+
+
+class PanelTask(models.Model):
+    operation = models.CharField(max_length=40)
+    owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name='panel_tasks')
+    params_by_panel = models.JSONField(default=dict)
+    state = models.CharField(max_length=24, default='preflight_queued', db_index=True)
+    retry_parent = models.ForeignKey('self', null=True, on_delete=models.PROTECT, related_name='retries')
+    acknowledgements = models.JSONField(default=list)
+    audit = models.JSONField(default=list)
+    cancel_requested = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'baota_tasks'
+        ordering = ('-id',)
+
+
+class PanelTaskTarget(models.Model):
+    task = models.ForeignKey(PanelTask, on_delete=models.PROTECT, related_name='targets')
+    panel = models.ForeignKey(Panel, on_delete=models.PROTECT, related_name='task_targets')
+    panel_snapshot = models.JSONField(default=dict)
+    params = models.JSONField(default=dict)
+    children = models.JSONField(default=list)
+    summary = models.JSONField(default=dict)
+    state = models.CharField(max_length=24, default='preflight_queued', db_index=True)
+    message = models.CharField(max_length=500, default='等待只读预检')
+    reconcile_requested = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'baota_task_targets'
+        ordering = ('id',)
+        constraints = [models.UniqueConstraint(fields=['task', 'panel'], name='baota_task_panel_unique')]
+
+
+class PanelLock(models.Model):
+    # The unique panel key, rather than process memory, is the serialization authority.
+    panel = models.OneToOneField(Panel, primary_key=True, on_delete=models.PROTECT, related_name='task_lock')
+    target = models.OneToOneField(PanelTaskTarget, on_delete=models.PROTECT, related_name='panel_lock')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'baota_panel_locks'

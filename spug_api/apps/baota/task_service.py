@@ -1,0 +1,294 @@
+"""Durable task commands. Browser input can never supply a dispatch snapshot."""
+import copy
+import json
+import re
+
+from django.db import transaction
+from django.utils import timezone
+
+from .models import Panel, PanelGroup, PanelTask, PanelTaskTarget, PanelLock
+from .operations import get_operation
+from .operations.base import strict
+from .validation import positive_id
+
+
+MAX_PANELS = 50
+MAX_CHILDREN = 200
+MAX_JSON_BYTES = 1024 * 1024
+TERMINAL = frozenset(('success', 'failed', 'already', 'skipped', 'cancelled'))
+ACTIVE = frozenset(('preflighting', 'running', 'dispatching', 'reconciling'))
+ACK_CODES = frozenset(('ssl_panel_sync',))
+
+
+def now():
+    return timezone.now().isoformat()
+
+
+def bounded(value, maximum=MAX_JSON_BYTES):
+    try:
+        encoded = json.dumps(value, ensure_ascii=False, allow_nan=False)
+    except (TypeError, ValueError, RecursionError):
+        raise ValueError('任务 JSON 格式无效') from None
+    if len(encoded.encode('utf-8')) > maximum:
+        raise ValueError('任务数据超出单次限制')
+    return copy.deepcopy(value)
+
+
+def permission(user, name):
+    if not user.has_perms(['exec.panel.' + name]):
+        raise PermissionError('权限拒绝')
+
+
+def visible(user, queryset=None):
+    queryset = queryset if queryset is not None else PanelTask.objects.all()
+    return queryset if user.has_perms(['exec.panel.manage']) else queryset.filter(owner_id=user.pk)
+
+
+def owned(user, task_id, action, lock=False):
+    permission(user, action)
+    qs = PanelTask.objects.select_for_update() if lock else PanelTask.objects
+    try:
+        return visible(user, qs).get(pk=positive_id(task_id))
+    except PanelTask.DoesNotExist:
+        raise PermissionError('任务不存在或无权访问') from None
+
+
+def configured(panel, revision=None):
+    if not panel.api_base_url or not panel.api_key_ciphertext or not panel.api_checked_at:
+        raise ValueError('请先配置 API 并测试连接')
+    if revision is not None and panel.api_config_revision != revision:
+        raise ValueError('API 配置在预检后变化，请创建新预检')
+
+
+def safe_panel(panel):
+    return {'id': panel.pk, 'name': panel.name, 'group_id': panel.group_id,
+            'group_name': panel.group.name, 'api_config_revision': panel.api_config_revision,
+            'api_configured': bool(panel.api_base_url and panel.api_key_ciphertext),
+            'api_checked': bool(panel.api_checked_at), 'api_version': panel.api_version}
+
+
+def selected_panels(data):
+    panel_ids, group_ids = data.get('panel_ids', []), data.get('group_ids', [])
+    if (not isinstance(panel_ids, list) or not isinstance(group_ids, list)
+            or len(panel_ids) > MAX_PANELS or len(group_ids) > MAX_PANELS):
+        raise ValueError('单次最多选择 50 个面板或分组')
+    ids = {positive_id(v) for v in panel_ids}
+    selected = {positive_id(v) for v in group_ids}
+    groups = dict(PanelGroup.objects.values_list('id', 'parent_id'))
+    if not selected.issubset(groups):
+        raise ValueError('分组不存在')
+    while True:
+        expanded = selected | {gid for gid, parent in groups.items() if parent in selected}
+        if expanded == selected:
+            break
+        selected = expanded
+    if Panel.objects.filter(pk__in=ids).count() != len(ids):
+        raise ValueError('面板不存在')
+    ids.update(Panel.objects.filter(group_id__in=selected).values_list('id', flat=True))
+    if not 1 <= len(ids) <= MAX_PANELS:
+        raise ValueError('请选择 1 至 50 个面板')
+    return list(Panel.objects.select_related('group').filter(pk__in=ids).order_by('id'))
+
+
+def prepare(user, data, retry_parent=None):
+    permission(user, 'create')
+    bounded(data)
+    strict(data, ('operation', 'panel_ids', 'group_ids', 'params', 'params_by_panel'), ('operation',))
+    operation = get_operation(data['operation'])
+    panels = selected_panels(data)
+    if ('params' in data) == ('params_by_panel' in data):
+        raise ValueError('请提供公共参数或每个面板的参数映射之一')
+    mapping = data.get('params_by_panel')
+    ids = {str(p.pk) for p in panels}
+    if mapping is not None and (not isinstance(mapping, dict) or set(mapping) != ids):
+        raise ValueError('参数映射必须恰好包含每个选中面板')
+    clean = {}
+    for panel in panels:
+        clean[str(panel.pk)] = operation.validate(copy.deepcopy(mapping[str(panel.pk)] if mapping is not None else data['params']))
+    bounded(clean)
+    with transaction.atomic():
+        task = PanelTask.objects.create(operation=operation.code, owner=user, params_by_panel=clean,
+                                        retry_parent=retry_parent,
+                                        audit=[{'action': 'prepare', 'actor_id': user.pk, 'at': now()}])
+        PanelTaskTarget.objects.bulk_create([
+            PanelTaskTarget(task=task, panel=panel, panel_snapshot=safe_panel(panel), params=clean[str(panel.pk)])
+            for panel in panels])
+    return task
+
+
+def required_acks(targets):
+    codes = set()
+    for target in targets:
+        for child in target.children:
+            if child['snapshot']['state'] == 'ready':
+                values = child['snapshot'].get('plan', {}).get('required_acknowledgements', [])
+                if not isinstance(values, list) or any(v not in ACK_CODES for v in values):
+                    raise ValueError('冻结计划包含未知确认项')
+                codes.update(values)
+    return sorted(codes)
+
+
+def refresh_task(task):
+    """Caller holds the task row lock; every writer uses task -> target lock order."""
+    states = list(task.targets.values_list('state', flat=True))
+    if any(s == 'uncertain' for s in states):
+        task.state = 'uncertain'
+    elif any(s in ('remote', 'reconciling') for s in states):
+        task.state = 'remote'
+    elif any(s in ('running', 'dispatching', 'queued') for s in states):
+        task.state = 'running'
+    elif any(s in ('preflight_queued', 'preflighting') for s in states):
+        task.state = 'preflight_queued'
+    elif any(s == 'prepared' for s in states):
+        task.state = 'prepared'
+    elif states and all(s == 'cancelled' for s in states):
+        task.state = 'cancelled'
+    else:
+        task.state = 'completed'
+    task.save(update_fields=['state', 'updated_at'])
+
+
+def settle_target(target):
+    states = [c['state'] for c in target.children]
+    if 'uncertain' in states:
+        target.state = 'uncertain'
+    elif 'remote' in states:
+        target.state = 'remote'
+    elif 'ready' in states:
+        target.state = 'queued'
+    elif states and all(s == 'cancelled' for s in states):
+        target.state = 'cancelled'
+    else:
+        target.state = 'completed'
+    if all(s in TERMINAL for s in states):
+        PanelLock.objects.filter(target=target).delete()
+    target.save(update_fields=['children', 'state', 'message', 'reconcile_requested', 'updated_at'])
+
+
+def audit(task, user, action, **values):
+    task.audit = bounded([*task.audit, {'action': action, 'actor_id': user.pk, 'at': now(), **values}])
+    task.save(update_fields=['audit', 'updated_at'])
+
+
+def start(user, task_id, data):
+    strict(data, ('acknowledgements',), ('acknowledgements',))
+    codes = data['acknowledgements']
+    if not isinstance(codes, list) or len(codes) > len(ACK_CODES) or any(not isinstance(c, str) for c in codes):
+        raise ValueError('确认项格式无效')
+    with transaction.atomic():
+        task = owned(user, task_id, 'execute', lock=True)
+        if task.state != 'prepared' or task.cancel_requested:
+            raise ValueError('任务尚未完成预检或已提交，请刷新')
+        targets = list(task.targets.select_for_update().select_related('panel'))
+        if sum(len(t.children) for t in targets) > MAX_CHILDREN:
+            raise ValueError('单次最多处理 200 个子项')
+        if sorted(codes) != required_acks(targets):
+            raise ValueError('请明确确认全部冻结计划要求的确认项')
+        for target in targets:
+            if target.state == 'prepared':
+                configured(target.panel, target.panel_snapshot['api_config_revision'])
+        task.acknowledgements = sorted(codes)
+        task.save(update_fields=['acknowledgements', 'updated_at'])
+        audit(task, user, 'start', acknowledgements=sorted(codes))
+        for target in targets:
+            if target.state == 'prepared':
+                target.state = 'queued'
+                target.save(update_fields=['state', 'updated_at'])
+        refresh_task(task)
+    return task
+
+
+def cancel(user, task_id):
+    with transaction.atomic():
+        task = owned(user, task_id, 'cancel', lock=True)
+        task.cancel_requested = True
+        task.save(update_fields=['cancel_requested', 'updated_at'])
+        for target in task.targets.select_for_update():
+            for child in target.children:
+                if child['state'] == 'ready' and not child['intents']:
+                    child['state'] = 'cancelled'
+                    child['result'] = {'state': 'cancelled', 'message': '已取消未发送子项', 'evidence': {}}
+            # An active call owns its state until its result is saved.
+            if target.state not in ACTIVE:
+                if target.state in ('preflight_queued', 'prepared'):
+                    target.state = 'cancelled'
+                    target.save(update_fields=['state', 'children', 'updated_at'])
+                else:
+                    settle_target(target)
+            else:
+                target.save(update_fields=['children', 'updated_at'])
+        audit(task, user, 'cancel', note='仅取消尚未发送子项；远端操作未声明停止')
+        refresh_task(task)
+    return task
+
+
+def reconcile(user, task_id):
+    with transaction.atomic():
+        task = owned(user, task_id, 'view', lock=True)
+        for target in task.targets.select_for_update().filter(state__in=('remote', 'uncertain')):
+            target.reconcile_requested = True
+            target.save(update_fields=['reconcile_requested', 'updated_at'])
+        audit(task, user, 'reconcile')
+    return task
+
+
+def resolve(user, task_id, data):
+    permission(user, 'manage')
+    strict(data, ('target_id', 'child_key', 'outcome', 'reason', 'evidence'),
+           ('target_id', 'child_key', 'outcome', 'reason', 'evidence'))
+    if data['outcome'] not in ('success', 'failed'):
+        raise ValueError('人工结论必须是 success 或 failed')
+    for name in ('reason', 'evidence', 'child_key'):
+        if not isinstance(data[name], str) or not data[name].strip() or len(data[name]) > 2000:
+            raise ValueError('必须填写原因和核验依据')
+    with transaction.atomic():
+        task = PanelTask.objects.select_for_update().get(pk=positive_id(task_id))
+        target = task.targets.select_for_update().get(pk=positive_id(data['target_id']))
+        if target.state in ACTIVE:
+            raise ValueError('调用仍在执行，不能人工覆盖')
+        child = next((c for c in target.children if c['snapshot']['key'] == data['child_key']), None)
+        if not child or child['state'] not in ('remote', 'uncertain'):
+            raise ValueError('仅可处理待确认或不确定子项')
+        resolution = {'actor_id': user.pk, 'at': now(), **{k: data[k] for k in ('outcome', 'reason', 'evidence')}}
+        child.setdefault('resolutions', []).append(resolution)
+        child['state'] = data['outcome']
+        child['result'] = {'state': data['outcome'], 'message': '管理员依据人工核验作出结论',
+                           'evidence': {'manual_resolution': resolution}}
+        settle_target(target)
+        audit(task, user, 'resolve', target_id=target.pk, child_key=data['child_key'], **resolution)
+        refresh_task(task)
+    return task
+
+
+def retry(user, task_id):
+    source = owned(user, task_id, 'create')
+    return prepare(user, {'operation': source.operation,
+                         'panel_ids': list(source.targets.values_list('panel_id', flat=True)),
+                         'params_by_panel': source.params_by_panel}, retry_parent=source)
+
+
+# Adapter return values are trusted, selected metadata. Filter sensitive keys again at
+# the API boundary; no model.to_dict() or raw transport response enters a task view.
+SENSITIVE = re.compile(r'password|private.?key|ciphertext|access.?token|request.?token|api.?key|raw|pem|csr|tls_ca', re.I)
+
+
+def safe_tree(value):
+    if isinstance(value, dict):
+        return {k: safe_tree(v) for k, v in value.items() if isinstance(k, str) and not SENSITIVE.search(k)}
+    if isinstance(value, list):
+        return [safe_tree(v) for v in value]
+    return value if value is None or type(value) in (str, int, float, bool) else None
+
+
+def task_view(task, detail=True):
+    data = {'id': task.pk, 'operation': task.operation, 'owner_id': task.owner_id, 'state': task.state,
+            'retry_parent_id': task.retry_parent_id, 'cancel_requested': task.cancel_requested,
+            'acknowledgements': task.acknowledgements, 'created_at': task.created_at.isoformat(),
+            'updated_at': task.updated_at.isoformat()}
+    if detail:
+        targets = list(task.targets.all())
+        data.update(required_acknowledgements=required_acks(targets), audit=task.audit,
+                    targets=[{'id': t.pk, 'panel': t.panel_snapshot, 'state': t.state,
+                              'message': t.message, 'summary': t.summary,
+                              'children': t.children} for t in targets])
+    return safe_tree(data)
