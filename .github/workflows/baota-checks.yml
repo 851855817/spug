@@ -31,13 +31,19 @@ jobs:
         run: docker pull ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c
       - name: Run all Baota tests in isolation
         run: |
+          baota_test_modules=()
+          for baota_test_file in spug_api/apps/baota/test*.py; do
+            baota_test_module=${baota_test_file#spug_api/}
+            baota_test_module=${baota_test_module%.py}
+            baota_test_modules+=("${baota_test_module//\//.}")
+          done
           docker run --rm --network none --read-only --tmpfs /tmp:rw,nosuid,size=128m \
             --memory 768m --cpus 2 --pids-limit 128 \
             -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONUNBUFFERED=1 \
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api \
             --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test apps.baota --settings=spug.test_settings --noinput
+            manage.py test "${baota_test_modules[@]}" --settings=spug.test_settings --noinput
       - name: Check whitespace
         run: git diff --check HEAD^ HEAD
 
@@ -54,7 +60,7 @@ jobs:
           node-version: '20'
           cache: npm
           cache-dependency-path: spug_web/package-lock.json
-      - run: npm ci --no-audit --no-fund
+      - run: npm ci --legacy-peer-deps --no-audit --no-fund
       - name: Run module helper tests
         env:
           CI: 'true'
