@@ -9,6 +9,7 @@ on:
       - 'spug_api/spug/test_*.py'
       - 'spug_web/src/pages/baota/**'
       - 'spug_web/src/pages/exec/panel/**'
+      - 'deploy/baota/**'
       - '.github/workflows/baota-checks.yml'
   workflow_dispatch:
 
@@ -46,6 +47,43 @@ jobs:
             manage.py test "${baota_test_modules[@]}" --settings=spug.test_settings --noinput
       - name: Check whitespace
         run: git diff --check HEAD^ HEAD
+      - name: Build worker image with disposable static assets
+        run: |
+          baota_context="$RUNNER_TEMP/baota-image-context"
+          mkdir -p "$baota_context/spug_api/apps" "$baota_context/spug_api/spug" "$baota_context/spug_web/build"
+          cp -a spug_api/apps/baota "$baota_context/spug_api/apps/"
+          cp spug_api/spug/settings.py spug_api/spug/urls.py "$baota_context/spug_api/spug/"
+          cp -a deploy "$baota_context/"
+          printf '<html>CI image wiring check only</html>\n' > "$baota_context/spug_web/build/index.html"
+          docker build --network none --build-arg SOURCE_REVISION="$GITHUB_SHA" \
+            -f "$baota_context/deploy/baota/Dockerfile" -t baota-worker-ci "$baota_context"
+          docker run --rm --network none --read-only --memory 128m --pids-limit 32 \
+            -v "$GITHUB_WORKSPACE/deploy/baota/test_image.py:/test_image.py:ro" \
+            --entrypoint python3 baota-worker-ci /test_image.py worker
+      - name: Check guarded rollback patch on fixed upstream runtime
+        run: |
+          baota_context="$RUNNER_TEMP/baota-image-context"
+          # Public fixture: old production image is host-local and is never pulled into CI.
+          cat > "$baota_context/rollback-fixture.Dockerfile" <<'EOF'
+          FROM ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c
+          COPY deploy/baota/entrypoint.sh /baota-entrypoint.sh
+          RUN sed -i 's/\r$//' /baota-entrypoint.sh && chmod 755 /baota-entrypoint.sh
+          ENTRYPOINT ["/baota-entrypoint.sh"]
+          EOF
+          docker build --network none -f "$baota_context/rollback-fixture.Dockerfile" \
+            -t baota-rollback-fixture "$baota_context"
+          docker build --network none --build-arg ROLLBACK_IMAGE=baota-rollback-fixture \
+            -f "$baota_context/deploy/baota/rollback.Dockerfile" -t baota-rollback-ci "$baota_context"
+          docker run --rm --network none --read-only --memory 128m --pids-limit 32 \
+            -v "$GITHUB_WORKSPACE/deploy/baota/test_image.py:/test_image.py:ro" \
+            -v "$GITHUB_WORKSPACE/spug_api/apps/baota:/compat-source:ro" \
+            --entrypoint python3 baota-rollback-ci /test_image.py rollback
+          # Refuse a different/already-patched entrypoint instead of silently building.
+          if docker build --network none --build-arg ROLLBACK_IMAGE=baota-rollback-ci \
+            -f "$baota_context/deploy/baota/rollback.Dockerfile" -t baota-rollback-must-fail "$baota_context"; then
+            echo 'Rollback patch unexpectedly accepted an entrypoint without the exact updatedb line.'
+            exit 1
+          fi
 
   mariadb:
     runs-on: ubuntu-latest
