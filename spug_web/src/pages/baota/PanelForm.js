@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Button, Checkbox, Divider, Form, Input, Modal, Radio, Space, TreeSelect, Typography, message } from 'antd';
 import { http } from 'libs';
-import { buildGroupTree } from './helpers';
+import { buildGroupTree, inferAPIBaseURL } from './helpers';
 
 export default function PanelForm({record, groups, selectedGroup, onCancel, onSaved, onChecked}) {
   const [form] = Form.useForm();
@@ -10,6 +10,7 @@ export default function PanelForm({record, groups, selectedGroup, onCancel, onSa
   const [inspecting, setInspecting] = useState(false);
   const [connection, setConnection] = useState(record);
   const [checkFailed, setCheckFailed] = useState(false);
+  const [manualAPIAddress, setManualAPIAddress] = useState(Boolean(record.api_base_url));
   const [trust, setTrust] = useState(record.has_tls_ca ? 'ca' : record.tls_fingerprint ? 'fingerprint' : 'system');
   const apiAddress = Form.useWatch('api_base_url', form) || '';
   const clearingKey = Form.useWatch('clear_api_key', form);
@@ -20,6 +21,9 @@ export default function PanelForm({record, groups, selectedGroup, onCancel, onSa
     setSaving(true);
     try {
       const payload = {...values, id: record.id};
+      if (!record.api_base_url && !record.has_api_key && !values.api_key && !manualAPIAddress) {
+        payload.api_base_url = '';
+      }
       if (!/^https:/i.test(values.api_base_url || '') || trust === 'system') {
         payload.tls_ca = '';
         payload.tls_fingerprint = '';
@@ -50,6 +54,13 @@ export default function PanelForm({record, groups, selectedGroup, onCancel, onSa
   function validateAPIURL(_, value) {
     if (value && /[?#]/.test(value)) return Promise.reject('API 地址不能包含查询参数或片段');
     return validateURL(_, value);
+  }
+
+  function handleValuesChange(changed, values) {
+    if ('api_base_url' in changed) setManualAPIAddress(true);
+    else if ('url' in changed && !manualAPIAddress) {
+      form.setFieldsValue({api_base_url: inferAPIBaseURL(values.url)});
+    }
   }
 
   async function checkConnection() {
@@ -100,7 +111,9 @@ export default function PanelForm({record, groups, selectedGroup, onCancel, onSa
     <Modal open title={record.id ? '编辑宝塔面板' : '添加宝塔面板'} width={680} maskClosable={false}
            bodyStyle={{maxHeight: '65vh', overflowY: 'auto'}}
            confirmLoading={saving} onCancel={onCancel} onOk={handleSubmit} okText="保存" destroyOnClose>
-      <Form form={form} layout="vertical" initialValues={{group_id: selectedGroup || undefined, ...record, api_key: '', clear_api_key: false}}>
+      <Form form={form} layout="vertical" onValuesChange={handleValuesChange}
+            initialValues={{group_id: selectedGroup || undefined, ...record,
+              api_base_url: record.api_base_url || inferAPIBaseURL(record.url), api_key: '', clear_api_key: false}}>
         <Form.Item name="name" label="面板名称" rules={[{required: true, whitespace: true, message: '请输入面板名称'}]}>
           <Input maxLength={100} placeholder="例如：客户 A · 生产服务器" autoFocus/>
         </Form.Item>
@@ -125,9 +138,9 @@ export default function PanelForm({record, groups, selectedGroup, onCancel, onSa
         <Typography.Paragraph type="secondary">
           API 密钥与登录密码不同。请先在宝塔设置中开启 API，并将 Spug 实际出口 IP 加入 API 白名单。
         </Typography.Paragraph>
-        <Form.Item name="api_base_url" label="API 基础地址" extra="与上方登录安全入口分开填写；反向代理可包含路径前缀。"
+        <Form.Item name="api_base_url" label="API 基础地址" extra="默认从面板地址自动提取，去掉登录安全入口；已有或手动填写的地址保留，反向代理可包含路径前缀。"
                    rules={[{validator: validateAPIURL}]}>
-          <Input maxLength={2048} placeholder="https://example.com:8888" autoComplete="off"/>
+          <Input maxLength={2048} placeholder="自动读取上方地址，特殊情况可手动修改" autoComplete="off"/>
         </Form.Item>
         {/^http:/i.test(apiAddress) && <Alert type="warning" showIcon style={{marginBottom: 16}}
           message="此 API 地址使用明文 HTTP，密钥签名和请求内容将通过未加密连接发送。"/>}

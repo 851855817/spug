@@ -32,3 +32,12 @@ export function filterPanels(panels, groups, groupId, search) {
   return panels.filter(panel => (!selected || selected.has(panel.group_id)) &&
     [panel.name, panel.url, panel.username].some(value => value.toLowerCase().includes(query)));
 }
+
+export function inferAPIBaseURL(value) {
+  if (typeof value !== 'string' || /[\s\\]/.test(value)) return '';
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) return '';
+    return url.origin;
+  } catch (_) { return ''; }
+}
