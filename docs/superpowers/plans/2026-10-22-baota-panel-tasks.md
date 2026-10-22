@@ -32,7 +32,7 @@
 
 ## 任务 1：API 接入和连接客户端
 
-- [ ] 先添加 `test_connection.py`，验证双 MD5、URL 安全入口分离、重定向拒绝、响应大小上限、密钥加密和不返回、留空编辑保留密钥、配置变化使连接失效、连接权限、TLS 指纹拒绝不匹配。
+- [x] 先添加 `test_connection.py`，验证双 MD5、URL 安全入口分离、重定向拒绝、响应大小上限、密钥加密和不返回、留空编辑保留密钥、配置变化使连接失效、连接权限、TLS 指纹拒绝不匹配。
 
 ```python
 record = self.panel(api_base_url='https://example.com:8888', api_key='test-key')
@@ -41,11 +41,11 @@ self.assertNotIn('api_key_ciphertext', record)
 self.assertEqual(Panel.objects.get(pk=record['id']).get_api_key(), 'test-key')
 ```
 
-- [ ] 运行新增测试，确认因缺少功能失败；保留红灯证据。
-- [ ] 在 models.py 添加 API 地址、加密密钥、TLS CA/指纹、连接时间与版本、配置修订号；现有记录默认未配置。PanelView 保存前校验，配置变化清除最后连接结果。
-- [ ] 实现 `PanelClient.request(path, action=None, params=None, mutating=False, timeout=None)`；固定同源路径、签名、无重定向、大小限制和安全错误。`PanelClient.close()` 释放会话及临时 CA 文件。支持系统信任、专用 CA 和固定 SHA-256 证书指纹。
-- [ ] 实现 `/baota/connection/` 保存配置后的连接检查和 `/baota/certificate/` 无凭据证书检查；连接测试仅读系统信息。前端在面板表单中配置 API 并在列表测试已保存配置。
-- [ ] 运行新增和既有后端测试、前端相关测试，审查后提交 `feat: add encrypted Baota API connections`。
+- [x] 运行新增测试，确认因缺少功能失败；保留红灯证据。
+- [x] 在 models.py 添加 API 地址、加密密钥、TLS CA/指纹、连接时间与版本、配置修订号；现有记录默认未配置。PanelView 保存前校验，配置变化清除最后连接结果。
+- [x] 实现 `PanelClient.request(path, action=None, params=None, mutating=False, timeout=None)`；固定同源路径、签名、无重定向、大小限制和安全错误。`PanelClient.close()` 释放会话及临时 CA 文件。支持系统信任、专用 CA 和固定 SHA-256 证书指纹。
+- [x] 实现 `/baota/connection/` 保存配置后的连接检查和 `/baota/certificate/` 无凭据证书检查；连接测试仅读系统信息。前端在面板表单中配置 API 并在列表测试已保存配置。
+- [x] 运行新增和既有后端测试、前端相关测试，审查后提交 `feat: add encrypted Baota API connections`。
 
 ## 任务 2：资源读取及八类操作适配器
 
