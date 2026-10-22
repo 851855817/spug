@@ -1,12 +1,14 @@
 import datetime
 import hashlib
 import importlib
+import inspect
 import ipaddress
 import json
 import socket
 import ssl
 import tempfile
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
@@ -27,13 +29,15 @@ class LocalPanel:
     """Real local transport; captures only fixture credentials and never contacts a customer."""
 
     def __init__(self, response=None, status=200, tls=False, headers=None, raw=None, disconnect=False,
-                 response_gate=None):
+                 response_gate=None, trickle=None, keep_alive=False):
         self.received = []
         self.response = response if response is not None else {'version': '13.1.0', 'system': 'Ubuntu 22.04 Linux'}
         self.raw, self.status, self.headers = raw, status, headers or {}
         owner = self
 
         class Handler(BaseHTTPRequestHandler):
+            protocol_version = 'HTTP/1.1' if keep_alive else 'HTTP/1.0'
+
             def do_POST(self):
                 body = self.rfile.read(int(self.headers.get('Content-Length', 0)))
                 owner.received.append((self.path, parse_qs(body.decode()), dict(self.headers)))
@@ -41,7 +45,28 @@ class LocalPanel:
                     self.connection.shutdown(socket.SHUT_RDWR)
                     self.connection.close()
                     return
+                if trickle:
+                    payload = owner.raw if owner.raw is not None else json.dumps(owner.response).encode()
+                    if trickle == 'headers':
+                        wire = (b'HTTP/1.1 200 OK\r\nX-Trickle: ' + b'x' * 60 + b'\r\nContent-Length: '
+                                + str(len(payload)).encode() + b'\r\n\r\n' + payload)
+                    else:
+                        self.send_response(owner.status)
+                        self.send_header('Content-Length', str(len(payload)))
+                        self.end_headers()
+                        wire = payload
+                    try:
+                        for byte in wire:
+                            self.wfile.write(bytes([byte]))
+                            self.wfile.flush()
+                            time.sleep(0.015)
+                    except OSError:
+                        pass
+                    return
                 self.send_response(owner.status)
+                if keep_alive:
+                    payload = owner.raw if owner.raw is not None else json.dumps(owner.response).encode()
+                    self.send_header('Content-Length', str(len(payload)))
                 for key, value in owner.headers.items():
                     self.send_header(key, value)
                 self.end_headers()
@@ -397,12 +422,60 @@ class PanelTransportTests(SimpleTestCase):
             gate.set()
         self.assertEqual(len(server.received), 1)
 
+    def test_total_deadline_interrupts_slow_trickle_inside_header_and_body_reads(self):
+        for tls in (False, True):
+            for phase in ('headers', 'body'):
+                with self.subTest(tls=tls, phase=phase):
+                    server = self.local_panel(tls=tls, trickle=phase, raw=b'{"result":"' + b'x' * 60 + b'"}')
+                    client = self.make_client(server, tls_fingerprint=server.fingerprint)
+                    started = time.monotonic()
+                    timeout = (0.15, 0.15) if tls else (0.05, 0.05)
+                    with self.assertRaises(self.client_module.PanelAPIError) as raised:
+                        client.request('/site', action='AddSite', mutating=True, timeout=timeout)
+                    elapsed = time.monotonic() - started
+                    self.assertLess(elapsed, sum(timeout) + 0.25, 'A trickling response exceeded its total budget')
+                    self.assertTrue(raised.exception.uncertain)
+                    self.assertIn('超时', str(raised.exception))
+                    self.assertEqual(len(server.received), 1)
+
+    def test_total_deadline_does_not_poison_later_requests_or_leak_threads(self):
+        server = self.local_panel(trickle='body', raw=b'{"result":"' + b'x' * 60 + b'"}')
+        client = self.make_client(server)
+        before = {thread.ident for thread in threading.enumerate()}
+        with self.assertRaises(self.client_module.PanelAPIError):
+            client.request('/system', timeout=(0.05, 0.05))
+        self.assertEqual(client.request('/system', timeout=(1, 2)), {'result': 'x' * 60})
+        # Request handlers belong to the fixture; the transport must not create watchdog threads.
+        extra = [thread for thread in threading.enumerate() if thread.ident not in before]
+        self.assertTrue(all('process_request_thread' in thread.name for thread in extra), extra)
+
+    def test_pooled_keep_alive_connections_receive_a_fresh_deadline(self):
+        server = self.local_panel(keep_alive=True, tls=True)
+        client = self.make_client(server, tls_fingerprint=server.fingerprint)
+        self.assertEqual(client.request('/system', timeout=(0.15, 0.15)), server.response)
+        # The first request's short deadline must not affect a later response on the same socket.
+        time.sleep(0.35)
+        self.assertEqual(client.request('/system', timeout=(1, 1)), server.response)
+        self.assertEqual(len(server.received), 2)
+
     def test_invalid_response_never_exposes_raw_body(self):
         server = self.local_panel(raw=b'fixture-api-secret request_token raw-body')
         with self.assertRaises(self.client_module.PanelAPIError) as raised:
             self.make_client(server).request('/system')
         self.assertNotIn('fixture-api-secret', str(raised.exception))
         self.assertNotIn('raw-body', str(raised.exception))
+
+    def test_false_resource_status_requires_explicit_internal_opt_in(self):
+        result = {'status': False, 'type': -1, 'domain': [], 'key': 'fixture-private-key',
+                  'csr': '', 'index': 'fixture-index'}
+        server = self.local_panel(response=result)
+        client = self.make_client(server)
+        with self.assertRaises(self.client_module.PanelAPIError) as raised:
+            client.request('/site', action='GetSSL')
+        self.assertNotIn('fixture-private-key', str(raised.exception))
+        self.assertNotIn('fixture-index', str(raised.exception))
+        self.assertIn('allow_status_false', inspect.signature(client.request).parameters)
+        self.assertEqual(client.request('/site', action='GetSSL', allow_status_false=True), result)
 
     def test_proxy_prefix_is_kept_separate_from_login_entry(self):
         server = self.local_panel()
