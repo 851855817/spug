@@ -1,0 +1,15 @@
+.layout { padding: 0 24px 24px; }
+.panels { min-height: 420px; }
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.search { max-width: 320px; }
+@media (max-width: 767px) {
+  .layout { padding: 0 12px 12px; }
+  .search { max-width: 100%; }
+}

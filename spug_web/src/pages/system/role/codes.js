@@ -38,6 +38,23 @@ export default [{
     ]
   }]
 }, {
+  key: 'baota',
+  label: t('宝塔面板管理'),
+  pages: [{
+    key: 'panel',
+    label: t('面板记录'),
+    perms: [
+      {key: 'view', label: t('查看面板')},
+      {key: 'add', label: t('添加面板')},
+      {key: 'edit', label: t('编辑面板')},
+      {key: 'del', label: t('删除面板')},
+    ]
+  }, {
+    key: 'group',
+    label: t('面板分组'),
+    perms: [{key: 'manage', label: t('管理面板分组')}]
+  }]
+}, {
   key: 'exec',
   label: t('批量执行'),
   pages: [{
