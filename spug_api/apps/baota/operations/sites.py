@@ -305,6 +305,9 @@ class Rewrite(Operation):
             restored = actual == item['before']['rewrite_digest']
             return result('failed', 'Web 配置检查未通过，已核对面板回滚结果', {'rollback_verified': restored, 'digest': actual})
         if actual == item['plan']['digest']:
-            return result('success', '伪静态规则已读回确认', {'digest': actual})
+            # Official SetRewriteLists marks status:true before serviceReload and ignores
+            # its return value. The saved file cannot establish that workers loaded it.
+            return result('uncertain', '配置已保存，Web服务加载结果需核实',
+                          {'digest': actual, 'configuration_saved': True, 'runtime_verified': False}, remote)
         return result('uncertain' if remote.get('ambiguous') else 'failed',
                       '伪静态内容未符合目标，不会自动重发或恢复', {'digest': actual}, remote)

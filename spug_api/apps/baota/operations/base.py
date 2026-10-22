@@ -5,10 +5,20 @@ ONCE, on one panel, into independent child items. The worker persists each entir
 execute() is dispatch(..., 'apply'). Before EVERY dispatch the worker must durably save
 the dispatch intent and mark the panel busy. dispatch performs at most ONE mutating API
 request; never loop over children or phases. All panel mutations must be serialized.
+One API request can have broad server-side effects: SSL apply/renew automatically sync
+eligible same-SAN certificates panel-wide, including unselected/orphan copies and panel
+TLS, and reload Web services. The initial intent covers that whole frozen policy. The
+task service MUST persist each required acknowledgement before initial dispatch; no
+adapter input can narrow or suppress Baota's automatic sync. The registered-site
+inventory is explicitly incomplete and never claims to cover orphan/panel certificates.
 
 Persist the returned {state,message,evidence,remote}. Reconcile is READ ONLY and may
 return remote.next_action='deploy'. Persist that result, then a separate dispatch intent,
 then call dispatch(..., 'deploy', remote). 'remote' and 'uncertain' are not success.
+An already auto-deployed selected SSL certificate needs no SetCertToSite mutation.
+Panel TLS pin changes remain uncertain/locked; never automatically trust a new pin.
+Rewrite file readback proves saving only: runtime reload is unverified and remains
+uncertain, including API child status:true. Reconcile cannot promote file-only evidence.
 After transport ambiguity the worker polls reconcile; it MUST NOT automatically resend
 any mutation. An unchanged readback cannot prove a timed-out request was not accepted.
 An operator may start a new preflight after resolving uncertainty. Persisted plans are
@@ -98,6 +108,7 @@ def file_body(client, path):
 class Operation:
     category = ''
     code = ''
+    readback_failure_state = 'remote'
 
     def execute(self, client, item):
         return self.dispatch(client, item, 'apply')
@@ -132,7 +143,8 @@ class Operation:
         try:
             return self._reconcile(client, item, remote or {})
         except (PanelAPIError, ValueError):
-            return result('remote', '暂时无法读回结果，请继续只读核验', remote=remote or {})
+            return result('uncertain' if (remote or {}).get('ambiguous') else self.readback_failure_state,
+                          '暂时无法读回结果，请继续只读核验', remote=remote or {})
 
     @staticmethod
     def phase(phase, expected='apply'):

@@ -1,4 +1,10 @@
-"""HTTP ACME issuance and deployment, separated by a durable worker boundary."""
+"""HTTP ACME issuance includes Baota's automatic panel-wide certificate sync.
+
+The initial intent covers issuance/renewal AND sub_all_cert side effects. A separate
+SetCertToSite intent is conditional: Baota may already update the selected site's
+certificate during the first call. Scope acknowledgement is persisted/enforced by the
+task service; this adapter accepts no caller-controlled scope override or bypass.
+"""
 import datetime
 import json
 import posixpath
@@ -9,11 +15,56 @@ from cryptography.hazmat.primitives import hashes
 
 from .. import resources as r
 from ..client import PanelAPIError
-from .base import Operation, result, selection, strict
+from .base import Operation, digest, identity, result, selection, strict
 from .sites import domain_list, site_preflight
 
 
 INDEX = re.compile(r'[a-fA-F0-9]{16,128}\Z')
+MAX_SSL_INVENTORY_SITES = 200
+
+
+def ssl_scope(renewal):
+    """Fixed public policy derived from both official versions' save_cert/sub_all_cert."""
+    return {'policy': 'baota_acme_panel_sync_v1',
+            'scope': 'panel_wide_same_san_eligible_certificates',
+            'may_update_unselected_sites': True, 'may_update_orphan_certificates': True,
+            'may_update_panel_tls': True, 'web_service_reload': True,
+            'renewal_http_to_https_toggle': renewal,
+            'candidate_directory_roots': ['/www/server/panel/vhost/cert', '/www/server/panel/vhost/ssl',
+                                          '/www/server/panel'],
+            'eligibility': 'immediate_child_certificate_with_same_san_set_compatible_issuer_and_not_later_expiry',
+            'inventory_complete': False,
+            'message': '申请或续签可能自动替换本面板内符合条件的同域名证书，包括未选择网站、孤立证书和面板自身 TLS，并重载 Web 服务；续签还可能临时切换 HTTP 跳转 HTTPS 配置。'}
+
+
+def public_inventory(client):
+    """Bounded registered-site reads only; never enumerate directories or fetch keys.
+
+    Even an untruncated result is incomplete: GetSSL cannot enumerate orphan folders,
+    unregistered copies, or every panel TLS certificate scanned by Baota itself.
+    A failed known-site read fails preflight/guard instead of silently losing coverage.
+    """
+    all_sites = sorted(r.sites(client), key=lambda site: site['id'])
+    scanned = all_sites[:MAX_SSL_INVENTORY_SITES]
+    records = []
+    for site in scanned:
+        snapshot = ssl_snapshot(client, site)
+        if snapshot['certificate']:
+            records.append({'site_id': site['id'], 'site_name': site['name'], 'enabled': snapshot['enabled'],
+                            'certificate': snapshot['certificate']})
+    return {'complete': False, 'coverage': 'registered_sites_GetSSL_only',
+            'registered_site_count': len(all_sites), 'scanned_site_count': len(scanned),
+            'scan_limit': MAX_SSL_INVENTORY_SITES, 'truncated': len(all_sites) > len(scanned),
+            'site_roster_digest': digest(json.dumps([identity(site) for site in all_sites], sort_keys=True)),
+            'not_enumerated': ['orphan_certificate_directories', 'unregistered_certificate_copies', 'panel_tls'],
+            'records': records}
+
+
+def matching_inventory(inventory, domains):
+    wanted = set(domains)
+    return {**{key: value for key, value in inventory.items() if key != 'records'},
+            'matching_sites': [record for record in inventory['records']
+                               if set(record['certificate']['domains']) == wanted]}
 
 
 def order_index(value):
@@ -120,6 +171,12 @@ class CertificateOperation(Operation):
     category = 'ssl'
     resources = ('sites', 'domains', 'ssl')
     renewal = False
+    readback_failure_state = 'uncertain'
+
+    @staticmethod
+    def deployment_evidence(cert):
+        return {'certificate': cert, 'selected_site_configuration_verified': True, 'live_tls_verified': False,
+                'panel_sync_outcome_verified': False, 'ssl_scope_policy': 'baota_acme_panel_sync_v1'}
 
     def validate(self, params):
         strict(params, ('sites', 'all_sites', 'domains'))
@@ -140,6 +197,7 @@ class CertificateOperation(Operation):
         params, info = self.validate(params), r.system_info(client)
         server = r.webserver(client)
         all_orders = orders(client)
+        inventory_cache = []
         def prepare(site, item):
             if server == 'openlitespeed':
                 item.update(state='skipped', message='OpenLiteSpeed SSL 尚未完成此操作适配')
@@ -157,7 +215,8 @@ class CertificateOperation(Operation):
             snapshot = ssl_snapshot(client, site)
             item['before'].update(ssl=snapshot, domains=bound, webserver=server,
                                   order_ids=[v['index'] for v in all_orders])
-            plan = item['plan'] = {'domains': requested, 'auth_to': auth_to, 'renewal': self.renewal}
+            plan = item['plan'] = {'domains': requested, 'auth_to': auth_to, 'renewal': self.renewal,
+                                  'required_acknowledgements': ['ssl_panel_sync'], 'ssl_scope': ssl_scope(self.renewal)}
             if self.renewal:
                 index = order_index(snapshot['index'])
                 linked = [v for v in all_orders if v['index'] == index and matches(v, plan)]
@@ -181,6 +240,9 @@ class CertificateOperation(Operation):
                             datetime.datetime.fromisoformat(cert['expires_at']) >
                             datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)):
                         plan['reuse_index'] = matching_orders[0]['index']
+            if not inventory_cache:
+                inventory_cache.append(public_inventory(client))
+            item['before']['ssl_sync_inventory'] = matching_inventory(inventory_cache[0], requested)
         return site_preflight(client, params, info, prepare)
 
     def guard_site(self, client, item):
@@ -194,9 +256,12 @@ class CertificateOperation(Operation):
     def _dispatch(self, client, item, phase, remote):
         if phase not in ('apply', 'deploy'):
             raise ValueError('证书操作阶段无效')
+        plan = item['plan']
+        if (plan.get('ssl_scope') != ssl_scope(self.renewal)
+                or plan.get('required_acknowledgements') != ['ssl_panel_sync']):
+            raise PanelAPIError('缺少冻结的面板证书同步范围，请重新预检')
         site = self.guard_site(client, item)
         current = ssl_snapshot(client, site)
-        plan = item['plan']
         if phase == 'apply':
             if current != item['before']['ssl']:
                 raise PanelAPIError('网站 SSL 配置在预检后变化')
@@ -206,15 +271,17 @@ class CertificateOperation(Operation):
                 raise PanelAPIError('证书订单在预检后出现冲突')
             if plan.get('reuse_index'):
                 return self.reconcile(client, item, {'phase': 'issue', 'index': plan['reuse_index']})
+            if matching_inventory(public_inventory(client), plan['domains']) != item['before'].get('ssl_sync_inventory'):
+                raise PanelAPIError('面板已知同域名证书清单在预检后变化，请重新预检')
             if self.renewal:
                 linked = [o for o in latest if o['index'] == plan['index'] and matches(o, plan)]
                 if len(linked) != 1: raise PanelAPIError('续签订单关联已变化')
                 response = client.request('/acme', 'renew_cert', {'index': plan['index']}, mutating=True)
-                remote = {'phase': 'issue', 'index': plan['index']}
+                remote = {'phase': 'issue_and_sync', 'index': plan['index'], 'ssl_scope_policy': plan['ssl_scope']['policy']}
             else:
                 response = client.request('/acme', 'apply_cert_api', {'id': site['id'],
                     'domains': json.dumps(plan['domains']), 'auth_type': 'http', 'auth_to': plan['auth_to']}, mutating=True)
-                remote = {'phase': 'issue'}
+                remote = {'phase': 'issue_and_sync', 'ssl_scope_policy': plan['ssl_scope']['policy']}
             # A return body may contain private_key/cert/raw logs. Select only a valid index.
             if isinstance(response, dict) and isinstance(response.get('index'), str) and INDEX.fullmatch(response['index']):
                 remote['index'] = response['index'].lower()
@@ -229,7 +296,8 @@ class CertificateOperation(Operation):
             raise PanelAPIError('签发证书在部署前发生变化')
         if current != item['before']['ssl']:
             if current['enabled'] and current['certificate'].get('fingerprint') == cert['fingerprint']:
-                return result('success', '目标证书已部署并读回确认', cert)
+                return result('success', '目标网站公开证书配置已读回确认；实际 TLS 连接及其他同步位置未核验',
+                              self.deployment_evidence(cert))
             raise PanelAPIError('网站 SSL 配置在部署前发生变化')
         client.request('/acme', 'SetCertToSite', {'index': index, 'siteName': site['name']}, mutating=True)
         return self.reconcile(client, item, {'phase': 'deploy', 'index': index, 'certificate': cert})
@@ -266,13 +334,15 @@ class CertificateOperation(Operation):
             return result('remote', '仍读取到续签前的旧证书，等待新证书', remote=remote)
         current = ssl_snapshot(client, site)
         if current['enabled'] and current['certificate'].get('fingerprint') == cert['fingerprint']:
-            return result('success', '证书域名、有效期及网站部署指纹已读回确认', cert)
+            return result('success', '目标网站公开证书配置的域名、有效期及指纹已读回确认；实际 TLS 连接及其他同步位置未核验',
+                          self.deployment_evidence(cert))
         if remote.get('phase') == 'deploy':
             return result('uncertain' if remote.get('ambiguous') else 'remote',
                           '证书已签发，但网站尚未读回相同证书；不会自动再次部署',
                           {'certificate': cert, 'deployed': False}, {**remote, 'certificate': cert})
-        return result('remote', '证书已签发，等待独立持久化部署阶段', {'certificate': cert},
-                      {**remote, 'phase': 'issue', 'next_action': 'deploy', 'certificate': cert})
+        return result('remote', '已读到有效签发证书，目标网站尚需独立部署阶段；其他同步位置未核验',
+                      {'certificate': cert, 'panel_sync_outcome_verified': False},
+                      {**remote, 'phase': 'issue_and_sync', 'next_action': 'deploy', 'certificate': cert})
 
 
 class ApplyCertificate(CertificateOperation):

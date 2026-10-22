@@ -41,6 +41,7 @@ class PanelFixture:
         self.modules = []
         self.orders = []
         self.ssl = {'status': False, 'csr': '', 'key': 'PRIVATE_SECRET', 'index': ''}
+        self.ssl_by_name = {}
         self.file_bodies = {}
         self.mutation_error = None
         self.reject_rewrite = False
@@ -103,9 +104,10 @@ class PanelFixture:
             return {'local': {'version': self.info['version']}, 'cloud': {
                 'OfficialVersion': {'version': self.offered}, 'OfficialVersionLatest': []}, 'upgrade': 1}
         if action == 'GetSSL':
-            if not kwargs.get('allow_status_false') and self.ssl['status'] is False:
+            ssl_state = self.ssl_by_name.get(p['siteName'], self.ssl)
+            if not kwargs.get('allow_status_false') and ssl_state['status'] is False:
                 raise PanelAPIError('disabled')
-            return copy.deepcopy(self.ssl)
+            return copy.deepcopy(ssl_state)
         if action == 'get_orders': return copy.deepcopy(self.orders)
         if action in ('apply_cert_api', 'renew_cert'): return {'status': True, 'index': 'a' * 32}
         if action == 'SetCertToSite': return {'status': True}
@@ -195,7 +197,7 @@ class OperationTests(TestCase):
         self.assertEqual(op.execute(self.client, item)['state'], 'failed')
         self.assertEqual(self.mutations(), [])
         op, item = self.item('site_rewrite', params)
-        self.assertEqual(op.execute(self.client, item)['state'], 'success')
+        self.assertEqual(op.execute(self.client, item)['state'], 'uncertain')
         self.assertEqual(self.mutations()[0][2]['rewrite_data'], params['rules'])
 
     def test_rejected_rewrite_checks_rollback_without_second_mutation(self):
@@ -568,5 +570,179 @@ class OperationTests(TestCase):
         self.client.file_bodies['/www/server/panel/rewrite/nginx/wordpress.conf'] = rules
         op, item = self.item('site_rewrite', {'sites': [1], 'mode': 'template', 'webserver': 'nginx', 'template': 'wordpress'})
         self.client.file_bodies['/www/server/panel/rewrite/nginx/wordpress.conf'] = '# newer global template\n'
-        self.assertEqual(op.execute(self.client, item)['state'], 'success')
+        self.assertEqual(op.execute(self.client, item)['state'], 'uncertain')
         self.assertEqual(self.mutations()[0][2]['rewrite_data'], rules)
+
+    def test_saved_rewrite_cannot_prove_reload_even_when_api_returns_true(self):
+        op, item = self.item('site_rewrite', {'sites': [1], 'mode': 'custom', 'webserver': 'nginx', 'rules': '# desired\n'})
+        # The real API returns child status:true before serviceReload and ignores its result.
+        result = op.execute(self.client, item)
+        self.assertEqual(result['state'], 'uncertain')
+        self.assertEqual(result['message'], '配置已保存，Web服务加载结果需核实')
+        self.assertTrue(result['evidence']['configuration_saved'])
+        self.assertFalse(result['evidence']['runtime_verified'])
+        count = len(self.mutations())
+        self.assertEqual(op.reconcile(self.client, item, result['remote'])['state'], 'uncertain')
+        self.assertEqual(len(self.mutations()), count)
+
+    def ssl_sync_fixture(self):
+        old = pem(days=5)
+        self.client.ssl.update(status=True, csr=old, index='a' * 32, auth_type='http', type=1)
+        self.client.sites.append({'id': 2, 'name': 'unselected.example.com', 'path': '/www/wwwroot/unselected',
+                                  'project_type': 'PHP', 'php_version': '74', 'status': '1'})
+        self.client.ssl_by_name['unselected.example.com'] = copy.deepcopy(self.client.ssl)
+        self.client.file_bodies['/www/server/panel/ssl/certificate.pem'] = old
+        return old
+
+    def test_ssl_scope_is_fixed_broad_and_known_inventory_is_public_and_incomplete(self):
+        self.ssl_sync_fixture()
+        _, item = self.item('ssl_apply', {'sites': [1]})
+        self.assertEqual(item['plan']['required_acknowledgements'], ['ssl_panel_sync'])
+        scope = item['plan']['ssl_scope']
+        self.assertEqual(scope['policy'], 'baota_acme_panel_sync_v1')
+        self.assertTrue(scope['may_update_unselected_sites'])
+        self.assertTrue(scope['may_update_orphan_certificates'])
+        self.assertTrue(scope['may_update_panel_tls'])
+        self.assertTrue(scope['web_service_reload'])
+        self.assertFalse(scope['renewal_http_to_https_toggle'])
+        inventory = item['before']['ssl_sync_inventory']
+        self.assertFalse(inventory['complete'])
+        self.assertEqual([v['site_id'] for v in inventory['matching_sites']], [1, 2])
+        self.assertNotIn('BEGIN CERTIFICATE', json.dumps(item))
+        self.assertNotIn('PRIVATE_SECRET', json.dumps(item))
+        with self.assertRaises(ValueError):
+            self.op('ssl_apply').validate({'sites': [1], 'ssl_scope': {'may_update_panel_tls': False}})
+
+    def test_ssl_known_unselected_inventory_drift_blocks_initial_mutation(self):
+        self.ssl_sync_fixture()
+        op, item = self.item('ssl_apply', {'sites': [1]})
+        self.client.ssl_by_name['unselected.example.com']['csr'] = pem(days=10)
+        self.assertEqual(op.execute(self.client, item)['state'], 'failed')
+        self.assertEqual(self.mutations(), [])
+
+    def test_ssl_missing_or_narrowed_scope_cannot_dispatch(self):
+        op, item = self.item('ssl_apply', {'sites': [1]})
+        for change in ('remove_scope', 'narrow_scope', 'remove_acknowledgement', 'remove_inventory'):
+            with self.subTest(change=change):
+                altered = copy.deepcopy(item)
+                if change == 'remove_scope':
+                    altered['plan'].pop('ssl_scope')
+                elif change == 'narrow_scope':
+                    altered['plan']['ssl_scope']['may_update_panel_tls'] = False
+                elif change == 'remove_acknowledgement':
+                    altered['plan']['required_acknowledgements'] = []
+                else:
+                    altered['before'].pop('ssl_sync_inventory')
+                self.assertEqual(op.execute(self.client, altered)['state'], 'failed')
+                self.assertEqual(self.mutations(), [])
+
+    def test_ssl_registered_inventory_limit_is_explicit_and_never_complete(self):
+        self.client.ssl.update(status=True, csr=pem(days=5))
+        self.client.sites.extend({'id': sid, 'name': 'site-%s.example.com' % sid,
+            'path': '/www/wwwroot/site-%s' % sid, 'project_type': 'PHP', 'php_version': '74', 'status': '1'}
+            for sid in range(2, 206))
+        _, item = self.item('ssl_apply', {'sites': [1]})
+        self.assertEqual(item['state'], 'ready')
+        inventory = item['before']['ssl_sync_inventory']
+        self.assertFalse(inventory['complete'])
+        self.assertTrue(inventory['truncated'])
+        self.assertEqual(inventory['registered_site_count'], 205)
+        self.assertEqual(inventory['scanned_site_count'], 200)
+        self.assertEqual(inventory['scan_limit'], 200)
+        self.assertEqual(len(inventory['matching_sites']), 200)
+        self.assertEqual(inventory['matching_sites'][-1]['site_id'], 200)
+        self.assertEqual(sum(c[1] == 'GetSSL' for c in self.client.calls), 201)
+
+    def test_ssl_unselected_inventory_read_failure_blocks_preflight(self):
+        self.ssl_sync_fixture()
+        original = self.client.request
+        def request(path, action=None, params=None, mutating=False, **kwargs):
+            if action == 'GetSSL' and params['siteName'] == 'unselected.example.com':
+                raise PanelAPIError('unavailable')
+            return original(path, action, params, mutating, **kwargs)
+        self.client.request = request
+        op, item = self.item('ssl_apply', {'sites': [1]})
+        self.assertEqual(item['state'], 'failed')
+        self.assertEqual(op.execute(self.client, item)['state'], 'failed')
+        self.assertEqual(self.mutations(), [])
+
+    def test_ssl_initial_request_can_auto_deploy_selected_unselected_and_panel(self):
+        self.ssl_sync_fixture()
+        op, item = self.item('ssl_apply', {'sites': [1]})
+        certificate = pem()
+        original = self.client.request
+        def request(path, action=None, params=None, mutating=False, **kwargs):
+            response = original(path, action, params, mutating, **kwargs)
+            if action == 'apply_cert_api':
+                # Representative official save_cert -> sub_all_cert behavior, without a
+                # SetCertToSite request: the first API call itself changes these files.
+                self.client.ssl['csr'] = certificate
+                self.client.ssl_by_name['unselected.example.com']['csr'] = certificate
+                self.client.file_bodies['/www/server/panel/ssl/certificate.pem'] = certificate
+                self.client.orders = [{'index': 'a' * 32, 'domains': ['example.com'], 'auth_type': 'http',
+                    'auth_to': '/www/wwwroot/example.com', 'status': 'valid', 'save_path': 'vhost/letsencrypt/example.com'}]
+                self.client.file_bodies['/www/server/panel/vhost/letsencrypt/example.com/fullchain.pem'] = certificate
+            return response
+        self.client.request = request
+        result = op.execute(self.client, item)
+        self.assertEqual(result['state'], 'success')
+        self.assertEqual(len(self.mutations()), 1)
+        self.assertEqual(self.client.ssl_by_name['unselected.example.com']['csr'], certificate)
+        self.assertEqual(self.client.file_bodies['/www/server/panel/ssl/certificate.pem'], certificate)
+        self.assertNotIn('next_action', result.get('remote', {}))
+        self.assertFalse(result['evidence']['panel_sync_outcome_verified'])
+        self.assertTrue(result['evidence']['selected_site_configuration_verified'])
+        self.assertFalse(result['evidence']['live_tls_verified'])
+        self.assertIn('公开证书配置', result['message'])
+
+    def test_ssl_renew_auto_deploys_without_second_mutating_request(self):
+        old = self.ssl_sync_fixture()
+        self.client.orders = [{'index': 'a' * 32, 'domains': ['example.com'], 'auth_type': 'http',
+            'auth_to': '/www/wwwroot/example.com', 'status': 'valid', 'save_path': 'vhost/letsencrypt/example.com'}]
+        self.client.file_bodies['/www/server/panel/vhost/letsencrypt/example.com/fullchain.pem'] = old
+        op, item = self.item('ssl_renew', {'sites': [1]})
+        certificate = pem()
+        original = self.client.request
+        def request(path, action=None, params=None, mutating=False, **kwargs):
+            response = original(path, action, params, mutating, **kwargs)
+            if action == 'renew_cert':
+                self.client.ssl['csr'] = certificate
+                self.client.ssl_by_name['unselected.example.com']['csr'] = certificate
+                self.client.file_bodies['/www/server/panel/ssl/certificate.pem'] = certificate
+                self.client.file_bodies['/www/server/panel/vhost/letsencrypt/example.com/fullchain.pem'] = certificate
+            return response
+        self.client.request = request
+        result = op.execute(self.client, item)
+        self.assertEqual(result['state'], 'success')
+        self.assertEqual([c[1] for c in self.mutations()], ['renew_cert'])
+        self.assertNotIn('next_action', result.get('remote', {}))
+        self.assertTrue(result['evidence']['selected_site_configuration_verified'])
+        self.assertFalse(result['evidence']['live_tls_verified'])
+        count = len(self.mutations())
+        self.assertEqual(op.reconcile(self.client, item, {'phase': 'issue_and_sync', 'index': 'a' * 32})['state'], 'success')
+        self.assertEqual(len(self.mutations()), count)
+
+    def test_ssl_renew_plan_covers_redirect_toggle_and_panel_tls_read_failure_stays_uncertain(self):
+        old = self.ssl_sync_fixture()
+        self.client.orders = [{'index': 'a' * 32, 'domains': ['example.com'], 'auth_type': 'http',
+            'auth_to': '/www/wwwroot/example.com', 'status': 'valid', 'save_path': 'vhost/letsencrypt/example.com'}]
+        self.client.file_bodies['/www/server/panel/vhost/letsencrypt/example.com/fullchain.pem'] = old
+        op, item = self.item('ssl_renew', {'sites': [1]})
+        self.assertTrue(item['plan']['ssl_scope']['renewal_http_to_https_toggle'])
+        original = self.client.request
+        submitted = False
+        def request(path, action=None, params=None, mutating=False, **kwargs):
+            nonlocal submitted
+            if submitted:
+                raise PanelAPIError('面板 HTTPS 证书验证失败')
+            response = original(path, action, params, mutating, **kwargs)
+            submitted = submitted or mutating
+            return response
+        self.client.request = request
+        result = op.execute(self.client, item)
+        self.assertEqual(result['state'], 'uncertain')
+        self.assertEqual(result['remote']['phase'], 'issue_and_sync')
+        self.assertNotIn('next_action', result['remote'])
+        self.assertEqual(len(self.mutations()), 1)
+        op.reconcile(self.client, item, result['remote'])
+        self.assertEqual(len(self.mutations()), 1)
