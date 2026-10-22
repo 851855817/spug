@@ -97,3 +97,13 @@ def api_configuration(data, panel):
     if clear and key:
         raise ValueError('不能同时填写和清除 API 密钥')
     return values, key, clear
+
+
+def is_linux_system(info):
+    """Require a recognizable Linux platform or distro from GetSystemTotal."""
+    system = ' '.join(info[key].lower() for key in ('system', 'os', 'platform')
+                      if isinstance(info.get(key), str))
+    if re.search(r'\b(?:windows|win32|darwin|macos|mac os|freebsd|openbsd|netbsd|solaris|sunos|aix|hp-ux|plan\s?9)\b', system):
+        return False
+    return bool(re.search(r'\b(?:linux|ubuntu|debian|centos|rocky|almalinux|red hat|fedora|'
+                          r'opensuse|suse|arch|alpine|gentoo|cloudlinux|euleros|openeuler|anolis)\b', system))

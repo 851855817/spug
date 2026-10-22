@@ -257,6 +257,30 @@ class ConnectionAPITests(TestCase):
                 self.assertNotIn('raw-body', result.content.decode())
                 self.assertEqual(Panel.objects.get(pk=record['id']).api_version, '')
 
+    def test_unknown_or_absent_os_cannot_be_marked_connected(self):
+        for system in [None, '', 'Plan9', 'unknown', {'name': 'Linux'}, 42]:
+            with self.subTest(system=system):
+                response = {'version': '13.1.0'}
+                if system is not None:
+                    response['system'] = system
+                server = self.local_panel(response=response)
+                record = self.configured(server, group_id=self.group(str(Panel.objects.count()))['id'])
+                self.request('post', '/baota/connection/', {'id': record['id']}, success=False)
+                panel = Panel.objects.get(pk=record['id'])
+                self.assertEqual(panel.api_checked_at, '')
+                self.assertEqual(panel.api_version, '')
+
+    def test_recognizable_linux_distributions_are_accepted_without_literal_linux(self):
+        for system in ['Ubuntu 22.04.5 LTS x86_64', 'CentOS 7.9.2009 x86_64',
+                       'Debian GNU/Linux 12', 'Rocky Linux 9.5', 'AlmaLinux 9.4',
+                       'Red Hat Enterprise Linux 9', 'openEuler 22.03 LTS', 'Alibaba Cloud Linux 3']:
+            with self.subTest(system=system):
+                server = self.local_panel(response={'version': '13.1.0', 'system': system})
+                record = self.configured(server, group_id=self.group(str(Panel.objects.count()))['id'])
+                result = self.request('post', '/baota/connection/', {'id': record['id']})
+                self.assertEqual(result['api_version'], '13.1.0')
+                self.assertTrue(result['api_checked_at'])
+
 
 class PanelTransportTests(SimpleTestCase):
     def setUp(self):

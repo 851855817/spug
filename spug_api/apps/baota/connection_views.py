@@ -5,7 +5,7 @@ from django.views import View
 from libs import auth, human_datetime, json_response
 from .client import PanelAPIError, PanelClient, inspect_certificate
 from .models import Panel
-from .validation import parse_body, positive_id
+from .validation import is_linux_system, parse_body, positive_id
 
 
 class ConnectionView(View):
@@ -18,10 +18,8 @@ class ConnectionView(View):
                 result = client.request('/system', action='GetSystemTotal')
             if not isinstance(result, dict):
                 raise PanelAPIError('面板系统信息格式错误')
-            system = ' '.join(str(result.get(key, '')) for key in ('system', 'os', 'platform')).lower()
-            if any(name in system for name in ('windows', 'win32', 'darwin', 'macos', 'mac os',
-                                               'freebsd', 'openbsd', 'netbsd', 'solaris', 'sunos', 'aix', 'hp-ux')):
-                raise PanelAPIError('当前仅支持 Linux 宝塔面板')
+            if not is_linux_system(result):
+                raise PanelAPIError('无法确认此面板运行 Linux，当前仅支持可识别的 Linux 宝塔面板')
             version = result.get('version')
             if not isinstance(version, str) or not re.fullmatch(r'\d{1,3}(?:\.\d{1,3}){1,3}(?:[a-zA-Z0-9._-]{0,20})', version):
                 raise PanelAPIError('面板没有返回可识别的版本号')
