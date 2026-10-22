@@ -47,6 +47,44 @@ jobs:
       - name: Check whitespace
         run: git diff --check HEAD^ HEAD
 
+  mariadb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+      - name: Pull disposable database and fixed application runtime
+        run: |
+          docker pull mariadb:11.4
+          docker pull ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c
+      - name: Start database without external network access
+        run: |
+          docker network create --internal baota-ci
+          docker run -d --name baota-ci-db --network baota-ci --memory 512m --pids-limit 128 \
+            -e MARIADB_ROOT_PASSWORD=disposable-ci-password -e MARIADB_DATABASE=baota_ci mariadb:11.4
+          for baota_attempt in $(seq 1 60); do
+            if docker exec baota-ci-db healthcheck.sh --connect --innodb_initialized; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Check task transactions and concurrent claims
+        run: |
+          if [ ! -f spug_api/apps/baota/test_tasks.py ]; then
+            echo 'Task tests have not been committed yet.'
+            exit 0
+          fi
+          docker run --rm --network baota-ci --read-only --tmpfs /tmp:rw,nosuid,size=128m \
+            --memory 768m --cpus 2 --pids-limit 128 \
+            -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONUNBUFFERED=1 \
+            -e BAOTA_CI_DB_HOST=baota-ci-db -e BAOTA_CI_DB_PASSWORD=disposable-ci-password \
+            -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api --entrypoint python3 \
+            ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
+            manage.py test apps.baota.test_tasks --settings=spug.baota_ci_settings --noinput
+      - name: Remove disposable database
+        if: always()
+        run: |
+          docker rm -fv baota-ci-db || true
+          docker network rm baota-ci || true
+
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 20
