@@ -274,9 +274,9 @@ class Rewrite(Operation):
                 if len(matches) != 1: raise PanelAPIError('模板不在当前服务器目录中')
                 rules = file_body(client, expected)
                 if len(rules.encode('utf-8')) > 65536: raise PanelAPIError('模板超出限制')
-            item['before'].update(rewrite_digest=digest(body), webserver=server)
+            item['before'].update(rewrite_digest=digest(body), webserver=server, runtime_verified=False)
             item['plan'] = {'file': path, 'rules': rules, 'digest': digest(rules)}
-            if body == rules: item.update(state='already', message='伪静态规则已符合目标')
+            if body == rules: item.update(state='already', message='配置文件已符合目标，Web 服务加载状态未核实')
         return site_preflight(client, params, info, prepare)
 
     def _dispatch(self, client, item, phase, remote):
@@ -291,9 +291,18 @@ class Rewrite(Operation):
         response = client.request('/site', 'SetRewriteLists', {'sites': json.dumps([{
             'id': item['target']['id'], 'name': item['target']['name'], 'file': item['plan']['file']}]),
             'rewrite_data': item['plan']['rules']}, mutating=True)
-        rejected = not (isinstance(response, list) and len(response) == 1 and isinstance(response[0], dict)
-                        and response[0].get('id') == item['target']['id'] and response[0].get('status') is True)
-        return self.reconcile(client, item, {'phase': 'apply', 'rejected': rejected})
+        response_status = 'unknown'
+        if (isinstance(response, list) and len(response) == 1 and isinstance(response[0], dict)
+                and type(response[0].get('id')) is int and response[0]['id'] == item['target']['id']):
+            if response[0].get('status') is True:
+                response_status = 'accepted'
+            elif response[0].get('status') is False:
+                response_status = 'rejected'
+        saved = {'phase': 'apply', 'response_status': response_status}
+        if response_status == 'unknown':
+            # An unexpected reply cannot prove rejection, even if the file is unchanged.
+            saved['ambiguous'] = True
+        return self.reconcile(client, item, saved)
 
     def _reconcile(self, client, item, remote):
         site = self.guard(client, item, site=True)
@@ -301,7 +310,7 @@ class Rewrite(Operation):
                 self.expected_file(client, site, item['before']['webserver']) != item['plan']['file']):
             raise PanelAPIError('伪静态生效文件或运行目录已变化')
         actual = digest(file_body(client, item['plan']['file']))
-        if remote.get('rejected'):
+        if remote.get('response_status') == 'rejected':
             restored = actual == item['before']['rewrite_digest']
             return result('failed', 'Web 配置检查未通过，已核对面板回滚结果', {'rollback_verified': restored, 'digest': actual})
         if actual == item['plan']['digest']:
@@ -309,5 +318,7 @@ class Rewrite(Operation):
             # its return value. The saved file cannot establish that workers loaded it.
             return result('uncertain', '配置已保存，Web服务加载结果需核实',
                           {'digest': actual, 'configuration_saved': True, 'runtime_verified': False}, remote)
-        return result('uncertain' if remote.get('ambiguous') else 'failed',
-                      '伪静态内容未符合目标，不会自动重发或恢复', {'digest': actual}, remote)
+        unknown = remote.get('response_status') not in ('accepted', 'rejected')
+        return result('uncertain' if remote.get('ambiguous') or unknown else 'failed',
+                      '伪静态内容未符合目标，不会自动重发或恢复',
+                      {'digest': actual, 'runtime_verified': False}, remote)

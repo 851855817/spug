@@ -581,9 +581,52 @@ class OperationTests(TestCase):
         self.assertEqual(result['message'], '配置已保存，Web服务加载结果需核实')
         self.assertTrue(result['evidence']['configuration_saved'])
         self.assertFalse(result['evidence']['runtime_verified'])
+        self.assertEqual(result['remote']['response_status'], 'accepted')
         count = len(self.mutations())
         self.assertEqual(op.reconcile(self.client, item, result['remote'])['state'], 'uncertain')
         self.assertEqual(len(self.mutations()), count)
+
+    def test_unknown_rewrite_responses_never_prove_rejection_or_allow_retry(self):
+        responses = (None, [], {'unexpected': 'REMOTE_SECRET'}, [{'id': 1, 'status': 'true'}],
+                     [{'id': 1, 'status': 'false'}], [{'id': 1}], [{'id': 2, 'status': False}],
+                     [{'id': True, 'status': False}], [{'id': 1, 'status': True}, {'id': 1, 'status': False}])
+        for response in responses:
+            for saved in (False, True):
+                with self.subTest(response=response, saved=saved):
+                    self.client = PanelFixture()
+                    op, item = self.item('site_rewrite', {'sites': [1], 'mode': 'custom',
+                        'webserver': 'nginx', 'rules': '# desired\n'})
+                    self.client.reject_rewrite = not saved
+                    original = self.client.request
+                    def request(path, action=None, params=None, mutating=False, **kwargs):
+                        value = original(path, action, params, mutating, **kwargs)
+                        return copy.deepcopy(response) if action == 'SetRewriteLists' else value
+                    self.client.request = request
+                    result = op.execute(self.client, item)
+                    self.assertEqual(result['state'], 'uncertain')
+                    self.assertEqual(result['remote']['response_status'], 'unknown')
+                    self.assertTrue(result['remote']['ambiguous'])
+                    self.assertFalse(result['evidence']['runtime_verified'])
+                    self.assertNotIn('rollback_verified', result['evidence'])
+                    if saved:
+                        self.assertTrue(result['evidence']['configuration_saved'])
+                        self.assertEqual(result['message'], '配置已保存，Web服务加载结果需核实')
+                    self.assertNotIn('REMOTE_SECRET', json.dumps(result))
+                    self.assertEqual(len(self.mutations()), 1)
+                    self.assertEqual(op.reconcile(self.client, item, result['remote'])['state'], 'uncertain')
+                    self.assertEqual(len(self.mutations()), 1)
+
+    def test_already_rewrite_only_confirms_configuration_file(self):
+        self.client.rules['/www/server/panel/vhost/rewrite/example.com.conf'] = '# desired\n'
+        op, item = self.item('site_rewrite', {'sites': [1], 'mode': 'custom',
+            'webserver': 'nginx', 'rules': '# desired\n'})
+        self.assertEqual(item['state'], 'already')
+        self.assertEqual(item['message'], '配置文件已符合目标，Web 服务加载状态未核实')
+        self.assertFalse(item['before']['runtime_verified'])
+        result = op.execute(self.client, item)
+        self.assertEqual(result['state'], 'already')
+        self.assertEqual(result['message'], item['message'])
+        self.assertEqual(self.mutations(), [])
 
     def ssl_sync_fixture(self):
         old = pem(days=5)
