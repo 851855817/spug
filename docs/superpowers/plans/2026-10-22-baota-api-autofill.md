@@ -8,6 +8,6 @@
 
 - [x] 为 `helpers.js` 的 origin 推导和真实 `PanelForm` 的自动同步、手动覆盖、保存旧配置补充回归。首次运行 13 项预期失败、5 项已有用例通过；实现后面板及任务模块 8 个套件共 42 项通过。
 - [x] 修改 `PanelForm.js`：初值和地址变化自动推导；保留显式配置/手动输入；未启用 API 的普通编辑维持空配置；提示说明自动来源。模块 lint 通过；前端生产构建通过，保留上游既有 Hook 警告。
-- [ ] 运行面板及任务模块前端测试、模块 lint 和生产构建。固定提交打包、备份后发布；检查现有数据和任务，浏览器只填写临时表单并取消，不向客户发送命令。更新使用说明、PR 和部署记录。
+- [x] 运行面板及任务模块前端测试、模块 lint 和生产构建。以提交 `6586098f0606d71175e1e29d90842522bf4f98e9` 打包，21:21（UTC+8）配套备份后发布；完整数据/API 配置/任务/密钥摘要前后一致。浏览器验证自动提取与手动覆盖后取消，未保存测试记录或向客户发送命令。使用说明和部署记录已更新，GitHub PR 延续原分支。
 
 验证命令：`node node_modules/react-app-rewired/bin/index.js test --watch=false --runInBand --runTestsByPath src/pages/baota/helpers.test.js src/pages/baota/PanelForm.test.js`。浏览器验收使用 `https://example.invalid:8888/security-entry`，预期 API 地址 `https://example.invalid:8888`；手动设置带代理前缀的地址后更改登录地址，原手动值保持。
