@@ -84,11 +84,11 @@ SSL 的第一次 ACME 请求自身可能同步整个面板内相同域名集合�
 
 ## 任务 4：批量任务页面
 
-- [ ] `helpers.test.js` 先验证分组递归去重、面板/网站映射、粘贴建站表格、SSL/版本参数、结果汇总，覆盖不合法域名及错配面板。
-- [ ] TaskForm 依次选择面板和操作，OperationForm 提供八类可理解的参数；网站逐面板选择或展开全部；建站提供结构化网格和批量粘贴，不要求用户写 API JSON。
-- [ ] 资源由后端接口读取；未知版本、未配密钥和依赖错误展示到目标行。prepare 后显示固定预览；start 请求只提交任务 ID，防止界面修改越过预检。
-- [ ] index 提供记录、过滤、搜索目录；TaskDetail 轮询安全摘要和逐对象结果，提供未下发取消、只读核实与有权限的管理员处理。
-- [ ] routes.js 增加 `/exec/panel` 及父级权限；codes.js 增加 view/create/execute/cancel/manage。前端测试和生产构建通过后审查并提交 `feat: add batch panel task workflow`。
+- [x] `helpers.test.js` 先验证分组递归去重、面板/网站映射、粘贴建站表格、SSL/版本参数、结果汇总，覆盖不合法域名及错配面板。
+- [x] TaskForm 依次选择面板和操作，OperationForm 提供八类可理解的参数；网站逐面板选择或展开全部；建站提供结构化网格和批量粘贴，不要求用户写 API JSON。
+- [x] 资源由后端接口读取；未知版本、未配密钥和依赖错误展示到目标行。prepare 后显示固定预览；start 请求只提交任务 ID，防止界面修改越过预检。
+- [x] index 提供记录、过滤、搜索目录；TaskDetail 轮询安全摘要和逐对象结果，提供未下发取消、只读核实与有权限的管理员处理。
+- [x] routes.js 增加 `/exec/panel` 及父级权限；codes.js 增加 view/create/execute/cancel/manage。前端测试和生产构建通过后审查并提交 `feat: add batch panel task workflow`。
 
 ## 任务 5：Linux 集成和隔离验证
 
