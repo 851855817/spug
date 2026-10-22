@@ -9,6 +9,7 @@ from django.utils import timezone
 from .models import Panel, PanelGroup, PanelTask, PanelTaskTarget, PanelLock
 from .operations import get_operation
 from .operations.base import strict
+from .resources import SUPPORTED_VERSIONS
 from .validation import positive_id
 
 
@@ -84,6 +85,17 @@ def safe_panel(panel):
             'api_checked': bool(panel.api_checked_at), 'api_version': panel.api_version}
 
 
+def preflight_prerequisite_error(panel):
+    """Local saved facts only: an empty-parameter target can never become runnable."""
+    try:
+        configured(panel)
+    except ValueError as exc:
+        return str(exc)
+    if panel.api_version not in SUPPORTED_VERSIONS:
+        return '面板版本未知或尚未经过协议适配，禁止变更；仅支持 11.7.0 / 13.1.0'
+    return ''
+
+
 def selected_panels(data):
     panel_ids, group_ids = data.get('panel_ids', []), data.get('group_ids', [])
     if (not isinstance(panel_ids, list) or not isinstance(group_ids, list)
@@ -119,17 +131,28 @@ def prepare(user, data, retry_parent=None):
     ids = {str(p.pk) for p in panels}
     if mapping is not None and (not isinstance(mapping, dict) or set(mapping) != ids):
         raise ValueError('参数映射必须恰好包含每个选中面板')
-    clean = {}
+    clean, blocked = {}, {}
     for panel in panels:
-        clean[str(panel.pk)] = operation.validate(copy.deepcopy(mapping[str(panel.pk)] if mapping is not None else data['params']))
+        params = copy.deepcopy(mapping[str(panel.pk)] if mapping is not None else data['params'])
+        prerequisite = preflight_prerequisite_error(panel)
+        if params == {} and prerequisite:
+            clean[str(panel.pk)] = {}
+            blocked[panel.pk] = prerequisite
+        else:
+            if params == {} and retry_parent is not None:
+                raise ValueError('面板连接条件已变化，请重新填写各面板参数并创建新预检')
+            clean[str(panel.pk)] = operation.validate(params)
     bounded(clean)
     with transaction.atomic():
         task = PanelTask.objects.create(operation=operation.code, owner=user, params_by_panel=clean,
                                         retry_parent=retry_parent,
                                         audit=[{'action': 'prepare', 'actor_id': user.pk, 'at': now()}])
         PanelTaskTarget.objects.bulk_create([
-            PanelTaskTarget(task=task, panel=panel, panel_snapshot=safe_panel(panel), params=clean[str(panel.pk)])
+            PanelTaskTarget(task=task, panel=panel, panel_snapshot=safe_panel(panel), params=clean[str(panel.pk)],
+                            **({'state': 'failed', 'message': blocked[panel.pk], 'summary': preflight_summary([])}
+                               if panel.pk in blocked else {}))
             for panel in panels])
+        refresh_task(task)
     return task
 
 

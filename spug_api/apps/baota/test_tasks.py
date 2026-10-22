@@ -111,6 +111,65 @@ class PanelTaskTests(TransactionTestCase):
         for name in ('PanelTask', 'PanelTaskTarget', 'PanelLock'):
             self.assertTrue(hasattr(models, name), name + ' durable queue model missing')
 
+    def test_mixed_site_preflight_retains_unconfigured_panel_as_explicit_failure(self):
+        service = importlib.import_module('apps.baota.task_service')
+        ready = self.configured()
+        models.Panel.objects.filter(pk=ready['id']).update(api_version='13.1.0')
+        missing = self.panel(name='missing API', group_id=ready['group_id'])
+        task = service.prepare(self.admin, {'operation': 'site_basedir', 'panel_ids': [ready['id'], missing['id']],
+            'params_by_panel': {str(ready['id']): {'sites': [81], 'enabled': True}, str(missing['id']): {}}})
+        failed = task.targets.get(panel_id=missing['id'])
+        self.assertEqual(failed.state, 'failed')
+        self.assertIn('API', failed.message)
+        self.assertEqual(failed.children, [])
+        self.assertEqual(failed.summary, service.preflight_summary([]))
+        self.assertEqual(task.targets.get(panel_id=ready['id']).params, {'sites': [81], 'enabled': True})
+        self.assertFalse(models.PanelLock.objects.exists())
+        self.assertEqual(task.state, 'preflight_queued')
+
+    def test_mixed_software_preflight_retains_unsupported_panel_without_fabricated_version(self):
+        service = importlib.import_module('apps.baota.task_service')
+        ready = self.configured()
+        unsupported = self.configured(name='unsupported', group_id=ready['group_id'])
+        models.Panel.objects.filter(pk=ready['id']).update(api_version='11.7.0')
+        models.Panel.objects.filter(pk=unsupported['id']).update(api_version='12.0.0')
+        params = {'name': 'php', 'm_version': '7.4', 'min_version': '33', 'install_type': '0'}
+        task = service.prepare(self.admin, {'operation': 'software_install', 'panel_ids': [ready['id'], unsupported['id']],
+            'params_by_panel': {str(ready['id']): params, str(unsupported['id']): {}}})
+        self.assertEqual(task.targets.get(panel_id=unsupported['id']).state, 'failed')
+        self.assertIn('版本', task.targets.get(panel_id=unsupported['id']).message)
+        self.assertEqual(task.targets.get(panel_id=ready['id']).params, params)
+
+    def test_empty_parameters_never_bypass_ready_panel_validation(self):
+        service = importlib.import_module('apps.baota.task_service')
+        ready = self.configured()
+        models.Panel.objects.filter(pk=ready['id']).update(api_version='13.1.0')
+        with self.assertRaises(ValueError):
+            service.prepare(self.admin, {'operation': 'site_basedir', 'panel_ids': [ready['id']], 'params_by_panel': {str(ready['id']): {}}})
+        self.assertFalse(models.PanelTask.objects.exists())
+
+    def test_invalid_nonempty_parameters_on_blocked_panel_are_still_rejected(self):
+        service = importlib.import_module('apps.baota.task_service')
+        missing = self.panel()
+        with self.assertRaises(ValueError):
+            service.prepare(self.admin, {'operation': 'site_basedir', 'panel_ids': [missing['id']],
+                'params_by_panel': {str(missing['id']): {'unexpected': True}}})
+        self.assertFalse(models.PanelTask.objects.exists())
+
+    def test_all_blocked_targets_complete_without_queue_or_lock_and_cannot_start_after_repair(self):
+        service = importlib.import_module('apps.baota.task_service')
+        missing = self.configured()
+        models.Panel.objects.filter(pk=missing['id']).update(api_checked_at='')
+        task = service.prepare(self.admin, {'operation': 'software_install', 'panel_ids': [missing['id']], 'params_by_panel': {str(missing['id']): {}}})
+        self.assertEqual(task.state, 'completed')
+        self.assertEqual(task.targets.get().state, 'failed')
+        self.assertFalse(models.PanelLock.objects.exists())
+        models.Panel.objects.filter(pk=missing['id']).update(api_version='13.1.0', api_checked_at='2026-10-22 10:00:00')
+        with self.assertRaises(ValueError):
+            service.start(self.admin, task.pk, {'acknowledgements': []})
+        with self.assertRaisesRegex(ValueError, '重新.*参数'):
+            service.retry(self.admin, task.pk)
+
     def test_prepare_deduplicates_descendant_selection_and_freezes_panel_names(self):
         self.services()
         root = self.group('root')

@@ -1,0 +1,57 @@
+import { selectPanels, parseSiteRows, buildTaskRequest, summarizeTask, stateColor, startPayload } from './helpers';
+
+const panels = [{id: 1, name: 'A', group_id: 2}, {id: 2, name: 'B', group_id: 3}];
+const groups = [{id: 1}, {id: 2, parent_id: 1}, {id: 3, parent_id: 2}];
+
+test('recursive groups and explicit panels produce a stable deduplicated selection', () => {
+  expect(selectPanels(panels, groups, [2], [1, 2]).map(x => x.id)).toEqual([1, 2]);
+  expect(selectPanels(panels, [{id: 1, parent_id: 2}, {id: 2, parent_id: 1}], [], [1])).toEqual([panels[0]]);
+});
+
+test('TSV maps each website only to its explicit panel and preserves additional domains', () => {
+  const rows = parseSiteRows('1\ta.example.com,www.a.example.com\t/www/a\t74\t80\tA\n2\tb.example.com\t/www/b\t00\t8080\tB');
+  const request = buildTaskRequest('site_add', panels, {}, rows);
+  expect(request.params_by_panel['1'].entries[0].domains).toEqual(['a.example.com', 'www.a.example.com']);
+  expect(request.params_by_panel['2'].entries[0]).toMatchObject({php_version: '00', port: 8080});
+  expect(request.params_by_panel['1'].entries).toHaveLength(1);
+});
+
+test.each(['*.example.com', 'https://a.com', 'bad_domain.com', 'a.com:80', '127.0.0.1', 'example.123'])('rejects illegal DNS %s', domain => {
+  const rows = parseSiteRows(`1\t${domain}\t/www/a\t74\t80\n2\tb.com\t/www/b\t00\t80`);
+  expect(() => buildTaskRequest('site_add', panels, {}, rows)).toThrow(/域名/);
+});
+
+test('site identifiers are scoped to their own panel and never copied', () => {
+  const resources = {1: {sites: [{id: 10}]}, 2: {sites: [{id: 20}]}};
+  const values = {1: {sites: [10], enabled: false}, 2: {sites: [20], enabled: true}};
+  expect(buildTaskRequest('site_basedir', panels, values, [], resources).params_by_panel['2'].sites).toEqual([20]);
+  expect(() => buildTaskRequest('site_basedir', panels, {...values, 2: {sites: [10], enabled: true}}, [], resources)).toThrow(/网站.*面板/);
+  expect(() => buildTaskRequest('site_add', [panels[0]], {}, [{panel_id: 2}])).toThrow(/面板/);
+});
+
+test('SSL selectors and exact version fields submit clean panel parameters', () => {
+  expect(buildTaskRequest('ssl_apply', [panels[0]], {1: {all_sites: true, mode: 'ignored'}}).params_by_panel['1']).toEqual({all_sites: true});
+  expect(buildTaskRequest('software_install', [panels[0]], {1: {name: 'php', m_version: '7.4', min_version: '33', install_type: '1', sites: [9]}}).params_by_panel['1'])
+    .toEqual({name: 'php', m_version: '7.4', min_version: '33', install_type: '1'});
+  expect(() => buildTaskRequest('ssl_apply', [panels[0]], {1: {sites: [10], domains: {10: ['*.a.com']}}})).toThrow(/域名/);
+});
+
+test('completed aggregates target errors even with no children; remote and uncertainty never become green', () => {
+  const task = {state: 'completed', targets: [{state: 'failed', children: []}, {children: [{state: 'success'}, {state: 'uncertain'}, {state: 'remote'}]}]};
+  expect(summarizeTask(task)).toMatchObject({success: 1, failed: 1, uncertain: 1, remote: 1});
+  ['completed', 'failed', 'uncertain', 'remote'].forEach(state => expect(stateColor(state)).not.toBe('green'));
+});
+
+test('start includes only exact explicit acknowledgements and never edited parameters', () => {
+  const task = {state: 'prepared', required_acknowledgements: ['ssl_panel_sync'], targets: [{children: [{state: 'ready'}]}]};
+  expect(() => startPayload(task, [])).toThrow(/确认/);
+  expect(startPayload(task, ['ssl_panel_sync'])).toEqual({acknowledgements: ['ssl_panel_sync']});
+  expect(() => startPayload({...task, state: 'running'}, ['ssl_panel_sync'])).toThrow();
+});
+
+test('known blocked panels send empty parameters while ready panels remain strictly validated', () => {
+  const ready = {...panels[0], api_configured: true, api_checked: true, api_version: '13.1.0'};
+  const blocked = {...panels[1], api_configured: false, api_checked: false, api_version: ''};
+  expect(buildTaskRequest('software_install', [ready, blocked], {1: {name: 'php', m_version: '7.4', min_version: '33'}}).params_by_panel['2']).toEqual({});
+  expect(() => buildTaskRequest('software_install', [ready], {})).toThrow(/软件/);
+});

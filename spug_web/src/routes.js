@@ -25,6 +25,7 @@ import BaotaIndex from './pages/baota';
 import ExecTask from './pages/exec/task';
 import ExecTemplate from './pages/exec/template';
 import ExecTransfer from './pages/exec/transfer';
+import ExecPanel from './pages/exec/panel';
 import DeployApp from './pages/deploy/app';
 import DeployRepository from './pages/deploy/repository';
 import DeployRequest from './pages/deploy/request';
@@ -59,10 +60,11 @@ export default [
   {icon: <CloudServerOutlined/>, title: t('主机管理'), auth: 'host.host.view', path: '/host', component: HostIndex},
   {icon: <CloudServerOutlined/>, title: t('宝塔面板管理'), auth: 'baota.panel.view', path: '/baota', component: BaotaIndex},
   {
-    icon: <CodeOutlined/>, title: t('批量执行'), auth: 'exec.task.do|exec.template.view', child: [
+    icon: <CodeOutlined/>, title: t('批量执行'), auth: 'exec.task.do|exec.template.view|exec.panel.view', child: [
       {title: t('执行任务'), auth: 'exec.task.do', path: '/exec/task', component: ExecTask},
       {title: t('模板管理'), auth: 'exec.template.view', path: '/exec/template', component: ExecTemplate},
       {title: t('文件分发'), auth: 'exec.transfer.do', path: '/exec/transfer', component: ExecTransfer},
+      {title: t('面板任务'), auth: 'exec.panel.view', path: '/exec/panel', component: ExecPanel},
     ]
   },
   {
