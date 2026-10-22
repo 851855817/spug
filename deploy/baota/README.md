@@ -2,7 +2,7 @@
 
 基于上游 Spug 4.1.1（`049984e01373fc1cd97b94b60c0b3124036b0f47`），保留 AGPL-3.0 许可证。
 
-已部署版本、验证结果和 GitHub 记录见 [首次部署记录](DEPLOYMENT.md)。
+当前已部署批量面板任务，版本、验证结果和 GitHub 记录见 [面板任务部署记录](DEPLOYMENT-PANEL-TASKS.md)；原入口管理的首次记录见 [历史部署记录](DEPLOYMENT.md)。操作步骤见 [用户说明](../../docs/baota-panel-tasks-user-guide.md)。
 
 ## 功能
 
