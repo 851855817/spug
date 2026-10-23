@@ -1,9 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Checkbox, Collapse, Descriptions, Empty, Modal, Space, Spin, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Collapse, Empty, Modal, Space, Spin, Typography } from 'antd';
 import { hasPermission, http } from 'libs';
 import Evidence, { Status } from './TaskEvidence';
 import ResolveForm from './ResolveForm';
+import TaskItem from './TaskItem';
 import { OPERATION_LABELS, SSL_ACK, startPayload, summarizeTask } from './helpers';
+import styles from './TaskDetail.module.css';
+
+const COUNT_LABELS = {success: '成功', already: '已满足', failed: '失败', uncertain: '待核实', remote: '处理中',
+  ready: '待执行', skipped: '已跳过', cancelled: '已取消', pending: '等待中'};
 
 export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange, onRetry}) {
   const [task, setTask] = useState(null);
@@ -61,13 +66,14 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
   const confirmed = required.every(code => acknowledged.includes(code));
   return <Card title={`任务 #${task.id} · ${OPERATION_LABELS[task.operation] || task.operation}`}>
     {error && <Alert type="error" message={error}/>}
-    <Space wrap><Status state={task.state}/><Typography.Text>
-      成功 {counts.success} / 已满足 {counts.already} / 失败 {counts.failed} / 不确定 {counts.uncertain} / 远端处理中 {counts.remote} / 待执行 {counts.ready} / 跳过 {counts.skipped} / 已取消 {counts.cancelled}
-    </Typography.Text></Space>
-    <Typography.Paragraph type="secondary">预检快照固定于本任务。修改新建表单需重新预检；当前网站列表不会扩展本次执行范围。任务“已结束”不代表全部成功。</Typography.Paragraph>
-    {task.retry_parent_id && <Typography.Paragraph>关联重试来源：任务 #{task.retry_parent_id}（本次仍需独立预检和确认）</Typography.Paragraph>}
-    {task.operation.startsWith('ssl_') && <Alert showIcon type="warning" message="SSL 可能影响整个面板" description={SSL_ACK}/>}
-    {task.operation === 'site_rewrite' && <Alert type="info" showIcon message="伪静态文件保存不代表运行时生效；仅文件回读的结果保持不确定，不自动重载。"/>}
+    <Space wrap><Status state={task.state}/><Typography.Text type="secondary">{(task.targets || []).length} 个面板</Typography.Text>
+      {Object.entries(COUNT_LABELS).filter(([key]) => counts[key] > 0).map(([key, label]) =>
+        <Typography.Text key={key} type={key === 'failed' ? 'danger' : key === 'uncertain' ? 'warning' : undefined}>{label} {counts[key]}</Typography.Text>)}
+    </Space>
+    {ready && <Typography.Paragraph type="secondary">按本次预检范围执行；修改参数需重新预检。</Typography.Paragraph>}
+    {task.retry_parent_id && <Typography.Paragraph type="secondary">重试来源：任务 #{task.retry_parent_id}</Typography.Paragraph>}
+    {task.operation.startsWith('ssl_') && <Alert showIcon type="warning" message="SSL 可能同步未选网站和面板证书，并重载 Web 服务。"/>}
+    {task.operation === 'site_rewrite' && <Alert type="info" showIcon message="伪静态仅核实文件保存，运行状态仍需确认。"/>}
     <Space wrap style={{margin: '16px 0'}}>
       {hasPermission('exec.panel.view') && <Button loading={busy} onClick={() => command('reconcile')}>只读核验</Button>}
       {hasPermission('exec.panel.cancel') && !['completed', 'cancelled'].includes(task.state) && <Button danger loading={busy}
@@ -79,24 +85,13 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
     {!(task.targets || []).length && <Empty description="暂无目标，等待预检"/>}
     <Collapse key={task.state === 'preflight_queued' ? 'preflight' : 'frozen'} defaultActiveKey={(task.targets || []).map(target => String(target.id))}>
       {(task.targets || []).map(target => <Collapse.Panel key={String(target.id)} header={<Space>{target.panel?.name || `面板 ${target.id}`}<Status state={target.state}/></Space>}>
-        {target.message && <Alert type={target.state === 'failed' ? 'error' : 'info'} message={target.message}/>}
-        <Descriptions bordered size="small" column={1}><Descriptions.Item label="预检汇总"><Evidence value={target.summary}/></Descriptions.Item></Descriptions>
-        <Collapse style={{marginTop: 12}} defaultActiveKey={(target.children || []).map(child => child.snapshot.key)}>
-          {(target.children || []).map(child => <Collapse.Panel key={child.snapshot.key} header={<Space>{child.snapshot.label}
-            {task.operation === 'site_rewrite' && child.state === 'already' ? <Tag>配置文件一致，运行时未核实</Tag> : <Status state={child.state}/>}</Space>}>
-            {child.snapshot.message && <Alert type={child.snapshot.state === 'failed' ? 'error' : 'info'} message={child.snapshot.message}/>}
-            <Descriptions bordered size="small" column={1}>
-              <Descriptions.Item label="实际目标 / 网站"><Evidence value={child.snapshot.target}/></Descriptions.Item>
-              <Descriptions.Item label="冻结的当前状态"><Evidence value={child.snapshot.before}/></Descriptions.Item>
-              <Descriptions.Item label="冻结的拟执行动作 / 影响范围"><Evidence value={child.snapshot.plan}/></Descriptions.Item>
-              <Descriptions.Item label="执行结果与核验证据"><Evidence value={child.result}/></Descriptions.Item>
-              <Descriptions.Item label="持久化下发记录"><Evidence value={child.intents}/></Descriptions.Item>
-              <Descriptions.Item label="人工判定历史"><Evidence value={child.resolutions}/></Descriptions.Item>
-            </Descriptions>
+        {target.message && (['failed', 'uncertain', 'remote'].includes(target.state) || !(target.children || []).length) &&
+          <Alert type={target.state === 'failed' ? 'error' : 'warning'} message={target.message}/>}
+        {(target.children || []).map(child => <div key={child.snapshot.key} className={styles.entry}>
+            <TaskItem operation={task.operation} child={child}/>
             {hasPermission('exec.panel.manage') && ['uncertain', 'remote'].includes(child.state) && <Button style={{marginTop: 8}}
               onClick={() => setResolution({target, child})}>人工判定</Button>}
-          </Collapse.Panel>)}
-        </Collapse>
+          </div>)}
       </Collapse.Panel>)}
     </Collapse>
     {ready && <div style={{marginTop: 20}}>
