@@ -30,31 +30,31 @@ metrics 固定结构：`{cpu:{percent,cores},memory:{used_bytes,total_bytes,perc
 
 ## 任务 1：采集器（先测试）
 
-- [ ] 编写 test_resource_collector.py：宝塔 9.2/11.7/13.1 响应的 CPU list、mem MB、网络 KiB/s、disk size 单位字符串；异常、NaN、布尔、超大值拒绝。SSH 脚本在本地 Linux 夹具运行，不接触客户机器。
-- [ ] 运行 `python manage.py test apps.baota.test_resource_collector --settings=spug.test_settings --noinput`，确认缺失功能失败。
-- [ ] 实现 collect_panel(panel)、collect_host(host) → metrics。宝塔固定 GetNetWork 一个查询 timeout(3,8)；SSH连接／认证／banner与读取共享总预算 15 秒，输出最多 64KiB，无命令插值、无安装／写文件。CPU和网络用两次短间隔采样；内存 /proc/meminfo；磁盘用限时固定本地 df 查询。
-- [ ] 测试通过并记录实际测试范围，提交独立文件。
+- [x] 编写 test_resource_collector.py：宝塔 9.2/11.7/13.1 响应的 CPU list、mem MB、网络 KiB/s、disk size 单位字符串；异常、NaN、布尔、超大值拒绝。SSH 脚本在本地 Linux 夹具运行，不接触客户机器。
+- [x] 运行 `python manage.py test apps.baota.test_resource_collector --settings=spug.test_settings --noinput`，确认缺失功能失败。
+- [x] 实现 collect_panel(panel)、collect_host(host) → metrics。宝塔固定 GetNetWork 一个查询 timeout(3,8)；SSH连接／认证／banner与读取共享总预算 15 秒，输出最多 64KiB，无命令插值、无安装／写文件。CPU和网络用两次短间隔采样；内存 /proc/meminfo；磁盘用限时固定本地 df 查询。
+- [x] 测试通过并记录实际测试范围，提交独立文件。
 
 ## 任务 2：偏好与采样服务（先测试）
 
-- [ ] 新增三个模型 ResourceMonitorPreference、ResourceMonitorSnapshot、ResourceMonitorLease，独立新表；偏好 host 或 panel 恰一项约束，默认 enabled=False，panel 可 linked_host；模型导入经 apps.baota.models。
-- [ ] 测试默认关闭、bool严格校验、view/edit组合权限、主机组授权、开启不联网、禁用后无卡片也不可直接采样、关联双方权限／取消关联、隐藏关闭源、API优先与SSH后备、缓存和配置摘要、失败退避、过期租约／令牌释放、最多两个全局采集、上次未完成不重叠。
-- [ ] 执行失败测试，再实现 API。偏好配置变更更换 revision；快照读取与写入都重新校验 revision/凭据摘要，禁用或凭据更改时旧结果不得返回。租约原子条件更新，释放需匹配令牌，60秒租约大于一次全采样墙钟预算。网络不在数据库事务内。
-- [ ] 部分失败返回安全短信息，旧数据可带 stale 状态但时间不更新冒充成功。失败间隔 60、120、240、300秒封顶；所有读者共用。只保存指标，不保存远端原始对象。
-- [ ] 执行 SQLite 和隔离 MariaDB 关键测试，提交。
+- [x] 新增三个模型 ResourceMonitorPreference、ResourceMonitorSnapshot、ResourceMonitorLease，独立新表；偏好 host 或 panel 恰一项约束，默认 enabled=False，panel 可 linked_host；模型导入经 apps.baota.models。
+- [x] 测试默认关闭、bool严格校验、view/edit组合权限、主机组授权、开启不联网、禁用后无卡片也不可直接采样、关联双方权限／取消关联、隐藏关闭源、API优先与SSH后备、缓存和配置摘要、失败退避、过期租约／令牌释放、最多两个全局采集、上次未完成不重叠。
+- [x] 执行失败测试，再实现 API。偏好配置变更更换 revision；快照读取与写入都重新校验 revision/凭据摘要，禁用或凭据更改时旧结果不得返回。租约原子条件更新，释放需匹配令牌，60秒租约大于一次全采样墙钟预算。网络不在数据库事务内。
+- [x] 部分失败返回安全短信息，旧数据可带 stale 状态但时间不更新冒充成功。失败间隔 60、120、240、300秒封顶；所有读者共用。只保存指标，不保存远端原始对象。
+- [x] 执行 SQLite 和隔离 MariaDB 关键测试，提交。
 
 ## 任务 3：页面与开关（先测试）
 
-- [ ] 编写页面测试：关闭的来源不展示；空态指向两处开启开关；初始和刷新顺序采样；默认60秒及30/300选择；隐藏/离开/暂停后无后续请求；旧响应不能覆盖新开关／筛选；失败卡片与null进度；开关禁用权限、持久化回读；关联提交需明确确认。
-- [ ] 实现 ResourceMonitorSwitch 和来源 hook，一处列表统一加载 sources，行只发 settings POST，不在每行发GET。原列表刷新需刷新监控状态，卸载后忽略异步回调。
-- [ ] 实现卡片网格，group/source/status过滤与名称/IP检索；隐私隐藏IP开关；时间和状态明确，磁盘展开；无虚假预填数据。合并设置弹窗从有权限来源列表选择主机或解除关联，相同地址只是建议。
-- [ ] 入口 routes.js 监控中心新增子菜单。运行页面单测、模块lint和本地生产构建，检查桌面与窄屏。
+- [x] 编写页面测试：关闭的来源不展示；空态指向两处开启开关；初始和刷新顺序采样；默认60秒及30/300选择；隐藏/离开/暂停后无后续请求；旧响应不能覆盖新开关／筛选；失败卡片与null进度；开关禁用权限、持久化回读；关联提交需明确确认。
+- [x] 实现 ResourceMonitorSwitch 和来源 hook，一处列表统一加载 sources，行只发 settings POST，不在每行发GET。原列表刷新需刷新监控状态，卸载后忽略异步回调。
+- [x] 实现卡片网格，group/source/status过滤与名称/IP检索；隐私隐藏IP开关；时间和状态明确，磁盘展开；无虚假预填数据。合并设置弹窗从有权限来源列表选择主机或解除关联，相同地址只是建议。
+- [x] 入口 routes.js 监控中心新增子菜单。运行页面单测、模块lint和本地生产构建，检查桌面与窄屏。
 
 ## 任务 4：集成、审查、部署
 
-- [ ] 核对设计逐项覆盖，独立规格审查后独立代码质量审查；修复关键问题，运行后端全模块、前端全套和生产构建。
-- [ ] 创建新草稿 PR，base feature/baota-panel-tasks，附加到当前任务；不合并。
-- [ ] 基于当前正式 spug-baota:5437d77 或实际运行镜像做派生镜像，复制新模块与本机前端，不在2核服务器编译依赖。记录源码提交与产物SHA。
-- [ ] 新表迁移只在应用代码可发现的 baota 内生成；隔离克隆验证新增表与关闭默认值，验证兼容回退保留表。发布前备份数据库、卷、密钥和Compose；有运行任务时不强制中止。
-- [ ] 发布后检查原记录、密钥解密、任务锁与状态、全部服务和HTTP，核对所有偏好默认关闭。浏览器展示真实空态和列表开关；只在独立夹具验证有数据卡片，不擅自开启客户采样。
-- [ ] 文档记录真实测试与部署边界、截图、备份和回退方法，推送开发记录。
+- [x] 核对设计逐项覆盖，独立规格审查后独立代码质量审查；修复关键问题，运行后端全模块、前端全套和生产构建。
+- [x] 创建新草稿 PR，base feature/baota-panel-tasks，附加到当前任务；不合并。
+- [x] 基于当前正式 spug-baota:5437d77 或实际运行镜像做派生镜像，复制新模块与本机前端，不在2核服务器编译依赖。记录源码提交与产物SHA。
+- [x] 新表迁移只在应用代码可发现的 baota 内生成；隔离克隆验证新增表与关闭默认值，验证兼容回退保留表。发布前备份数据库、卷、密钥和Compose；有运行任务时不强制中止。
+- [x] 发布后检查原记录、密钥解密、任务锁与状态、全部服务和HTTP，核对所有偏好默认关闭。浏览器展示真实空态和列表开关；只在独立夹具验证有数据卡片，不擅自开启客户采样。
+- [x] 文档记录真实测试与部署边界、截图、备份和回退方法，推送开发记录。
