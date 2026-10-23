@@ -73,7 +73,8 @@ class TemplateSelector extends React.Component {
         maskClosable={false}>
         <SearchForm>
           <SearchForm.Item span={8} title={t('模板类别')}>
-            <Select allowClear placeholder={t('请选择')} value={store.f_type} onChange={v => store.f_type = v}>
+            <Select style={{width: '100%'}} dropdownMatchSelectWidth={false}
+                    allowClear placeholder={t('请选择')} value={store.f_type} onChange={v => store.f_type = v}>
               {store.types.map(item => (
                 <Select.Option value={item} key={item}>{item}</Select.Option>
               ))}
