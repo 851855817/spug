@@ -12,9 +12,16 @@ export function uploadLimits(value = {}) {
 
 function pathBytes(path) {return new Blob([path]).size;}
 
+function directoryText(value) {
+  const text = String(value || '');
+  // Check before trim: JavaScript treats the format control U+FEFF as whitespace.
+  if (/[\p{Cf}\p{Cs}]/u.test(text)) throw new Error('目标目录包含无效字符');
+  return text.trim();
+}
+
 function validatePath(path, absolute, label) {
   const segments = path.split('/').slice(absolute ? 1 : 0);
-  const hasControl = Array.from(path).some(char => char.charCodeAt(0) < 32 || (char.charCodeAt(0) >= 127 && char.charCodeAt(0) <= 159));
+  const hasControl = /[\p{Cc}\p{Cf}\p{Cs}]/u.test(path);
   if (!path || path.startsWith('/') !== absolute || hasControl || /[\\&|~]/.test(path) ||
       pathBytes(path) > 1024 || segments.some(part => !part || part === '.' || part === '..' || pathBytes(part) > 255)) {
     throw new Error(`${label}无效：请使用安全的${absolute ? '非根绝对目录' : '相对路径'}，每段最多 255 字节、全路径最多 1024 字节`);
@@ -23,7 +30,7 @@ function validatePath(path, absolute, label) {
 }
 
 export function normalizeUploadDirectory(value) {
-  return validatePath(String(value || '').trim().replace(/\/$/, ''), true, '目标目录');
+  return validatePath(directoryText(value).replace(/\/$/, ''), true, '目标目录');
 }
 
 export function collectUploadFiles(fileList, configuredLimits) {
@@ -57,20 +64,21 @@ export function collectUploadFiles(fileList, configuredLimits) {
 }
 
 export function resolveUploadDirectory(panel, common, overrides) {
-  const individual = String(overrides[panel.id] || '').trim();
+  const individual = directoryText(overrides[panel.id]);
   return {path: normalizeUploadDirectory(individual || common), source: individual ? '单独目录' : '公共目录'};
 }
 
 export function buildUploadRequest(bundleId, panels, common, overrides, files = []) {
   if (!panels.length || panels.length > 50) throw new Error('请选择 1 至 50 个面板');
-  const target_dir = String(common || '').trim() ? normalizeUploadDirectory(common) : '';
+  const commonText = directoryText(common);
+  const target_dir = commonText ? normalizeUploadDirectory(commonText) : '';
   const params_by_panel = {};
   panels.forEach(panel => {
     const blocked = panelBlocker(panel);
     if (blocked) throw new Error(`${panel.name}：${blocked}`);
     const {path} = resolveUploadDirectory(panel, target_dir, overrides);
     files.forEach(file => validatePath(`${path}/${file.path}`, true, `面板 ${panel.name} 最终目标路径`));
-    if (String(overrides[panel.id] || '').trim()) params_by_panel[String(panel.id)] = {target_dir: path};
+    if (directoryText(overrides[panel.id])) params_by_panel[String(panel.id)] = {target_dir: path};
   });
   return {operation: 'file_upload', panel_ids: panels.map(panel => panel.id), params: {bundle_id: bundleId, target_dir}, params_by_panel};
 }

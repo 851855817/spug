@@ -32,6 +32,19 @@ test.each(['../a', '/a', 'a/../b', 'a\\b', 'a&b', 'a|b', '~a', 'a\u0001', 'a\u00
   expect(() => collectUploadFiles([file('a', path)])).toThrow(/路径/);
 });
 
+test.each(['\u200b', '\u202e', '\ufeff', '\u00ad', '\ud800', '\udc00', '\u{e0001}'])('rejects Unicode format controls and isolated surrogates %j in source and destination paths', control => {
+  expect(() => collectUploadFiles([file(`文${control}件.txt`)])).toThrow(/路径/);
+  expect(() => buildUploadRequest(9, panels, `/www/目${control}录`, {})).toThrow(/目录/);
+  expect(() => buildUploadRequest(9, panels, '/www/common', {1: `${control}/www/override`})).toThrow(/目录/);
+  expect(() => buildUploadRequest(9, panels, `/www/common${control}`, {1: '/www/a', 2: '/www/b'})).toThrow(/目录/);
+});
+
+test('ordinary Chinese and emoji remain valid in source and destination paths', () => {
+  const files = collectUploadFiles([file('文件😀.txt', '目录😀/文件😀.txt')]);
+  expect(files[0].path).toBe('目录😀/文件😀.txt');
+  expect(buildUploadRequest(9, panels, '/www/目录😀', {}, files).params.target_dir).toBe('/www/目录😀');
+});
+
 test('source duplicates, file-directory collisions, UTF-8 lengths and configured quotas are enforced', () => {
   expect(() => collectUploadFiles([file('a'), file('a')])).toThrow(/重复/);
   expect(() => collectUploadFiles([file('a'), file('b', 'a/b')])).toThrow(/冲突/);
