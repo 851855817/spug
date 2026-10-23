@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Card, Col, Empty, Input, Modal, Row, Space, Table, Tag, Typography, message } from 'antd';
 import { ExportOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { AuthDiv, Breadcrumb } from 'components';
+import ResourceMonitorSwitch, { ResourceMonitorProvider } from 'components/ResourceMonitorSwitch';
 import { hasPermission, http } from 'libs';
 import Group from './Group';
 import PanelForm from './PanelForm';
@@ -19,10 +20,12 @@ export default function BaotaIndex() {
   const [checkingIds, setCheckingIds] = useState({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [monitorRevision, setMonitorRevision] = useState(0);
   const canView = hasPermission('baota.panel.view');
 
   const refresh = useCallback(async () => {
     if (!canView) return;
+    setMonitorRevision(value => value + 1);
     setLoading(true);
     try {
       const [newPanels, newGroups] = await Promise.all([http.get('/api/baota/'), http.get('/api/baota/group/')]);
@@ -81,6 +84,8 @@ export default function BaotaIndex() {
     {title: '所属分组', dataIndex: 'group_id', width: 130,
       render: id => groups.find(group => group.id === id)?.name || '—'},
     {title: '备注', dataIndex: 'desc', width: 150, ellipsis: true},
+    {title: '监控', key: 'monitor', width: 110, render: (_, panel) =>
+      <ResourceMonitorSwitch id={panel.id} name={panel.name} canEdit={hasPermission('baota.panel.edit')}/>},
     {title: '创建时间', dataIndex: 'created_at', width: 170},
     {title: '操作', key: 'actions', width: 300, fixed: 'right', render: (_, panel) => (
       <Space size={12}>
@@ -114,10 +119,12 @@ export default function BaotaIndex() {
             {ready && !groups.length && <Typography.Paragraph type="secondary">
               {hasPermission('baota.group.manage') ? '先点击左侧“＋”新建分组，再添加宝塔面板。' : '请联系管理员创建分组后再添加面板。'}
             </Typography.Paragraph>}
-            <Table rowKey="id" columns={columns} dataSource={rows} loading={loading} scroll={{x: 1700}}
+            <ResourceMonitorProvider kind="panel" revision={monitorRevision} enabled={canView && ready}>
+            <Table rowKey="id" columns={columns} dataSource={rows} loading={loading} scroll={{x: 1800}}
                    locale={{emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={search ? '没有匹配的面板' : '还没有宝塔面板'}/>}}
                    pagination={{current: page, pageSize, showSizeChanger: true, total: rows.length,
                      showTotal: total => `共 ${total} 个面板`, onChange: (value, size) => { setPage(value); setPageSize(size); }}}/>
+            </ResourceMonitorProvider>
             <Typography.Text type="secondary">“打开”将进入宝塔登录页面。</Typography.Text>
           </Card>
         </Col>

@@ -2,14 +2,20 @@ name: Baota module checks
 
 on:
   push:
-    branches: [feature/baota-panel-tasks]
+    branches: [feature/baota-panel-tasks, feature/server-resource-monitor]
   pull_request:
     paths:
       - 'spug_api/apps/baota/**'
       - 'spug_api/spug/test_*.py'
       - 'spug_web/src/pages/baota/**'
       - 'spug_web/src/pages/exec/panel/**'
+      - 'spug_web/src/pages/server-monitor/**'
+      - 'spug_web/src/pages/host/Table.js'
+      - 'spug_web/src/components/ResourceMonitor*'
+      - 'spug_web/src/components/useResourceMonitorSources.js'
+      - 'spug_web/src/routes.js'
       - 'deploy/baota/**'
+      - 'deploy/resource-monitor/**'
       - '.github/workflows/baota-checks.yml'
   workflow_dispatch:
 
@@ -122,7 +128,7 @@ jobs:
             -e BAOTA_CI_DB_HOST=baota-ci-db -e BAOTA_CI_DB_PASSWORD=disposable-ci-password \
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test apps.baota.test_tasks apps.baota.test_upload_store apps.baota.test_upload_tasks --settings=spug.baota_ci_settings --noinput
+            manage.py test apps.baota.test_tasks apps.baota.test_upload_store apps.baota.test_upload_tasks apps.baota.test_resource_monitor --settings=spug.baota_ci_settings --noinput
       - name: Remove disposable database
         if: always()
         run: |
@@ -147,7 +153,7 @@ jobs:
         env:
           CI: 'true'
           NODE_OPTIONS: --openssl-legacy-provider
-        run: node node_modules/react-app-rewired/bin/index.js test --watch=false --runInBand --testPathPattern='pages/(baota|exec/panel)/.*test.js' --passWithNoTests
+        run: node node_modules/react-app-rewired/bin/index.js test --watch=false --runInBand --passWithNoTests
       - name: Build production assets
         env:
           CI: 'false'

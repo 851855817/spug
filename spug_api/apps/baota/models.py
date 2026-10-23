@@ -167,3 +167,8 @@ class PanelUploadQuota(models.Model):
 
     class Meta:
         db_table = 'baota_upload_quota'
+
+
+# Additive monitor tables remain in this app's model registry for updatedb.
+from .resource_monitor.models import (ResourceMonitorPreference, ResourceMonitorSnapshot,
+                                      ResourceMonitorLease)  # noqa: E402,F401

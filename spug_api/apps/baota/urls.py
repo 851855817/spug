@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import include, path
 from django.db import transaction
 from .views import GroupView, PanelView
 from .connection_views import CertificateView, ConnectionView
@@ -15,6 +15,7 @@ def upload_results(request, target_id):
 
 
 urlpatterns = [
+    path('monitor/', include('apps.baota.resource_monitor.urls')),
     path('', PanelView.as_view()),
     path('group/', GroupView.as_view()),
     path('connection/', ConnectionView.as_view()),

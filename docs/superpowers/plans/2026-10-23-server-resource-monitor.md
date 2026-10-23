@@ -24,7 +24,7 @@
 - `POST settings/ {kind,id,enabled}` → 对应 source。enabled 必须布尔，沿用来源 edit 权限且主机分组过滤；只保存状态，不发送网络请求。禁用立即清空该源快照。
 - `POST link/ {panel_id,host_id:null|整数}` → `{ok:true}`。关联需双方 view/edit 及主机分组权限。无权源完全不进入卡片；相同 IP 仅提示，用户显式选择并确认关联。
 - `GET cards/` → `{cards:[{key,name,address,groups:[{key,name}],sources:[{kind,id,name}],snapshot:null|{status,message,sampled_at,attempted_at,metrics,source_kind},can_link,panel_id,linked_host_id}],default_interval:60}`。仅已开启且有来源 view 权限的记录参与分组。每个已开启主机与其可访问的已开启关联面板组成一张卡，主机 key 为 host:ID，其余为 panel:ID。指标采用 API 优先，失败后仅允许已开启 SSH 后备。无监控页权限不得读取 cards 或采样。
-- `POST sample/ {key,interval:30|60|300}` → `{key,snapshot,retry_after}`。重新校验权限、开关和配置；已有缓存最短间隔 30 秒，interval 指定所需年龄，不绕过租约与退避。忙返回当前快照与重试秒数，不建线程／后台队列。
+- `POST sample/ {key,interval:30|60|300}` → `{key,snapshot,retry_after,retry_reason}`。重新校验权限、开关和配置；已有缓存最短间隔 30 秒，interval 指定所需年龄，不绕过租约与退避。retry_reason 为 cache／collected 时成功采样年龄随新间隔计算，busy／backoff 必须遵守绝对等待时间。忙返回当前快照与重试秒数，不建线程／后台队列。
 
 metrics 固定结构：`{cpu:{percent,cores},memory:{used_bytes,total_bytes,percent},load:[1m,5m,15m],network:{up_bytes_sec,down_bytes_sec},disks:[{path,used_bytes,total_bytes,percent}]}`。未知数值 null；字节为非负有限值；百分比 0～100；禁止将非法值修成看似正常的 0。最多 32 个磁盘。
 
