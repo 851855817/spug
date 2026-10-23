@@ -70,7 +70,7 @@ export function createMonitorSampler({sample, onSnapshot, onError, beforeRound, 
       timer = setTimeout(() => {wake = null; resolve();}, delay);
     });
   }
-  function update({keys, interval, active, once = false, force = false, onComplete}) {
+  function update({keys, interval, active, once = false, force = false, onComplete, onProgress}) {
     stop();
     if (!active) return;
     const version = generation;
@@ -83,13 +83,18 @@ export function createMonitorSampler({sample, onSnapshot, onError, beforeRound, 
           try {await beforeRound();} catch (_) { /* Keep the last successful cards. */ }
         }
         first = false;
+        let completed = 0;
         for (const key of keys) {
           if (!current()) return;
-          if (due[key] > Date.now()) continue;
+          if (due[key] > Date.now()) {
+            if (onProgress) onProgress(++completed);
+            continue;
+          }
           const result = await collect(key, interval, force);
           if (!current()) return;
           const retry = Number.isFinite(result?.retry_after) ? result.retry_after : 0;
           due[key] = Date.now() + (result?.local ? retry : Math.max(interval, retry)) * 1000;
+          if (onProgress) onProgress(++completed);
           if (keys.length > 1) await wait(200);
         }
         if (!current()) return;

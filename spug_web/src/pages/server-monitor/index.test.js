@@ -321,3 +321,82 @@ test.each(['hidden', 'pause', 'unmount'])('%s stops automatic card reads even wh
   expect(http.get.mock.calls.filter(([path]) => path.endsWith('cards/'))).toHaveLength(1);
   expect(http.post).not.toHaveBeenCalled();
 });
+
+test('global collection reloads all enabled servers across pages and filters, with progress while paused', async () => {
+  cards = Array.from({length: 14}, (_, i) => card(i + 1)); await render();
+  await act(async () => {container.querySelector('[aria-label="自动刷新"]').click(); await flush();});
+  await change('来源筛选', 'host');
+  cards = Array.from({length: 14}, (_, i) => card(i + 2));
+  http.post.mockClear();
+  await act(async () => {button('全部采集').click(); await flush();});
+  expect(button('全部采集').disabled).toBe(true);
+  expect(container.textContent).toContain('1 / 14');
+  for (let i = 0; i < 14; i++) await advance(200);
+  expect(http.get.mock.calls.filter(([path]) => path.endsWith('cards/'))).toHaveLength(2);
+  expect(http.post.mock.calls.map(([, body]) => body)).toEqual(cards.map(row => ({key: row.key, interval: 30})));
+  expect(container.textContent).toContain('已处理 14 台');
+  expect(button('全部采集').disabled).toBe(false);
+  expect(container.querySelector('[aria-label="自动刷新"]').getAttribute('aria-checked')).toBe('false');
+  await advance(300000);
+  expect(http.post).toHaveBeenCalledTimes(14);
+});
+
+test('global collection respects busy and failure backoff and continues to later servers', async () => {
+  cards = [card(1), card(2), card(3)]; await render();
+  await act(async () => {container.querySelector('[aria-label="自动刷新"]').click(); await flush();});
+  http.post.mockClear();
+  http.post.mockResolvedValueOnce({key: 'panel:1', snapshot, retry_after: 120, retry_reason: 'busy'})
+    .mockRejectedValueOnce('network');
+  await act(async () => {button('全部采集').click(); await flush();});
+  for (let i = 0; i < 3; i++) await advance(200);
+  expect(http.post).toHaveBeenCalledTimes(3);
+  expect(container.textContent).toContain('已处理 3 台');
+  expect(container.textContent).toContain('120 秒后重试');
+  await act(async () => {button('全部采集').click(); await flush();});
+  for (let i = 0; i < 3; i++) await advance(200);
+  expect(http.post).toHaveBeenCalledTimes(4);
+  expect(http.post.mock.calls[3][1]).toEqual({key: 'panel:3', interval: 30});
+  expect(button('全部采集').disabled).toBe(false);
+});
+
+test('global collection returns to the previous automatic mode without an immediate duplicate round', async () => {
+  await render(); http.post.mockClear();
+  await act(async () => {button('全部采集').click(); await flush();});
+  await advance(200); await advance(200);
+  expect(http.post.mock.calls.map(([, body]) => body)).toEqual([
+    {key: 'panel:1', interval: 30}, {key: 'panel:2', interval: 30},
+  ]);
+  expect(container.querySelector('[aria-label="自动刷新"]').getAttribute('aria-checked')).toBe('true');
+  expect(button('全部采集').disabled).toBe(false);
+});
+
+test.each(['hidden', 'unmount', 'filter'])('%s cancels the remainder of a global collection round', async action => {
+  await render();
+  await act(async () => {container.querySelector('[aria-label="自动刷新"]').click(); await flush();});
+  let complete;
+  http.post.mockClear();
+  http.post.mockReturnValue(new Promise(resolve => {complete = resolve;}));
+  await act(async () => {button('全部采集').click(); await flush();});
+  if (action === 'filter') await change('来源筛选', 'host');
+  else await act(async () => {
+    if (action === 'hidden') {
+      Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'hidden'});
+      document.dispatchEvent(new Event('visibilitychange'));
+    } else ReactDOM.unmountComponentAtNode(container);
+    await flush();
+  });
+  await act(async () => {complete({key: 'panel:1', snapshot, retry_after: 30, retry_reason: 'collected'}); await flush();});
+  await advance(300000);
+  expect(http.post).toHaveBeenCalledTimes(1);
+  expect(container.textContent).not.toContain('已处理 2 台');
+});
+
+test('a global list read failure ends loading without starting a sampling round', async () => {
+  await render();
+  await act(async () => {container.querySelector('[aria-label="自动刷新"]').click(); await flush();});
+  http.post.mockClear(); http.get.mockRejectedValue('network');
+  await act(async () => {button('全部采集').click(); await flush();});
+  expect(http.post).not.toHaveBeenCalled();
+  expect(button('全部采集').disabled).toBe(false);
+  expect(container.textContent).toContain('监控列表加载失败');
+});

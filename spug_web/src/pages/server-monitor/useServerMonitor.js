@@ -74,7 +74,7 @@ export default function useServerMonitor(allowed) {
       }));
       setReady(true);
       setError(false);
-      return true;
+      return result.cards;
     } catch (_) {
       if (mounted.current && version === request.current) setError(true);
       return false;

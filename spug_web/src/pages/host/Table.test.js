@@ -4,6 +4,7 @@ import { act } from 'react-dom/test-utils';
 import { http, hasPermission } from 'libs';
 import store from './store';
 import ComTable from './Table';
+import { message } from 'antd';
 
 jest.mock('libs', () => ({http: {get: jest.fn(), post: jest.fn()}, hasPermission: jest.fn(), t: value => value}));
 jest.mock('mobx-react', () => ({observer: component => component}));
@@ -22,8 +23,16 @@ jest.mock('antd', () => {
   const Wrapper = ({children}) => <div>{children}</div>;
   return {Table: {Column: () => null}, Switch: ({checked, disabled, loading, onChange}) => <button role="switch" aria-checked={checked}
     disabled={disabled || loading} onClick={() => onChange(!checked)}/>, Modal: {confirm: jest.fn()}, Dropdown: Wrapper,
-    Button: Wrapper, Avatar: Wrapper, Tooltip: Wrapper, Space: Wrapper, Tag: Wrapper,
-    Radio: {Group: Wrapper, Button: Wrapper}, Input: () => null, message: {success: jest.fn()}};
+    Button: ({children, onClick, ...props}) => <button aria-label={props['aria-label']} onClick={onClick}>{children}</button>,
+    Avatar: Wrapper, Tooltip: Wrapper, Space: Wrapper, Tag: Wrapper,
+    Radio: {Group: Wrapper, Button: Wrapper}, Input: () => null, message: {success: jest.fn(), info: jest.fn()}};
+});
+
+test('host monitor icon reports disabled monitoring without collecting', async () => {
+  await act(async () => {ReactDOM.render(<ComTable/>, container);});
+  await act(async () => {container.querySelector('[aria-label="查看主机监控"]').click();});
+  expect(message.info).toHaveBeenCalledWith('未开启监控');
+  expect(http.post).not.toHaveBeenCalled();
 });
 let container;
 beforeEach(() => {

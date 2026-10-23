@@ -71,7 +71,7 @@ export default function ResourceCard({card, hideIP, onLink, onCollect, collectin
     <footer className={styles.cardFooter}>
       <div><div>更新：{time(snapshot?.sampled_at)}</div>
         {status !== 'ok' && snapshot?.attempted_at && <div>尝试：{time(snapshot.attempted_at)}</div>}</div>
-      {card.can_link && card.panel_id && <Button type="link" size="small" onClick={() => onLink(card)}>关联设置</Button>}
+      {card.can_link && card.panel_id && onLink && <Button type="link" size="small" onClick={() => onLink(card)}>关联设置</Button>}
     </footer>
   </article>;
 }
