@@ -368,6 +368,24 @@ class UploadStoreTests(TransactionTestCase):
                 with self.assertRaises(ValueError):
                     store.absolute_directory('/' + value)
 
+    def test_unicode_format_controls_rejected_while_chinese_and_emoji_paths_work(self):
+        store = self.store()
+        for name in ('x\u200by', 'x\u200dy', 'x\ufeffy', 'x\u202ey', 'x\u2066y', 'x\xad続'):
+            with self.subTest(path=repr(name)):
+                with self.assertRaises(ValueError):
+                    store.relative_path('资料/' + name)
+                with self.assertRaises(ValueError):
+                    store.absolute_directory('/资料/' + name)
+                with self.assertRaises(ValueError):
+                    self.bundle([{'path': '资料/' + name, 'size': 0}])
+        valid = '资料/图片😀.txt'
+        self.assertEqual(store.relative_path(valid), valid)
+        self.assertEqual(store.absolute_directory('/' + valid), '/' + valid)
+        bundle = self.bundle([{'path': valid, 'size': 3}])
+        source = self.receive(bundle)
+        self.assertEqual(source.relative_path, valid)
+        self.assertEqual(store.blob_path(source).read_bytes(), b'abc')
+
     def test_paths_have_1024_utf8_byte_total_limit_and_sanitize_invalid_unicode(self):
         store = self.store()
         oversized = '/'.join(['汉' * 80] * 5)

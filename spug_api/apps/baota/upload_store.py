@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import unicodedata
 import uuid
 from datetime import timedelta
 from pathlib import Path
@@ -46,7 +47,9 @@ def limits():
 def _path_parts(value):
     if not isinstance(value, str) or not value or len(value) > 1024:
         raise ValueError('文件路径无效')
-    if any(ord(c) < 32 or 127 <= ord(c) <= 159 for c in value) or any(c in value for c in ('\\', '~', '&', '|')):
+    if any(unicodedata.category(c) in ('Cc', 'Cf', 'Cs') for c in value):
+        raise ValueError('文件路径无效')
+    if any(c in value for c in ('\\', '~', '&', '|')):
         raise ValueError('文件路径包含无效字符')
     parts = value.split('/')
     try:
