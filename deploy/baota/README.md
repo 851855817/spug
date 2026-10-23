@@ -12,7 +12,9 @@
 
 面板新增/编辑时 API 连接为选填，基础地址自动从登录地址提取；已有配置和手动填写的代理前缀保留。当前代码适配 Linux 9.2.0、11.7.0、13.1.0，运行镜像及验证证据见上方部署记录。官方查询处理器内部也可能产生初始化/维护副作用，不能把客户端读取请求标记等同于远端零写盘，详见 [审查边界与后续适配链接](../../docs/research/2026-10-22-baota-9.2-audit.md)。
 
-“批量执行 → 面板任务”提供十个操作码、九类操作，新增独立 PHP 同分支更新。先预检并查看固定快照，再明确提交；未知投递状态保留面板锁，重启不会自动重发。9.2 面板升级只能使用明确确认的官方稳定通道，不能锁定后台目标。PHP 更新需确认网站短断风险，仅证明读回的 CLI 补丁和唯一结束队列。伪静态文件保存不证明 Web 服务已加载，结果保持待核实。SSL 预览说明面板自动同步可能影响未选网站、孤立证书和面板 HTTPS 证书，必须确认影响范围。
+“批量执行 → 面板任务”提供十一个操作码、十类操作，包括 PHP 同分支更新和批量上传文件／目录。上传支持公共绝对目录与逐面板覆盖，单独目录优先，留空继承公共目录；保留所选目录的根目录名称和层级，不包含空目录。每文件最多 20 MiB、每批 200 MiB、1000 文件、50 面板，预检展示新增与覆盖数量，明确确认后才向客户上传。逐文件持久化，读回大小与 SHA-256 均一致才成功，投递不明确时保持待核实，不自动重传。没有原子覆盖或远端自动回滚，原文件备份由操作者自行安排。
+
+先预检并查看固定快照，再明确提交；未知投递状态保留面板锁，重启不会自动重发。9.2 面板升级只能使用明确确认的官方稳定通道，不能锁定后台目标。PHP 更新需确认网站短断风险，仅证明读回的 CLI 补丁和唯一结束队列。伪静态文件保存不证明 Web 服务已加载，结果保持待核实。SSL 预览说明面板自动同步可能影响未选网站、孤立证书和面板 HTTPS 证书，必须确认影响范围。
 
 ## 构建
 
@@ -51,6 +53,23 @@ worker 使用单进程锁、独立 `logs/panel-worker.log`，不输出面板原�
 升级前保存原 Compose、镜像 ID 和相同时间点的数据库/完整数据卷备份。先在不接触客户面板的克隆数据库及克隆卷上完成“新版 → 兼容回退版 → 新版”预演，核对原有面板及分组、任务和迁移记录；旧版新增/编辑面板也必须可用。真实数据验证结果另行记录，镜像构建检查不能代替此预演。
 
 ## 安全回滚
+
+### 从批量上传版本回退
+
+批量上传新增五张表。不能直接切回原 `49d6dcc` 或其他缺少新模型的镜像，其 `updatedb` 入口可能生成删表迁移，旧面板 worker 也不能处理上传任务。使用 [upload-rollback.Dockerfile](upload-rollback.Dockerfile) 从实际旧镜像派生兼容版：保留当前完整 `models.py`，入口只运行 `migrate --noinput`，并关闭旧面板 worker 的 autostart/autorestart。本次实测镜像为 `spug-baota:upload-rollback-2350559`。
+
+```bash
+docker build --network none --build-arg ROLLBACK_IMAGE=spug-baota:49d6dcc \
+  -f deploy/baota/upload-rollback.Dockerfile -t spug-baota:upload-rollback-2350559 .
+docker run --rm --network none --read-only --memory 128m --pids-limit 32 \
+  -v "$PWD/deploy/baota/test_image.py:/test_image.py:ro" \
+  -v "$PWD/spug_api/apps/baota:/compat-source:ro" \
+  --entrypoint python3 spug-baota:upload-rollback-2350559 /test_image.py upload-rollback
+```
+
+回退前暂停新提交并停止面板 worker，记录所有逐文件状态、锁和远端处理情况，保留当前数据库、完整数据卷和密钥后切换兼容镜像。核对旧七项服务 RUNNING、面板 worker STOPPED、HTTP 和完整历史摘要；兼容版期间禁用面板任务提交，不手动启动旧 worker。不能删除上传表、清锁、重发或恢复旧备份覆盖新记录。恢复上传版时仍用相同数据库、卷和密钥；不确定的文件只能先核验或人工判定。
+
+### 退到首次任务模块之前（历史流程）
 
 不能直接切回 `spug-baota:b8677f7`：旧入口每次启动会同步旧模型并运行 `updatedb`（自动 `makemigrations` 与 `migrate`），可能根据旧模型生成删除新 API 字段或任务表的迁移。使用该旧镜像派生的兼容回退镜像，保留旧路由、UI、密钥校验入口及原七个服务；将精确的一条 `python3 manage.py updatedb` 改为 `python3 manage.py migrate --noinput`，匹配不到或匹配多次会构建失败。额外覆盖当前 `models.py`、`views.py`、`validation.py` 三个兼容文件，使旧界面新增面板时提供新 API 字段默认值，编辑时保留 API 配置，且删除面板仍遵守任务历史的外键保护；不接入任务路由或新 worker。
 
