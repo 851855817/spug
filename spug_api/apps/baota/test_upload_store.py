@@ -351,6 +351,25 @@ class UploadStoreTests(TransactionTestCase):
                 with self.assertRaises(ValueError):
                     store.absolute_directory('/' + value)
 
+    def test_paths_have_1024_utf8_byte_total_limit_and_sanitize_invalid_unicode(self):
+        store = self.store()
+        oversized = '/'.join(['汉' * 80] * 5)
+        self.assertLess(len(oversized), 1024)
+        self.assertGreater(len(oversized.encode('utf-8')), 1024)
+        for value in (oversized, 'folder/invalid\ud800'):
+            with self.subTest(path=repr(value)):
+                with self.assertRaises(ValueError) as error:
+                    store.relative_path(value)
+                self.assertEqual(str(error.exception), '文件路径无效')
+                with self.assertRaises(ValueError) as error:
+                    store.absolute_directory('/' + value)
+                self.assertEqual(str(error.exception), '文件路径无效')
+        # Exactly 1024 bytes is allowed for the entire absolute target path.
+        valid = '/'.join(['a' * 255] * 4)
+        self.assertEqual(len(valid.encode('utf-8')), 1023)
+        self.assertEqual(store.relative_path(valid), valid)
+        self.assertEqual(store.absolute_directory('/' + valid), '/' + valid)
+
     def test_stream_value_error_is_sanitized_and_final_manifest_is_order_independent(self):
         store = self.store()
         bundle = self.bundle()
@@ -387,6 +406,30 @@ class UploadStoreTests(TransactionTestCase):
         live.task.save()
         store.cleanup_expired()
         self.assertTrue(store.blob_path(source).exists())
+
+    def test_cleanup_expires_unbound_sealed_bundle_after_24_hours_and_releases_quota(self):
+        store = self.store()
+        bundle = self.bundle()
+        source = self.receive(bundle)
+        bundle = store.seal_bundle(self.user, bundle.pk)
+        manifest = bundle.manifest_sha256
+        path = store.blob_path(source)
+        self.age(bundle, 23 / 24)
+        with override_settings(BAOTA_UPLOAD_LIMITS={'global_bytes': 3, 'reserve_bytes': 0}):
+            store.cleanup_expired()
+            bundle.refresh_from_db()
+            self.assertEqual(bundle.state, 'sealed')
+            self.assertTrue(path.exists())
+            with self.assertRaises(ValueError):
+                self.bundle()
+            self.age(bundle, 25 / 24)
+            store.cleanup_expired()
+            bundle.refresh_from_db()
+            self.assertEqual(bundle.state, 'expired')
+            self.assertFalse(path.exists())
+            self.assertEqual(bundle.manifest_sha256, manifest)
+            self.assertEqual(bundle.files.get().sha256, source.sha256)
+            self.assertEqual(self.bundle().state, 'draft')
 
     def test_blob_lookup_rejects_symlink_and_missing_content(self):
         store = self.store()

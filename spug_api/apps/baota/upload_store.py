@@ -46,7 +46,7 @@ def _path_parts(value):
         raise ValueError('文件路径包含无效字符')
     parts = value.split('/')
     try:
-        if any(p in ('', '.', '..') or len(p.encode('utf-8')) > 255 for p in parts):
+        if len(value.encode('utf-8')) > 1024 or any(p in ('', '.', '..') or len(p.encode('utf-8')) > 255 for p in parts):
             raise ValueError('文件路径无效')
     except UnicodeError:
         raise ValueError('文件路径无效') from None
@@ -58,6 +58,8 @@ def absolute_directory(value):
         raise ValueError('请输入根目录以外的绝对目标目录')
     value = value[:-1] if value.endswith('/') else value
     _path_parts(value[1:])
+    if len(value.encode('utf-8')) > 1024:
+        raise ValueError('文件路径无效')
     return value
 
 
@@ -382,7 +384,7 @@ def cleanup_expired():
                 if any(b.target.state not in _ENDED or b.target.task.state not in _ENDED or
                        b.target.updated_at >= cutoff or b.target.task.updated_at >= cutoff for b in bindings):
                     continue
-            elif bundle.state not in ('draft', 'expired'):
+            elif bundle.state not in ('draft', 'sealed', 'expired'):
                 continue
             # A recently claimed receive is always protected, even if bundle
             # timestamps were imported from an older installation.
