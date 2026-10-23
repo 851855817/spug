@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 
 from apps.account.models import User
@@ -97,3 +99,71 @@ class PanelLock(models.Model):
 
     class Meta:
         db_table = 'baota_panel_locks'
+
+
+def upload_id():
+    return uuid.uuid4().hex
+
+
+class PanelUploadBundle(models.Model):
+    id = models.CharField(primary_key=True, max_length=32, default=upload_id, editable=False)
+    owner = models.ForeignKey(User, on_delete=models.PROTECT, related_name='panel_upload_bundles')
+    state = models.CharField(max_length=16, default='draft', choices=[(s, s) for s in ('draft', 'sealed', 'expired')])
+    total_bytes = models.BigIntegerField(default=0)
+    file_count = models.PositiveIntegerField(default=0)
+    manifest_sha256 = models.CharField(max_length=64, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'baota_upload_bundles'
+
+
+class PanelUploadFile(models.Model):
+    id = models.CharField(primary_key=True, max_length=32, default=upload_id, editable=False)
+    bundle = models.ForeignKey(PanelUploadBundle, on_delete=models.PROTECT, related_name='files')
+    relative_path = models.CharField(max_length=1024)
+    # utf8mb4 paths cannot fit MariaDB's 3072-byte composite index limit.
+    path_digest = models.CharField(max_length=64)
+    size = models.BigIntegerField()
+    sha256 = models.CharField(max_length=64, blank=True, default='')
+    state = models.CharField(max_length=16, default='pending', choices=[(s, s) for s in ('pending', 'receiving', 'complete')])
+    receive_token = models.CharField(max_length=32, blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'baota_upload_files'
+        constraints = [models.UniqueConstraint(fields=['bundle', 'path_digest'], name='baota_upload_bundle_path')]
+
+
+class PanelUploadBinding(models.Model):
+    target = models.OneToOneField(PanelTaskTarget, on_delete=models.PROTECT, related_name='upload_binding')
+    bundle = models.ForeignKey(PanelUploadBundle, on_delete=models.PROTECT, related_name='bindings')
+
+    class Meta:
+        db_table = 'baota_upload_bindings'
+
+
+class PanelUploadResult(models.Model):
+    target = models.ForeignKey(PanelTaskTarget, on_delete=models.PROTECT, related_name='upload_files')
+    source = models.ForeignKey(PanelUploadFile, on_delete=models.PROTECT, related_name='results')
+    state = models.CharField(max_length=24, default='ready', choices=[(s, s) for s in
+                            ('ready', 'failed', 'dispatching', 'success', 'uncertain', 'cancelled')])
+    before = models.JSONField(default=dict)
+    intent = models.JSONField(default=dict)
+    result = models.JSONField(default=dict)
+    resolutions = models.JSONField(default=list)
+    message = models.CharField(max_length=500, blank=True, default='')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'baota_upload_results'
+        constraints = [models.UniqueConstraint(fields=['target', 'source'], name='baota_upload_target_source')]
+
+
+class PanelUploadQuota(models.Model):
+    # A single durable row serializes quota reservations across API processes.
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+
+    class Meta:
+        db_table = 'baota_upload_quota'
