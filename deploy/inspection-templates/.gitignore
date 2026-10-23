@@ -1,0 +1,4 @@
+bundle.json
+__pycache__/
+checks/__pycache__/
+tests/__pycache__/
