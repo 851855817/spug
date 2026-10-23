@@ -1,0 +1,156 @@
+name: Baota module checks
+
+on:
+  push:
+    branches: [feature/baota-panel-tasks]
+  pull_request:
+    paths:
+      - 'spug_api/apps/baota/**'
+      - 'spug_api/spug/test_*.py'
+      - 'spug_web/src/pages/baota/**'
+      - 'spug_web/src/pages/exec/panel/**'
+      - 'deploy/baota/**'
+      - '.github/workflows/baota-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baota-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - name: Pull fixed production runtime
+        run: docker pull ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c
+      - name: Run all Baota tests in isolation
+        run: |
+          baota_test_modules=()
+          for baota_test_file in spug_api/apps/baota/test*.py; do
+            baota_test_module=${baota_test_file#spug_api/}
+            baota_test_module=${baota_test_module%.py}
+            baota_test_modules+=("${baota_test_module//\//.}")
+          done
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,nosuid,size=128m \
+            --memory 768m --cpus 2 --pids-limit 128 \
+            -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONUNBUFFERED=1 \
+            -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api \
+            --entrypoint python3 \
+            ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
+            manage.py test "${baota_test_modules[@]}" --settings=spug.test_settings --noinput
+      - name: Check whitespace
+        run: git diff --check HEAD^ HEAD
+      - name: Build worker image with disposable static assets
+        run: |
+          baota_context="$RUNNER_TEMP/baota-image-context"
+          mkdir -p "$baota_context/spug_api/apps" "$baota_context/spug_api/spug" "$baota_context/spug_web/build"
+          cp -a spug_api/apps/baota "$baota_context/spug_api/apps/"
+          cp spug_api/spug/settings.py spug_api/spug/urls.py "$baota_context/spug_api/spug/"
+          cp -a deploy "$baota_context/"
+          printf '<html>CI image wiring check only</html>\n' > "$baota_context/spug_web/build/index.html"
+          docker build --network none --build-arg SOURCE_REVISION="$GITHUB_SHA" \
+            -f "$baota_context/deploy/baota/Dockerfile" -t baota-worker-ci "$baota_context"
+          docker run --rm --network none --read-only --memory 128m --pids-limit 32 \
+            -v "$GITHUB_WORKSPACE/deploy/baota/test_image.py:/test_image.py:ro" \
+            --entrypoint python3 baota-worker-ci /test_image.py worker
+          docker build --network none --build-arg ROLLBACK_IMAGE=baota-worker-ci \
+            -f "$baota_context/deploy/baota/upload-rollback.Dockerfile" -t baota-upload-rollback-ci "$baota_context"
+          docker run --rm --network none --read-only --memory 128m --pids-limit 32 \
+            -v "$GITHUB_WORKSPACE/deploy/baota/test_image.py:/test_image.py:ro" \
+            -v "$GITHUB_WORKSPACE/spug_api/apps/baota:/compat-source:ro" \
+            --entrypoint python3 baota-upload-rollback-ci /test_image.py upload-rollback
+      - name: Check guarded rollback patch on fixed upstream runtime
+        run: |
+          baota_context="$RUNNER_TEMP/baota-image-context"
+          # Public fixture: old production image is host-local and is never pulled into CI.
+          cat > "$baota_context/rollback-fixture.Dockerfile" <<'EOF'
+          FROM ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c
+          COPY deploy/baota/entrypoint.sh /baota-entrypoint.sh
+          RUN sed -i 's/\r$//' /baota-entrypoint.sh && chmod 755 /baota-entrypoint.sh
+          ENTRYPOINT ["/baota-entrypoint.sh"]
+          EOF
+          docker build --network none -f "$baota_context/rollback-fixture.Dockerfile" \
+            -t baota-rollback-fixture "$baota_context"
+          docker build --network none --build-arg ROLLBACK_IMAGE=baota-rollback-fixture \
+            -f "$baota_context/deploy/baota/rollback.Dockerfile" -t baota-rollback-ci "$baota_context"
+          docker run --rm --network none --read-only --memory 128m --pids-limit 32 \
+            -v "$GITHUB_WORKSPACE/deploy/baota/test_image.py:/test_image.py:ro" \
+            -v "$GITHUB_WORKSPACE/spug_api/apps/baota:/compat-source:ro" \
+            --entrypoint python3 baota-rollback-ci /test_image.py rollback
+          # Refuse a different/already-patched entrypoint instead of silently building.
+          if docker build --network none --build-arg ROLLBACK_IMAGE=baota-rollback-ci \
+            -f "$baota_context/deploy/baota/rollback.Dockerfile" -t baota-rollback-must-fail "$baota_context"; then
+            echo 'Rollback patch unexpectedly accepted an entrypoint without the exact updatedb line.'
+            exit 1
+          fi
+
+  mariadb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+      - name: Pull disposable database and fixed application runtime
+        run: |
+          docker pull mariadb:11.4
+          docker pull ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c
+      - name: Start database without external network access
+        run: |
+          docker network create --internal baota-ci
+          docker run -d --name baota-ci-db --network baota-ci --memory 512m --pids-limit 128 \
+            -e MARIADB_ROOT_PASSWORD=disposable-ci-password -e MARIADB_DATABASE=baota_ci mariadb:11.4
+          for baota_attempt in $(seq 1 60); do
+            if docker exec baota-ci-db healthcheck.sh --connect --innodb_initialized; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - name: Check task transactions and concurrent claims
+        run: |
+          if [ ! -f spug_api/apps/baota/test_tasks.py ]; then
+            echo 'Task tests have not been committed yet.'
+            exit 0
+          fi
+          docker run --rm --network baota-ci --read-only --tmpfs /tmp:rw,nosuid,size=128m \
+            --memory 768m --cpus 2 --pids-limit 128 \
+            -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONUNBUFFERED=1 \
+            -e BAOTA_CI_DB_HOST=baota-ci-db -e BAOTA_CI_DB_PASSWORD=disposable-ci-password \
+            -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api --entrypoint python3 \
+            ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
+            manage.py test apps.baota.test_tasks apps.baota.test_upload_store apps.baota.test_upload_tasks --settings=spug.baota_ci_settings --noinput
+      - name: Remove disposable database
+        if: always()
+        run: |
+          docker rm -fv baota-ci-db || true
+          docker network rm baota-ci || true
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: spug_web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: spug_web/package-lock.json
+      - run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Run module helper tests
+        env:
+          CI: 'true'
+          NODE_OPTIONS: --openssl-legacy-provider
+        run: node node_modules/react-app-rewired/bin/index.js test --watch=false --runInBand --testPathPattern='pages/(baota|exec/panel)/.*test.js' --passWithNoTests
+      - name: Build production assets
+        env:
+          CI: 'false'
+          NODE_OPTIONS: --openssl-legacy-provider
+          GENERATE_SOURCEMAP: 'false'
+        run: node node_modules/react-app-rewired/bin/index.js build

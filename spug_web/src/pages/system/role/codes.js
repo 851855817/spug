@@ -58,6 +58,16 @@ export default [{
   key: 'exec',
   label: t('批量执行'),
   pages: [{
+    key: 'panel',
+    label: t('面板任务'),
+    perms: [
+      {key: 'view', label: t('查看面板任务')},
+      {key: 'create', label: t('创建面板预检')},
+      {key: 'execute', label: t('确认执行面板任务')},
+      {key: 'cancel', label: t('取消未下发项目')},
+      {key: 'manage', label: t('人工判定面板任务')},
+    ]
+  }, {
     key: 'task',
     label: t('执行任务'),
     perms: [

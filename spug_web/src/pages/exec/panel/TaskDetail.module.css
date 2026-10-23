@@ -1,0 +1,36 @@
+.entry + .entry {
+  border-top: 1px solid #f0f0f0;
+  margin-top: 14px;
+  padding-top: 14px;
+}
+
+.heading {
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  margin-bottom: 8px;
+  overflow-wrap: anywhere;
+}
+
+.message {
+  margin-bottom: 8px;
+}
+
+.details {
+  margin-top: 8px;
+}
+
+.details > summary {
+  color: #1890ff;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.details[open] > summary {
+  margin-bottom: 12px;
+}

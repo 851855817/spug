@@ -22,7 +22,8 @@ export default observer(function () {
       </Breadcrumb>
       <SearchForm>
         <SearchForm.Item span={8} title={t('模板类型')}>
-          <Select allowClear value={store.f_type} onChange={v => store.f_type = v} placeholder={t('请选择')}>
+          <Select style={{width: '100%'}} dropdownMatchSelectWidth={false}
+                  allowClear value={store.f_type} onChange={v => store.f_type = v} placeholder={t('请选择')}>
             {store.types.map(item => (
               <Select.Option value={item} key={item}>{item}</Select.Option>
             ))}

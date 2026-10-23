@@ -1,4 +1,4 @@
-import { buildGroupTree, descendantIds, filterPanels } from './helpers';
+import { buildGroupTree, descendantIds, filterPanels, inferAPIBaseURL } from './helpers';
 
 const groups = [
   {id: 1, name: '生产', parent_id: null},
@@ -25,4 +25,19 @@ test('parent selection includes panels in descendant groups', () => {
 test('descendant traversal terminates even with malformed cyclic input', () => {
   const cycle = [{id: 1, parent_id: 2}, {id: 2, parent_id: 1}];
   expect([...descendantIds(cycle, 1)]).toEqual([1, 2]);
+});
+
+test.each([
+  ['https://panel.example:8888/security-entry?from=login#top', 'https://panel.example:8888'],
+  ['http://192.0.2.10:8888/secret', 'http://192.0.2.10:8888'],
+  ['https://[2001:db8::1]:8443/entry', 'https://[2001:db8::1]:8443'],
+  ['https://panel.example/', 'https://panel.example'],
+])('infers the API origin from login address %s', (address, expected) => {
+  expect(inferAPIBaseURL(address)).toBe(expected);
+});
+
+test.each(['', 'panel.example:8888', '/entry', 'file:///etc/passwd',
+  'https://account:password@panel.example:8888/entry', 'https://panel.example\\entry',
+  'https://panel.example/invalid path'])('does not infer from invalid or credential-bearing URL %s', address => {
+  expect(inferAPIBaseURL(address)).toBe('');
 });

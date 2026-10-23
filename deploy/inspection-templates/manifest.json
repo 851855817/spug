@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "review_date": "2026-10-23",
+  "sources": {
+    "tldr": {
+      "url": "https://github.com/tldr-pages/tldr/tree/a81be9a1ed669a2275bf13af7d12d6416cf1a7eb",
+      "license": "CC-BY-4.0 (command documentation)",
+      "use": "Reference command documentation; independently implemented bounded Python wrappers. No wholesale upstream script import."
+    },
+    "ssl-cert-check": {
+      "url": "https://github.com/Matty9191/ssl-cert-check/blob/906d34b9e2c495bbed82edcb19404a01f7196b8f/ssl-cert-check",
+      "license": "GPL-2.0-or-later",
+      "use": "Conceptual reference for expiry reporting only. Independent stdlib TLS implementation; no source code copied."
+    }
+  },
+  "templates": [
+    {"key":"system", "name":"巡检·系统版本与运行时间", "type":"通用巡检", "desc":"只读查看系统、内核、运行时长和时区；不执行系统配置文件。Linux + Python 3.8+。", "sources":["tldr"]},
+    {"key":"resources", "name":"巡检·CPU负载与内存", "type":"通用巡检", "desc":"查看逻辑CPU数、1/5/15分钟负载、内存和交换区快照；负载不等于CPU使用率。Linux + Python 3.8+。", "sources":["tldr"]},
+    {"key":"disks", "name":"巡检·磁盘空间与Inode", "type":"通用巡检", "desc":"只检查本地文件系统容量和Inode；不递归扫描目录、不清理文件。需要df。Linux + Python 3.8+。", "sources":["tldr"]},
+    {"key":"processes", "name":"巡检·进程资源TOP20", "type":"通用巡检", "desc":"按CPU与内存各列前20个进程，不输出命令参数。CPU为进程生命周期平均值。需要procps版ps。Linux + Python 3.8+。", "sources":["tldr"]},
+    {"key":"ports", "name":"巡检·TCP与UDP监听端口", "type":"通用巡检", "desc":"列出最多100行监听端口，不扫描外部主机、不终止连接。需要ss。Linux + Python 3.8+。", "sources":["tldr"]},
+    {"key":"services", "name":"巡检·失败的系统服务", "type":"通用巡检", "desc":"仅列出systemd失败服务状态，不读取日志、不重启服务。非systemd系统会提示检查不可用。Linux + Python 3.8+。", "sources":["tldr"]},
+    {"key":"php_versions", "name":"PHP检查·宝塔CLI版本", "type":"PHP检查", "desc":"检查宝塔目录的PHP CLI版本；使用-n跳过php.ini和动态扩展。不会升级PHP，不代表网站实际运行版本。Linux + Python 3.8+。", "sources":["tldr"], "php_parameter":true},
+    {"key":"php_config", "name":"PHP检查·安全相关配置", "type":"PHP检查", "desc":"仅查看php.ini中10个白名单开关；不输出密码、完整配置或phpinfo。文件值不代表运行时值，也不直接判定安全。Linux + Python 3.8+。", "sources":["tldr"], "php_parameter":true},
+    {"key":"php_extensions", "name":"PHP检查·已配置扩展", "type":"PHP检查", "desc":"列出宝塔php.ini声明的扩展名；不加载扩展。未覆盖额外INI目录，配置存在不代表扩展已安装或已加载。Linux + Python 3.8+。", "sources":["tldr"], "php_parameter":true},
+    {"key":"php_fpm", "name":"PHP检查·FPM进程", "type":"PHP检查", "desc":"只查看PHP-FPM进程与资源，不输出参数或池名称。覆盖所有版本，进程存在不等于网站正常。需要procps版ps。Linux + Python 3.8+。", "sources":["tldr"]},
+    {"key":"website", "name":"网站检查·HTTPS可用性", "type":"网站与证书检查", "desc":"对公网域名443端口发HEAD /，检查状态码与耗时。验证TLS，不跟随跳转；不读取正文。会产生网站访问日志。Linux + Python 3.8+。", "sources":["tldr"], "domain_parameter":true},
+    {"key":"certificate", "name":"网站检查·TLS证书到期", "type":"网站与证书检查", "desc":"验证公网域名443端口证书链和主机名，剩余不足30天告警；不申请、续签或更改证书。非完整TLS审计。Linux + Python 3.8+。", "sources":["ssl-cert-check"], "domain_parameter":true}
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "review_date": "2026-10-23",
+  "interpreter": "sh",
+  "sources": {
+    "tldr": {
+      "url": "https://github.com/tldr-pages/tldr/tree/a81be9a1ed669a2275bf13af7d12d6416cf1a7eb",
+      "license": "CC-BY-4.0 (command documentation)",
+      "use": "Independent native Bash implementation referring to query command documentation; fixed arguments and bounded output."
+    }
+  },
+  "templates": [
+    {"key":"system", "name":"Shell·系统版本与运行时间", "type":"Shell通用巡检", "desc":"原生Shell只读巡检：系统、内核、运行时间、时区。不执行配置文件。需要Linux、Bash与GNU coreutils。", "sources":["tldr"]},
+    {"key":"resources", "name":"Shell·CPU负载与内存", "type":"Shell通用巡检", "desc":"原生Shell查看CPU数、负载、内存与交换区；不是CPU瞬时使用率。需要Linux、Bash、coreutils和procps。", "sources":["tldr"]},
+    {"key":"disks", "name":"Shell·磁盘空间与Inode", "type":"Shell通用巡检", "desc":"原生Shell检查本地文件系统容量和Inode，最多各100行；不清理、不扫描目录。需要Linux、Bash、GNU coreutils。", "sources":["tldr"]},
+    {"key":"processes", "name":"Shell·进程资源TOP20", "type":"Shell通用巡检", "desc":"原生Shell按CPU和内存列TOP20；仅PID、程序名和比例，不输出完整参数。需要Linux、Bash、coreutils和procps。", "sources":["tldr"]},
+    {"key":"ports", "name":"Shell·TCP与UDP监听端口", "type":"Shell通用巡检", "desc":"原生Shell列最多100行监听端口，不扫描外部主机。需要Linux、Bash、coreutils和ss。", "sources":["tldr"]},
+    {"key":"services", "name":"Shell·失败的系统服务", "type":"Shell通用巡检", "desc":"原生Shell列失败的systemd服务，不读取日志、不重启。需要Linux、Bash、coreutils和systemctl。", "sources":["tldr"]},
+    {"key":"php_versions", "name":"Shell·宝塔PHP CLI版本", "type":"Shell PHP检查", "desc":"原生Shell检查宝塔PHP CLI版本，支持all或7.4等分支；-n跳过INI与动态扩展，不升级PHP。需要Linux、Bash和GNU coreutils。", "sources":["tldr"], "php_parameter":true},
+    {"key":"php_fpm", "name":"Shell·PHP-FPM进程", "type":"Shell PHP检查", "desc":"原生Shell筛选PHP-FPM进程，不输出参数或池名称；只检查有界快照，不代表网站正常。需要Linux、Bash、coreutils和procps。", "sources":["tldr"]}
+  ]
+}

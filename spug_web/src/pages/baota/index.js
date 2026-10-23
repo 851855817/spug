@@ -16,6 +16,7 @@ export default function BaotaIndex() {
   const [loading, setLoading] = useState(false);
   const [ready, setReady] = useState(false);
   const [record, setRecord] = useState(null);
+  const [checkingIds, setCheckingIds] = useState({});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const canView = hasPermission('baota.panel.view');
@@ -52,6 +53,18 @@ export default function BaotaIndex() {
     });
   }
 
+  async function checkPanel(panel) {
+    setCheckingIds(value => ({...value, [panel.id]: true}));
+    try {
+      const result = await http.post('/api/baota/connection/', {id: panel.id});
+      setPanels(value => value.map(item => item.id === result.id ? result : item));
+      message.success(`${panel.name} 连接成功，宝塔版本 ${result.api_version}`);
+      await refresh();
+    } catch (_) {
+      // The shared HTTP client displays server errors.
+    } finally { setCheckingIds(value => ({...value, [panel.id]: false})); }
+  }
+
   const columns = [
     {title: '面板名称', dataIndex: 'name', width: 160, ellipsis: true},
     {title: '面板地址', dataIndex: 'url', width: 260, ellipsis: true,
@@ -59,14 +72,22 @@ export default function BaotaIndex() {
     {title: '登录账户', dataIndex: 'username', width: 140, ellipsis: true},
     {title: '密码', dataIndex: 'has_password', width: 100,
       render: value => <Tag color={value ? 'green' : 'default'}>{value ? '已加密保存' : '未设置'}</Tag>},
+    {title: 'API 连接', key: 'api', width: 190, render: (_, panel) => <div>
+      <Tag color={panel.api_checked_at ? 'green' : panel.has_api_key && panel.api_base_url ? 'orange' : 'default'}>
+        {panel.api_checked_at ? `宝塔 ${panel.api_version}` : panel.has_api_key && panel.api_base_url ? '待验证' : '未配置'}
+      </Tag>
+      {panel.api_checked_at && <div><Typography.Text type="secondary">{panel.api_checked_at}</Typography.Text></div>}
+    </div>},
     {title: '所属分组', dataIndex: 'group_id', width: 130,
       render: id => groups.find(group => group.id === id)?.name || '—'},
     {title: '备注', dataIndex: 'desc', width: 150, ellipsis: true},
     {title: '创建时间', dataIndex: 'created_at', width: 170},
-    {title: '操作', key: 'actions', width: 210, fixed: 'right', render: (_, panel) => (
+    {title: '操作', key: 'actions', width: 300, fixed: 'right', render: (_, panel) => (
       <Space size={12}>
         <a href={panel.url} target="_blank" rel="noopener noreferrer"><ExportOutlined/> 打开</a>
         {hasPermission('baota.panel.edit') && <Button type="link" size="small" onClick={() => setRecord(panel)}>编辑</Button>}
+        {hasPermission('baota.panel.edit') && <Button type="link" size="small" loading={!!checkingIds[panel.id]}
+          disabled={!panel.api_base_url || !panel.has_api_key} onClick={() => checkPanel(panel)}>测试连接</Button>}
         {hasPermission('baota.panel.del') && <Button type="link" danger size="small" onClick={() => remove(panel)}>删除</Button>}
       </Space>
     )},
@@ -93,7 +114,7 @@ export default function BaotaIndex() {
             {ready && !groups.length && <Typography.Paragraph type="secondary">
               {hasPermission('baota.group.manage') ? '先点击左侧“＋”新建分组，再添加宝塔面板。' : '请联系管理员创建分组后再添加面板。'}
             </Typography.Paragraph>}
-            <Table rowKey="id" columns={columns} dataSource={rows} loading={loading} scroll={{x: 1420}}
+            <Table rowKey="id" columns={columns} dataSource={rows} loading={loading} scroll={{x: 1700}}
                    locale={{emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={search ? '没有匹配的面板' : '还没有宝塔面板'}/>}}
                    pagination={{current: page, pageSize, showSizeChanger: true, total: rows.length,
                      showTotal: total => `共 ${total} 个面板`, onChange: (value, size) => { setPage(value); setPageSize(size); }}}/>
@@ -102,7 +123,7 @@ export default function BaotaIndex() {
         </Col>
       </Row>
       {record && <PanelForm record={record} groups={groups} selectedGroup={selected} onCancel={() => setRecord(null)}
-                            onSaved={() => { setRecord(null); refresh(); }}/ >}
+                            onChecked={refresh} onSaved={() => { setRecord(null); refresh(); }}/ >}
     </AuthDiv>
   );
 }

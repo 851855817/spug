@@ -5,7 +5,7 @@ from django.views import View
 from libs import auth, json_response
 from .models import Panel, PanelGroup
 from .security import encrypt_secret, SecretError
-from .validation import parse_body, positive_id, text, panel_url
+from .validation import api_configuration, parse_body, positive_id, text, panel_url
 
 
 class PanelView(View):
@@ -33,13 +33,20 @@ class PanelView(View):
             with transaction.atomic():
                 group = PanelGroup.objects.select_for_update().get(pk=group_id)
                 values['group'] = group
-                if record_id:
-                    panel = Panel.objects.select_for_update().get(pk=record_id)
-                    for key, value in values.items():
-                        setattr(panel, key, value)
-                    panel.save()
-                else:
-                    panel = Panel.objects.create(created_by=request.user, **values)
+                panel = (Panel.objects.select_for_update().get(pk=record_id) if record_id
+                         else Panel(created_by=request.user))
+                api_values, api_key, clear_api_key = api_configuration(data, panel)
+                if api_key:
+                    api_values['api_key_ciphertext'] = encrypt_secret(api_key)
+                elif clear_api_key:
+                    api_values['api_key_ciphertext'] = ''
+                if any(getattr(panel, key) != value for key, value in api_values.items()):
+                    panel.api_config_revision += 1
+                    panel.api_checked_at, panel.api_version = '', ''
+                values.update(api_values)
+                for key, value in values.items():
+                    setattr(panel, key, value)
+                panel.save()
             return json_response(panel.to_view())
         except (ValueError, SecretError) as exc:
             return json_response(error=str(exc))
@@ -57,6 +64,8 @@ class PanelView(View):
             return json_response(error=str(exc))
         except Panel.DoesNotExist:
             return json_response(error='面板不存在，请刷新列表后重试')
+        except ProtectedError:
+            return json_response(error='面板存在任务记录或保留锁，不能删除')
 
 
 class GroupView(View):

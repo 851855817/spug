@@ -1,0 +1,73 @@
+import React from 'react';
+import ReactDOM from 'react-dom';
+import { act } from 'react-dom/test-utils';
+import { http } from 'libs';
+import { readResource, useResources } from './resources';
+
+jest.mock('libs', () => ({http: {get: jest.fn()}}));
+
+test('resource reads from different panels never exceed two concurrent requests', async () => {
+  const pending = [];
+  let running = 0;
+  let maximum = 0;
+  http.get.mockImplementation(() => {
+    running++; maximum = Math.max(maximum, running);
+    return new Promise(resolve => pending.push(value => {running--; resolve(value);}));
+  });
+  const reads = [1, 2, 3, 4].map(panel_id => readResource({panel_id, kind: 'sites'}));
+  await Promise.resolve();
+  expect(http.get).toHaveBeenCalledTimes(2);
+  for (let i = 0; i < 4; i++) {
+    pending[i]({sites: []});
+    await reads[i];
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  await Promise.all(reads);
+  expect(maximum).toBe(2);
+  http.get.mockReset();
+});
+
+test('changing panel or PHP branch discards stale responses', async () => {
+  const pending = [];
+  http.get.mockImplementation(() => new Promise(resolve => pending.push(resolve)));
+  const container = document.createElement('div');
+  const observed = jest.fn();
+  function Reader({panelId, branch}) {
+    const result = useResources(panelId, [{kind: 'php_extensions', php_version: branch}], true, observed);
+    return <div>{JSON.stringify(result.data)}</div>;
+  }
+  await act(async () => {ReactDOM.render(<Reader panelId={1} branch="74"/>, container);});
+  await act(async () => {ReactDOM.render(<Reader panelId={2} branch="82"/>, container);});
+  await act(async () => {pending[0]({php_extensions: [{name: 'old'}]});});
+  expect(observed).not.toHaveBeenCalled();
+  await act(async () => {pending[1]({php_extensions: [{name: 'new'}]});});
+  expect(container.textContent).toContain('new');
+  expect(container.textContent).not.toContain('old');
+  act(() => {ReactDOM.unmountComponentAtNode(container);});
+});
+
+test('upgrade retry invalidates a previous candidate and failed retry stays unavailable', async () => {
+  const pending = [];
+  http.get.mockImplementation(() => new Promise((resolve, reject) => pending.push({resolve, reject})));
+  const observed = jest.fn();
+  const container = document.createElement('div');
+  let reader;
+  function Reader() {
+    reader = useResources(3, [{kind: 'upgrade_versions'}], true, observed);
+    return <div>{JSON.stringify(reader.data)}</div>;
+  }
+  await act(async () => {ReactDOM.render(<Reader/>, container);});
+  expect(observed).toHaveBeenLastCalledWith({upgrade_available: false, upgrade_loading: true});
+  await act(async () => {pending[0].resolve({upgrade_mode: 'legacy_stable', upgrade_available: true, checked_version: '13.1.0'});});
+  expect(observed).toHaveBeenLastCalledWith(expect.objectContaining({upgrade_available: true, upgrade_loading: false}));
+  await act(async () => {
+    reader.reload();
+    expect(observed).toHaveBeenLastCalledWith({upgrade_available: false, upgrade_loading: true});
+  });
+  expect(container.textContent).not.toContain('13.1.0');
+  await act(async () => {pending[1].reject('连接超时');});
+  expect(observed).toHaveBeenLastCalledWith({upgrade_available: false, upgrade_loading: false});
+  expect(reader.errors.upgrade_versions).toBe('连接超时');
+  act(() => {ReactDOM.unmountComponentAtNode(container);});
+  http.get.mockReset();
+});

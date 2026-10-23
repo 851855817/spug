@@ -1,0 +1,37 @@
+name: Inspection template safety
+on:
+  push:
+    paths:
+      - 'deploy/inspection-templates/**'
+      - '.github/workflows/inspection-templates.yml'
+  pull_request:
+    paths:
+      - 'deploy/inspection-templates/**'
+      - '.github/workflows/inspection-templates.yml'
+permissions:
+  contents: read
+jobs:
+  offline-checks:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.8', '3.12']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m unittest discover -s deploy/inspection-templates/tests -v
+      - run: python deploy/inspection-templates/build.py /tmp/inspection-bundle.json
+      - run: python deploy/inspection-templates/build.py /tmp/shell-bundle.json shell-manifest.json
+      - name: ShellCheck source fragments and generated bodies
+        run: |
+          shellcheck --shell=bash deploy/inspection-templates/shell/*.sh
+          python - <<'PY'
+          import json, pathlib, subprocess
+          bundle = json.loads(pathlib.Path('/tmp/shell-bundle.json').read_text())
+          for item in bundle['templates']:
+              path = pathlib.Path('/tmp') / ('spug-check-' + item['key'] + '.sh')
+              path.write_text(item['body'])
+              subprocess.run(['shellcheck', '--shell=sh', str(path)], check=True)
+          PY

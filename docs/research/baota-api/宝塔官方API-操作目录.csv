@@ -1,0 +1,375 @@
+﻿分类,操作名称或说明,方法,请求路径,action,文档操作标识,文档版本,接入状态,官方来源
+ACME 证书,将通过 ACME（Let's Encrypt 等）签发的 SSL 证书部署到指定网站，开启 HTTPS。,POST,/acme,SetCertToSite,SetCertToSite,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/acme/actions/index.md
+ACME 证书,创建 Let's Encrypt（或其他 ACME CA）证书申请订单。支持三种验证方式。,POST,/acme,apply_cert_api,apply_cert_api,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/acme/actions/index.md
+ACME 证书,自动调用已配置的 DNS 提供商 API（如腾讯云 DNSPod）创建 ACME 所需的 `_acme-challenge` TXT 记录，完成域名验证，签发并下载证书。验证完成后自动删除临时 TXT 记录。,POST,/acme,apply_dns_auth,apply_dns_auth,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/acme/actions/index.md
+ACME 证书,下载指定订单的证书文件到本地保存路径。,POST,/acme,download_cert,download_cert,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/acme/actions/index.md
+ACME 证书,获取指定订单的详细信息，包括证书内容。,POST,/acme,get_order_find,get_order_find,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/acme/actions/index.md
+ACME 证书,列出所有 ACME 证书申请订单，包括进行中、已完成和已过期的订单。,POST,/acme,get_orders,get_orders,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/acme/actions/index.md
+ACME 证书,删除指定索引的 ACME 证书订单记录。,POST,/acme,remove_order,remove_order,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/acme/actions/index.md
+ACME 证书,续签已有的 ACME 证书，使用原订单的验证方式和 DNS 配置。,POST,/acme,renew_cert,renew_cert,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/acme/actions/index.md
+计划任务,创建新的计划任务。,POST,/crontab,AddCrontab,AddCrontab,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,删除指定的计划任务。,POST,/crontab,DelCrontab,DelCrontab,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,清空指定计划任务的全部执行日志。,POST,/crontab,DelLogs,DelLogs,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,获取面板中所有计划任务的完整列表，包含任务配置、状态、执行周期等信息。,POST,/crontab,GetCrontab,GetCrontab,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,根据类型获取网站或数据库列表，用于计划任务中选择操作对象。,POST,/crontab,GetDataList,GetDataList,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,获取面板中所有数据库及其表结构信息，用于配置数据库备份任务。,POST,/crontab,GetDatabases,GetDatabases,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,获取指定计划任务的执行日志内容。,POST,/crontab,GetLogs,GetLogs,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,创建自定义的计划任务分类标签。,POST,/crontab,add_crontab_type,add_crontab_type,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,取消指定计划任务的置顶。,POST,/crontab,cancel_top,cancel_top,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,检测指定 URL 的可连通性，返回 HTTP 状态码和页面内容。,POST,/crontab,check_url_connecte,check_url_connecte,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,清除指定计划任务的日志记录。,POST,/crontab,clear_logs,clear_logs,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,将指定计划任务的执行日志导出到 `/tmp/` 目录下的文件中。,POST,/crontab,download_logs,download_logs,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,将指定计划任务的数据导出为 JSON 文件到 `/tmp/` 目录。,POST,/crontab,export_crontab_to_json,export_crontab_to_json,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,获取指定类型的自动备份计划任务配置。,POST,/crontab,get_auto_config,get_auto_config,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,获取指定 ID 的计划任务的完整配置信息。,POST,/crontab,get_crond_find,get_crond_find,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,检查系统 crond 服务的运行状态。,POST,/crontab,get_crontab_service,get_crontab_service,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,获取用户自定义的计划任务分类列表。,POST,/crontab,get_crontab_types,get_crontab_types,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,获取数据库名称的简化列表，用于计划任务配置。,POST,/crontab,get_databases,get_databases,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,获取面板中所有网站的域名列表，用于计划任务中关联网站。,POST,/crontab,get_domain,get_domain,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,获取指定计划任务的日志文件路径和大小。,POST,/crontab,get_log_path,get_log_path,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,获取指定项目的定时重启任务配置。,POST,/crontab,get_restart_project_config,get_restart_project_config,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,获取面板日志自动切割任务的配置信息。,POST,/crontab,get_rotate_log_config,get_rotate_log_config,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,获取系统用户列表，用于配置计划任务以指定用户身份运行。,POST,/crontab,get_system_user_list,get_system_user_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,获取系统支持的所有时区，按大洲分组。,POST,/crontab,get_zone,get_zone,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,修改已有计划任务的配置。,POST,/crontab,modify_crond,modify_crond,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,尝试修复 crond 计划任务服务。,POST,/crontab,repair_crontab_service,repair_crontab_service,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,临时关闭系统加固功能指定分钟数，超时后自动恢复。,POST,/crontab,set_atuo_start_syssafe,set_atuo_start_syssafe,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,为网站或数据库设置自动备份计划任务。任务不存在时自动创建，已存在时更新状态。,POST,/crontab,set_auto_config,set_auto_config,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,启用或暂停指定的计划任务。,POST,/crontab,set_cron_status,set_cron_status,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,批量操作计划任务：启动、停止、删除或立即执行。,POST,/crontab,set_cron_status_all,set_cron_status_all,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,将选中的计划任务归入指定的分类中。,POST,/crontab,set_crontab_type,set_crontab_type,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,立即执行指定计划任务的脚本。,POST,/crontab,set_execute_script,set_execute_script,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,为指定项目设置定时重启任务。,POST,/crontab,set_restart_project,set_restart_project,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,修改日志自动切割任务的配置参数。,POST,/crontab,set_rotate_log,set_rotate_log,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,开启或关闭日志自动切割任务。,POST,/crontab,set_rotate_log_status,set_rotate_log_status,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+计划任务,将指定计划任务置顶显示。,POST,/crontab,set_task_top,set_task_top,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/crontab/actions/index.md
+数据查询,查询面板 SQLite 数据表（sites、databases、ftps、domain 等）,POST,/data,getData,getData,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/data/get-data/index.md
+数据库管理,在指定 MySQL 服务器上创建新数据库，同时创建对应的数据库用户并授予全部权限。,POST,/database,AddDatabase,AddDatabase,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,在指定 MySQL 服务器上创建新用户。,POST,/database,AddMysqlUser,AddMysqlUser,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,数据库管理：按 action 选择功能,POST,/database,BinLog,BinLog,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取二进制日志文件列表及大小。,POST,/database,GetMySQLBinlogs,GetMySQLBinlogs,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,清理指定天数前的二进制日志。,POST,/database,ClearMySQLBinlog,ClearMySQLBinlog,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,删除 MySQL 服务器上的指定用户。,POST,/database,DelMysqlUser,DelMysqlUser,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,删除指定数据库，同时删除关联用户及权限。,POST,/database,DeleteDatabase,DeleteDatabase,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,查询指定 MySQL 服务器上所有用户及其允许登录的主机（Host），返回 `user@host` 格式列表。,POST,/database,GeUserHostList,GeUserHostList,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取所有数据库的备份文件列表。,POST,/database,GetAllBackup,GetAllBackup,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,数据库管理：按 action 选择功能,POST,/database,GetBackup,GetBackup,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取所有数据库服务器列表，包括本地 MySQL 和已添加的远程服务器。,POST,/database,GetCloudServer,GetCloudServer,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取指定 MySQL 服务器上的所有数据库列表。,POST,/database,GetDatabaseList,GetDatabaseList,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取面板 `databases` SQLite 表中记录的所有数据库及权限信息。,POST,/database,GetDatabasesList,GetDatabasesList,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取 MySQL 运行时的内存相关配置参数，通过解析 `/etc/my.cnf` 和 `SHOW VARIABLES` 获得。,POST,/database,GetDbStatus,GetDbStatus,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取 MySQL 数据库的错误日志文件路径。返回 MySQL 数据目录下 `.err` 结尾的错误日志文件。,POST,/database,GetErrorLog,GetErrorLog,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,数据库管理：按 action 选择功能,POST,/database,GetImportLog,GetImportLog,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取当前导入状态。,POST,/database,GetImportStatus,GetImportStatus,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取面板 `databases` 表中指定数据库的详细信息（大小、表列表）。,POST,/database,GetInfo,GetInfo,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,查询 MySQL 的 `CONNECTION_CONTROL` 插件状态及登录失败跟踪配置。,POST,/database,GetLoginFailed,GetLoginFailed,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取本地 MySQL / MariaDB 的数据目录和监听端口。,POST,/database,GetMySQLInfo,GetMySQLInfo,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取 MySQL 支持的 SQL 命令类型列表。,POST,/database,GetMysqlCommands,GetMysqlCommands,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取指定 MySQL 服务器上所有用户及其权限详情。,POST,/database,GetMysqlUser,GetMysqlUser,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取数据库相关消息推送的目标用户列表。,POST,/database,GetPushUser,GetPushUser,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取 MySQL 服务器的运行状态变量（`SHOW GLOBAL STATUS` 结果）。,POST,/database,GetRunStatus,GetRunStatus,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取 MySQL 慢查询日志的完整文本内容。,POST,/database,GetSlowLogs,GetSlowLogs,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取 MySQL 的超时和过期相关配置参数。,POST,/database,GetTimeOut,GetTimeOut,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,数据库管理：按 action 选择功能,POST,/database,GetValidatePasswordConfig,GetValidatePasswordConfig,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,设置 MySQL 的超时和连接相关配置参数。,POST,/database,SetTimeOut,SetTimeOut,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,备份指定数据库，生成 `.sql.gz` 文件存入面板备份目录。,POST,/database,ToBackup,ToBackup,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,根据数据库类型（如 `mysql`）和名称搜索数据库列表。,POST,/database,find_databases_by_name_and_type,find_databases_by_name_and_type,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取指定数据库中所有表的列表（执行 `SHOW TABLES`）。,POST,/database,get_database_table,get_database_table,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,检查本地 MySQL 是否已安装。,POST,/database,get_mysql_status,get_mysql_status,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,查询 MySQL 守护进程定时任务的配置状态，该任务在 MySQL 异常停止时自动重启。,POST,/database,get_restart_task,get_restart_task,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,数据库管理：按 action 选择功能,POST,/database,set_restart_task,set_restart_task,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+数据库管理,获取数据库类型分类列表（本地服务器 + 自定义分类）。,POST,/database,view_database_types,view_database_types,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/database/actions/index.md
+项目部署,添加自定义的一键部署软件包，支持 PHP 和 Java 两种项目类型。,POST,/deployment,AddPackage,AddPackage,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/deployment/actions/index.md
+项目部署,删除通过一键部署安装的项目。,POST,/deployment,DelPackage,DelPackage,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/deployment/actions/index.md
+项目部署,获取一键部署任务的最新执行日志。,POST,/deployment,GetInLog,GetInLog,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/deployment/actions/index.md
+项目部署,"获取面板""一键部署""中所有可用的软件包列表（WordPress、ThinkPHP、可道云等）。",POST,/deployment,GetList,GetList,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/deployment/actions/index.md
+项目部署,获取通过 [AddPackage](/api/deployment/addpackage) 自定义添加的软件包详细信息。,POST,/deployment,GetPackageOther,GetPackageOther,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/deployment/actions/index.md
+项目部署,获取面板中可用于一键部署的网站和框架列表。,POST,/deployment,GetSiteList,GetSiteList,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/deployment/actions/index.md
+项目部署,获取当前正在执行的一键部署任务的进度信息。,POST,/deployment,GetSpeed,GetSpeed,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/deployment/actions/index.md
+项目部署,将选中的一键部署软件包（内置或自定义）安装到指定网站。,POST,/deployment,SetupPackage,SetupPackage,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/deployment/actions/index.md
+项目部署,检查当前服务器环境是否满足项目部署的基本要求（MySQL、Nginx、Redis 等）。,POST,/deployment,check_project_env,check_project_env,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/deployment/actions/index.md
+Docker,创建 Docker 存储卷,GET,/btdocker/volume/add,,add,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/add-volume/index.md
+Docker,从 Docker 应用商店安装应用（参数来源于 get_apps 返回值）,POST,/mod/docker/com/create_app/stype,,create_app,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/create-app/index.md
+Docker,创建 Docker 网络,GET,/btdocker/network/create_network,,create_network,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/create-network/index.md
+Docker,获取 Docker 应用商店的 Git 配置,POST,/mod/docker/com/get_apphub_config/stype,,get_apphub_config,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/get-apphub-config/index.md
+Docker,获取 Docker 应用商店的所有可用应用列表（含参数定义）,POST,/mod/docker/com/get_apps/stype,,get_apps,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/get-apps/index.md
+Docker,获取容器执行命令的日志,GET,/btdocker/container/get_cmd_log,,get_cmd_log,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/get-cmd-log/index.md
+Docker,获取 Docker 的安装状态和配置,GET,/btdocker/setup/get_config,,get_config,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/get-config/index.md
+Docker,查询应用的依赖是否已安装,POST,/mod/docker/com/get_dependence_apps/stype,,get_dependence_apps,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/get-dependence-apps/index.md
+Docker,获取 Docker 网络列表,GET,/btdocker/network/get_host_network,,get_host_network,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/get-host-network/index.md
+Docker,获取所有 Docker 容器列表及运行状态,GET,/btdocker/container/get_list,,get_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/get-list/index.md
+Docker,获取 Docker Compose 项目列表,GET,/btdocker/project/get_project_list,,get_project_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/get-project-list/index.md
+Docker,获取 Docker 镜像加速器配置,GET,/btdocker/setup/get_registry_mirrors,,get_registry_mirrors,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/get-registry-mirrors/index.md
+Docker,获取 Docker 存储卷列表,GET,/btdocker/volume/get_volume_list,,get_volume_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/get-volume-list/index.md
+Docker,获取本地 Docker 镜像列表,GET,/btdocker/image/image_list,,image_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/image-list/index.md
+Docker,初始化 Docker 应用商店环境,POST,/mod/docker/com/install_apphub/stype,,install_apphub,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/install-apphub/index.md
+Docker,安装 Docker 和 Docker Compose（异步任务）,GET,/btdocker/setup/install_docker_program,,install_docker_program,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/install-docker-program/index.md
+Docker,清理所有已停止的无用容器,GET,/btdocker/container/prune,,prune,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/prune-container/index.md
+Docker,清理所有无用的 Docker 镜像,GET,/btdocker/image/prune,,prune,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/prune-image/index.md
+Docker,清理无用的 Docker 网络,GET,/btdocker/network/prune,,prune,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/prune-network/index.md
+Docker,获取 Docker 镜像仓库列表,GET,/btdocker/registry/registry_list,,registry_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/registry-list/index.md
+Docker,重启 Docker 容器,GET,/btdocker/container/restart,,restart,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/restart/index.md
+Docker,搜索 Docker Hub 上的镜像,GET,/btdocker/image/search,,search,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/search-image/index.md
+Docker,设置 Docker 监控数据的保留天数,GET,/btdocker/setup/set_monitor_save_date,,set_monitor_save_date,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/set-monitor-save-date/index.md
+Docker,设置 Docker 官方镜像加速器地址,GET,/btdocker/setup/set_registry_mirrors,,set_registry_mirrors,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/set-registry-mirrors/index.md
+Docker,设置 Docker 镜像仓库的备注,GET,/btdocker/registry/set_remark,,set_remark,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/set-remark/index.md
+Docker,启动已停止的 Docker 容器,GET,/btdocker/container/start,,start,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/start/index.md
+Docker,停止运行中的 Docker 容器,GET,/btdocker/container/stop,,stop,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/stop/index.md
+Docker,获取 Docker Compose 模板列表,GET,/btdocker/compose/template_list,,template_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/docker/template-list/index.md
+文件管理,激活后台任务队列，使积压的文件操作任务开始执行。,POST,/files,ActionTask,ActionTask,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,检查源文件是否与目标路径下已有文件重名，用于上传/复制前确认。,POST,/files,CheckExistsFiles,CheckExistsFiles,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,清空所有回收站目录，永久删除已放入回收站的文件。,POST,/files,Close_Recycle_bin,Close_Recycle_bin,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,文件管理：按 action 选择功能,POST,/files,CopyFile,CopyFile,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,移动（重命名）文件或目录。,POST,/files,MvFile,MvFile,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,文件管理：按 action 选择功能,POST,/files,CreateFile,CreateFile,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,创建目录。,POST,/files,CreateDir,CreateDir,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,删除文件（移入回收站）。,POST,/files,DeleteFile,DeleteFile,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,删除目录（移入回收站）。,POST,/files,DeleteDir,DeleteDir,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,为文件或目录创建软链接（符号链接 symlink）。,POST,/files,CreateLink,CreateLink,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,获取指定路径下的目录和文件列表，支持分页、排序、搜索。返回每项的详细信息（大小、权限、修改时间等）。,POST,/files,GetDir,GetDir,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,浏览服务器文件系统，查看指定目录下的文件和子目录列表，支持分页和搜索。,POST,/files,GetDirNew,GetDirNew,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,获取文件的权限（chmod）、所有者（chown）及系统用户列表。,POST,/files,GetFileAccess,GetFileAccess,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,文件管理：按 action 选择功能,POST,/files,GetFileBody,GetFileBody,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,保存编辑后的内容到文件。,POST,/files,SaveFileBody,SaveFileBody,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,查询面板文件管理的操作历史记录，支持分页和关键词搜索。,POST,/files,GetFileHistory,GetFileHistory,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,查看面板回收站中的文件和目录列表，支持分页。,POST,/files,Get_Recycle_bin,Get_Recycle_bin,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,将回收站中的文件或目录恢复到其原始位置。,POST,/files,Re_Recycle_bin,Re_Recycle_bin,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,切换文件回收站功能的开启/关闭状态。若回收站关闭，删除的文件将被直接永久删除。,POST,/files,Recycle_bin,Recycle_bin,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,删除指定 ID 的后台任务。若任务正在运行（状态 `-1`）则同时终止相关进程。,POST,/files,RemoveTask,RemoveTask,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,上传文件到指定目录。与面板其他接口不同，本接口使用 `multipart/form-data` 格式。,POST,/files,UploadFile,UploadFile,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,对指定目录发起 Webshell 木马扫描任务，结果写入面板安全日志。,POST,/files,dir_webshell_check,dir_webshell_check,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,列出所有有编辑历史记录的文件及其历史版本信息。,POST,/files,file_history_list,file_history_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,对指定文件进行 Webshell（木马）检测。,POST,/files,file_webshell_check,file_webshell_check,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,检查服务器上文件同步工具（rsync/lsyncd）的安装和配置状态。,POST,/files,get_bt_sync_status,get_bt_sync_status,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,获取当前服务器已安装的 Composer 版本号。,POST,/files,get_composer_version,get_composer_version,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,获取用户收藏/标记的目录列表。,POST,/files,get_files_store,get_files_store,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,获取指定路径的磁盘占用大小。,POST,/files,get_path_size,get_path_size,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,列出指定路径下的视频文件。,POST,/files,get_videos,get_videos,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,检查并安装 RAR 格式支持工具（rar/unrar）。若已安装则直接返回 `True`，否则自动安装。,POST,/files,install_rar,install_rar,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,列出已配置的云存储备份方案，包括本地和各类云存储。,POST,/files,list_backups,list_backups,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,批量解压多个压缩文件到指定目录，支持 zip/tar.gz 等格式。,POST,/files,mutil_unzip,mutil_unzip,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,删除指定 ID 的分享下载链接。,POST,/files,remove_download_url,remove_download_url,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,将误报的 Webshell 文件内容提交到宝塔官方服务器，用于改善木马检测准确性。,POST,/files,send_baota,send_baota,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,检测指定路径是否存在，返回路径、类型（目录/文件）和存在状态。,POST,/files,test_path,test_path,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,将服务器上已安装的 Composer 更新到最新版本。,POST,/files,update_composer,update_composer,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+文件管理,上传文件前批量检查目标路径下是否已有同名文件，返回已存在的文件列表。,POST,/files,upload_files_exists,upload_files_exists,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/files/actions/index.md
+FTP 管理,创建新的 FTP 用户。,POST,/ftp,AddUser,AddUser,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ftp/actions/index.md
+FTP 管理,批量修改多个 FTP 用户的密码。需同时传入用户 ID 和用户名。,POST,/ftp,BatchSetUserPassword,BatchSetUserPassword,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ftp/actions/index.md
+FTP 管理,删除 FTP 用户。,POST,/ftp,DeleteUser,DeleteUser,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ftp/actions/index.md
+FTP 管理,修改指定 FTP 用户的下载带宽、上传带宽和最大存储空间限制。,POST,/ftp,ModifyFtpUserAccess,ModifyFtpUserAccess,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ftp/actions/index.md
+FTP 管理,启用或暂停指定的 FTP 用户。,POST,/ftp,SetStatus,SetStatus,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ftp/actions/index.md
+FTP 管理,修改指定 FTP 用户的密码。,POST,/ftp,SetUserPassword,SetUserPassword,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ftp/actions/index.md
+FTP 管理,根据 FTP 用户 ID 查找用户详情。,POST,/ftp,find_ftp,find_ftp,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ftp/actions/index.md
+FTP 管理,获取指定 FTP 用户的操作行为日志，包括上传、下载、重命名、删除等操作记录。,POST,/ftp,get_action_logs,get_action_logs,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ftp/actions/index.md
+FTP 管理,获取指定 FTP 用户的登录历史记录。,POST,/ftp,get_login_logs,get_login_logs,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ftp/actions/index.md
+FTP 管理,修改 Pure-FTPd 的监听端口，并自动更新防火墙规则。,POST,/ftp,setPort,setPort,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ftp/actions/index.md
+FTP 管理,控制 FTP 操作日志的记录状态。,POST,/ftp,set_ftp_logs,set_ftp_logs,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ftp/actions/index.md
+FTP 管理,获取 FTP 用户的自定义分类列表。,POST,/ftp,view_ftp_types,view_ftp_types,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ftp/actions/index.md
+Java 项目,为 Java 项目添加反向代理规则,GET,/mod/java/project/add_server_proxy/stype,,add_server_proxy,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/add-server-proxy/index.md
+Java 项目,为 Java 项目开放外网映射（生成 Nginx 配置文件）,GET,/mod/java/project/bind_extranet/stype,,bind_extranet,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/bind-extranet/index.md
+Java 项目,修改 Java 项目的日志存储路径,GET,/mod/java/project/change_log_path/stype,,change_log_path,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/change-log-path/index.md
+Java 项目,检查 jar 文件的环境变量和配置,GET,/mod/java/project/check_env_for_project/stype,,check_env_for_project,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/check-env-for-project/index.md
+Java 项目,校验 Spring Boot 项目的创建参数,GET,/mod/java/project/check_spring_boot_args/stype,,check_spring_boot_args,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/check-spring-boot-args/index.md
+Java 项目,获取 Java 项目的配置文件列表,GET,/mod/java/project/config_file_list/stype,,config_file_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/config-file-list/index.md
+Java 项目,在已有网站下创建 Tomcat 项目（内嵌模式）,POST,/mod/java/project/create_site_tomcat_project/stype,,create_site_tomcat_project,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/create-site-tomcat-project/index.md
+Java 项目,创建 Spring Boot Java 项目，支持绑定域名,POST,/mod/java/project/create_spring_boot_project/stype,,create_spring_boot_project,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/create-spring-boot-project/index.md
+Java 项目,创建 Tomcat 类型的 Java 项目,GET,/mod/java/project/create_tomcat_project/stype,,create_tomcat_project,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/create-tomcat-project/index.md
+Java 项目,修复 Java 项目的配置,GET,/mod/java/project/fix_project/stype,,fix_project,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/fix-project/index.md
+Java 项目,强制停止 Java 项目进程,GET,/mod/java/project/force_stop/stype,,force_stop,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/force-stop/index.md
+Java 项目,获取 Java 项目的 JMX 监控状态,GET,/mod/java/project/get_jmx_status/stype,,get_jmx_status,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/get-jmx-status/index.md
+Java 项目,获取 Java 项目的更新任务状态,GET,/mod/java/project/get_keep_status/stype,,get_keep_status,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/get-keep-status/index.md
+Java 项目,获取 Java 项目的系统负载信息,GET,/mod/java/project/get_load_info/stype,,get_load_info,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/get-load-info/index.md
+Java 项目,获取 Java 项目的详细信息,GET,/mod/java/project/get_project_info/stype,,get_project_info,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/get-project-info/index.md
+Java 项目,读取 Spring Boot 项目的日志文件内容,GET,/mod/java/project/get_spring_log_data/stype,,get_spring_log_data,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/get-spring-log-data/index.md
+Java 项目,获取 Spring Boot 项目的日志文件列表,GET,/mod/java/project/get_spring_log_list/stype,,get_spring_log_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/get-spring-log-list/index.md
+Java 项目,获取 Java 运行环境状态 — JDK 版本、Tomcat 版本,GET,/mod/java/project/get_system_info/stype,,get_system_info,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/get-system-info/index.md
+Java 项目,获取已安装的 Tomcat 版本及运行状态,GET,/mod/java/project/get_tomcat_list/stype,,get_tomcat_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/get-tomcat-list/index.md
+Java 项目,获取 Java 项目的版本备份列表,GET,/mod/java/project/get_version_list/stype,,get_version_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/get-version-list/index.md
+Java 项目,异步安装指定版本的 JDK,GET,/mod/java/project/install_jdk_new/stype,,install_jdk_new,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/install-jdk-new/index.md
+Java 项目,异步安装指定版本的 Tomcat,GET,/mod/java/project/install_tomcat_new/stype,,install_tomcat_new,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/install-tomcat-new/index.md
+Java 项目,更新任务管理（使用新版/使用旧版/停止新版）,GET,/mod/java/project/keep_option/stype,,keep_option,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/keep-option/index.md
+Java 项目,修改 Java 项目的配置,GET,/mod/java/project/modify_project/stype,,modify_project,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/modify-project/index.md
+Java 项目,修改 Tomcat 的配置（端口、用户、JDK、备注等）,GET,/mod/java/project/modify_tomcat/stype,,modify_tomcat,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/modify-tomcat/index.md
+Java 项目,批量删除 Java 项目,POST,/mod/java/project/multi_remove_project/stype,,multi_remove_project,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/multi-remove-project/index.md
+Java 项目,批量启动/停止 Java 项目,POST,/mod/java/project/multi_set_project/stype,,multi_set_project,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/multi-set-project/index.md
+Java 项目,为 Java 项目创建版本备份,GET,/mod/java/project/now_file_backup/stype,,now_file_backup,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/now-file-backup/index.md
+Java 项目,获取运行中 Java 进程的信息，用于导入已有项目,GET,/mod/java/project/process_info_for_create/stype,,process_info_for_create,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/process-info-for-create/index.md
+Java 项目,获取 Java 项目绑定的域名列表,GET,/mod/java/project/project_domain_list/stype,,project_domain_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/project-domain-list/index.md
+Java 项目,获取所有 Java 项目列表及运行状态,GET,/mod/java/project/project_list/stype,,project_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/project-list/index.md
+Java 项目,删除 Java 项目（不删除文件）,GET,/mod/java/project/remove_project/stype,,remove_project,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/remove-project/index.md
+Java 项目,删除 Java 项目的反向代理规则,GET,/mod/java/project/remove_server_proxy/stype,,remove_server_proxy,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/remove-server-proxy/index.md
+Java 项目,删除 Java 项目的版本备份,GET,/mod/java/project/remove_version/stype,,remove_version,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/remove-version/index.md
+Java 项目,重启 Java 项目,GET,/mod/java/project/restart_project/stype,,restart_project,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/restart-project/index.md
+Java 项目,获取 Java 项目的反向代理规则列表,GET,/mod/java/project/server_proxy_list/stype,,server_proxy_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/server-proxy-list/index.md
+Java 项目,设置 Java 项目的日志记录开关,GET,/mod/java/project/set_project_log_status/stype,,set_project_log_status,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/set-project-log-status/index.md
+Java 项目,为 Spring Boot 项目设置静态文件路径,GET,/mod/java/project/set_static_path/stype,,set_static_path,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/set-static-path/index.md
+Java 项目,修改 Java 项目版本备份的备注,GET,/mod/java/project/set_version_ps/stype,,set_version_ps,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/set-version-ps/index.md
+Java 项目,启动 Java 项目,GET,/mod/java/project/start_project/stype,,start_project,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/start-project/index.md
+Java 项目,启动 Tomcat 项目,GET,/mod/java/project/start_tomcat/stype,,start_tomcat,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/start-tomcat/index.md
+Java 项目,停止 Java 项目,GET,/mod/java/project/stop_project/stype,,stop_project,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/stop-project/index.md
+Java 项目,取消 Java 项目的外网映射,GET,/mod/java/project/unbind_extranet/stype,,unbind_extranet,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/java/unbind-extranet/index.md
+密码管理,获取面板密码/SSH密钥认证配置,POST,/password,GetConfig,GetConfig,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/password/get-config/index.md
+反向代理,批量删除反向代理站点或域名。,POST,/mod/proxy/com/batch_delete/stype,,batch_delete,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/actions/index.md
+反向代理,{,POST,/mod/proxy/com/batch_del_domain/stype,,batch_del_domain,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/actions/index.md
+反向代理,获取和保存反向代理站点的 Nginx 配置（http_block / server_block）。,POST,/mod/proxy/com/save_config/stype,,save_config,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/actions/index.md
+反向代理,Proxy 反向代理：按 action 选择功能,POST,/mod/proxy/com/get_config/stype,,get_config,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/actions/index.md
+反向代理,Proxy 反向代理：按 action 选择功能,POST,/mod/proxy/com/add_domain/stype,,add_domain,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/actions/index.md
+反向代理,Proxy 反向代理：按 action 选择功能,POST,/mod/proxy/com/del_domain/stype,,del_domain,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/actions/index.md
+反向代理,管理反向代理站点的 IP 黑白名单。,POST,/mod/proxy/com/add_ip_limit/stype,,add_ip_limit,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/actions/index.md
+反向代理,Proxy 反向代理：按 action 选择功能,POST,/mod/proxy/com/del_ip_limit/stype,,del_ip_limit,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/actions/index.md
+反向代理,管理反向代理的内容替换（sub_filter）规则，用于在代理响应中替换文本。,POST,/mod/proxy/com/add_sub_filter/stype,,add_sub_filter,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/actions/index.md
+反向代理,Proxy 反向代理：按 action 选择功能,POST,/mod/proxy/com/del_sub_filter/stype,,del_sub_filter,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/actions/index.md
+反向代理,Proxy 反向代理：按 action 选择功能,POST,/mod/proxy/com/set_url_cache/stype,,set_url_cache,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/actions/index.md
+反向代理,"{""code"": 0, ""status"": true, ""msg"": ""设置成功！""}",POST,/mod/proxy/com/set_url_gzip/stype,,set_url_gzip,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/actions/index.md
+反向代理,"{""code"": 0, ""status"": true, ""msg"": ""设置成功！""}",POST,/mod/proxy/com/set_url_custom_conf/stype,,set_url_custom_conf,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/actions/index.md
+反向代理,为已有反向代理站点添加新的代理规则,POST,/mod/proxy/com/add_proxy/stype,,add_proxy,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/add-proxy/index.md
+反向代理,清除反向代理站点缓存,POST,/mod/proxy/com/clear_cache/stype,,clear_cache,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/clear-cache/index.md
+反向代理,创建反向代理站点,POST,/mod/proxy/com/create/stype,,create,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/create/index.md
+反向代理,删除反向代理站点,POST,/mod/proxy/com/delete/stype,,delete,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/delete/index.md
+反向代理,获取指定站点的域名列表及 HTTPS 端口,POST,/mod/proxy/com/get_domain_list/stype,,get_domain_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/get-domain-list/index.md
+反向代理,获取反向代理站点的全局配置信息,POST,/mod/proxy/com/get_global_conf/stype,,get_global_conf,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/get-global-conf/index.md
+反向代理,获取所有反向代理站点列表，支持分页和搜索,POST,/mod/proxy/com/get_list/stype,,get_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/get-list/index.md
+反向代理,获取指定站点的所有反向代理规则列表,POST,/mod/proxy/com/get_proxy_list/stype,,get_proxy_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/get-proxy-list/index.md
+反向代理,获取反向代理站点日志,POST,/mod/proxy/com/GetSiteLogs/stype,,GetSiteLogs,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/get-site-logs/index.md
+反向代理,设置反向代理站点全局缓存,POST,/mod/proxy/com/set_global_cache/stype,,set_global_cache,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/set-global-cache/index.md
+反向代理,设置反向代理站点全局 Gzip 压缩,POST,/mod/proxy/com/set_global_gzip/stype,,set_global_gzip,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/set-global-gzip/index.md
+反向代理,设置反向代理站点日志配置,POST,/mod/proxy/com/set_global_log/stype,,set_global_log,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/set-global-log/index.md
+反向代理,设置反向代理站点 WebSocket 支持,POST,/mod/proxy/com/set_global_websocket/stype,,set_global_websocket,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/set-global-websocket/index.md
+反向代理,设置反向代理站点备注,POST,/mod/proxy/com/set_remak/stype,,set_remak,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/set-remak/index.md
+反向代理,启用或停用反向代理站点,POST,/mod/proxy/com/set_site_stop/stype,,set_site_stop,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/proxy/set-site-stop/index.md
+消息推送,获取可用的消息推送模块列表。,POST,/push,get_modules_list,get_modules_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/push/actions/index.md
+消息推送,消息推送：按 action 选择功能,POST,/push,get_push_list,get_push_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/push/actions/index.md
+消息推送,获取推送日志记录。,POST,/push,get_push_logs,get_push_logs,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/push/actions/index.md
+消息推送,获取消息推送的告警任务模板列表。,POST,/push,get_task_template,get_task_template,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/push/actions/index.md
+网站管理,为已有网站添加额外域名绑定。,POST,/site,AddDomain,AddDomain,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,创建新网站，支持 PHP 和纯静态两种类型。自动生成 Nginx/Apache 配置、创建网站目录、可选同时创建 FTP 和数据库。,POST,/site,AddSite,AddSite,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,关闭指定网站的密码访问保护（HTTP Basic Auth）。,POST,/site,CloseHasPwd,CloseHasPwd,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,关闭指定网站的 SSL 证书，之后网站将仅通过 HTTP 访问。,POST,/site,CloseSSLConf,CloseSSLConf,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,网站管理：按 action 选择功能,POST,/site,CloseToHttps,CloseToHttps,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,开启 HTTP→HTTPS 强制跳转。,POST,/site,HttpToHttps,HttpToHttps,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,移除指定网站的 Tomcat 反向代理配置（Nginx/Apache 到 Tomcat 的转发）。,POST,/site,CloseTomcat,CloseTomcat,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,为指定网站创建反向代理，将指定路径的请求转发到后端服务。,POST,/site,CreateProxy,CreateProxy,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,为指定网站创建重定向规则，支持域名重定向和路径重定向。,POST,/site,CreateRedirect,CreateRedirect,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,删除指定网站的某条重定向规则。,POST,/site,DeleteRedirect,DeleteRedirect,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,删除指定网站，包括其 Nginx/Apache 配置、SSL 证书、日志等关联文件。,POST,/site,DeleteSite,DeleteSite,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取当前 301 重定向配置。,POST,/site,Get301Status,Get301Status,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取面板默认站点配置，包括当前是否有默认站点、站点列表。,POST,/site,GetDefaultSite,GetDefaultSite,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站的子目录（二级域名）绑定列表。,POST,/site,GetDirBinding,GetDirBinding,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站的目录保护和安全配置状态，包括防跨站攻击、日志开关、Git 同步及密码访问状态。,POST,/site,GetDirUserINI,GetDirUserINI,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取面板支持的 DNS API 提供商列表，用于 SSL 证书的 DNS-01 域名验证。,POST,/site,GetDnsApi,GetDnsApi,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,网站管理：按 action 选择功能,POST,/site,GetHasPwd,GetHasPwd,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站的默认文档（首页文件）列表。,POST,/site,GetIndex,GetIndex,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站的流量限制和并发连接配置。,POST,/site,GetLimitNet,GetLimitNet,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取面板上已安装的所有 PHP 版本及运行状态。,POST,/site,GetPHPVersion,GetPHPVersion,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站已配置的所有反向代理规则。,POST,/site,GetProxyList,GetProxyList,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站已配置的所有重定向规则。,POST,/site,GetRedirectList,GetRedirectList,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取可用的伪静态（URL 重写）规则模板列表，用于 Nginx/Apache 的 URL 美化。,POST,/site,GetRewriteList,GetRewriteList,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取所有可用的伪静态规则模板文件列表，按站点和模板分类。,POST,/site,GetRewriteLists,GetRewriteLists,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站的 SSL 证书完整信息，包括证书部署状态、域名列表、TLS 协议版本配置。,POST,/site,GetSSL,GetSSL,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站绑定的所有域名详情，包含 SSL 申请状态、DNS 状态等信息。,POST,/site,GetSiteDomains,GetSiteDomains,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站的 Web 访问日志内容。,POST,/site,GetSiteLogs,GetSiteLogs,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站当前使用的 PHP 版本及其他运行环境信息。,POST,/site,GetSitePHPVersion,GetSitePHPVersion,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取网站的 PHP 运行目录配置。,POST,/site,GetSiteRunPath,GetSiteRunPath,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,修改指定网站已有反向代理的目标 URL、缓存等配置。**需先用 CreateProxy 创建代理**。,POST,/site,ModifyProxy,ModifyProxy,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,修改指定网站已有重定向规则的目标 URL、域名等配置。,POST,/site,ModifyRedirect,ModifyRedirect,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,为网站设置 301 永久重定向规则，将指定来源域名跳转到目标 URL。,POST,/site,Set301Status,Set301Status,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,设置网站的到期时间。到期后网站将自动停止。,POST,/site,SetEdate,SetEdate,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,为网站设置基于 HTTP Basic Auth 的密码访问保护。,POST,/site,SetHasPwd,SetHasPwd,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,设置网站的流量限制、并发连接限制和单连接速率限制。,POST,/site,SetLimitNet,SetLimitNet,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,切换指定网站的 PHP 版本。,POST,/site,SetPHPVersion,SetPHPVersion,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,批量为多个网站设置伪静态模板文件。,POST,/site,SetRewriteLists,SetRewriteLists,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,将自定义 URL 重写（伪静态）规则保存为模板文件。,POST,/site,SetRewriteTel,SetRewriteTel,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,为指定网站部署自定义 SSL 证书（PEM 格式）。面板会验证证书和私钥的匹配性、证书链完整性，验证通过后写入配置并重载 Web 服务器。,POST,/site,SetSSL,SetSSL,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,为指定网站开启 SSL（HTTPS），兼容 Nginx/Apache 以及 PHP/Node/Java/Go 等多种项目类型。,POST,/site,SetSSLConf,SetSSLConf,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,启动（启用）已停止的网站。,POST,/site,SiteStart,SiteStart,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,网站管理：按 action 选择功能,POST,/site,SiteStop,SiteStop,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,备份指定网站的所有文件。,POST,/site,ToBackup,ToBackup,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,为 Apache Web 服务器添加额外的 SSL 监听端口。仅在 Apache 环境下有效，Nginx 环境返回 `null`。,POST,/site,apacheAddPort,apacheAddPort,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,检查「网站监控报表」插件是否已安装、版本是否满足要求以及是否有购买授权。,POST,/site,check_total_install_info,check_total_install_info,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取新建网站时的全局默认配置状态，包括 404 页面、默认首页、日志切割、CDN IP 获取等开关。,POST,/site,create_default_conf,create_default_conf,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,创建网站流量统计规则。,POST,/site,create_flow_rule,create_flow_rule,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,将指定网站的信息导出为 CSV 文件。,POST,/site,export_sites_to_csv,export_sites_to_csv,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,网站管理：按 action 选择功能,POST,/site,get_404_config,get_404_config,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,"{""status"": true, ""msg"": ""修改成功！""}",POST,/site,set_404_config,set_404_config,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取最近一次网站漏洞扫描的缓存结果。,POST,/site,get_Scan,get_Scan,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取面板全局的 CDN 客户端真实 IP 获取配置。,POST,/site,get_cdn_ip_settings,get_cdn_ip_settings,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取漏洞扫描定时任务的当前配置，包括扫描周期、推送渠道和开关状态。,POST,/site,get_cron_scanin_info,get_cron_scanin_info,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站的目录密码保护（HTTP Basic Auth）配置列表。,POST,/site,get_dir_auth,get_dir_auth,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站绑定的域名列表。,POST,/site,get_domains,get_domains,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,查询指定网站或全局的免费流量限制开关状态。,POST,/site,get_free_total_status,get_free_total_status,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取网站的流量统计摘要，包括请求数和流量总量。,POST,/site,get_generated_flow_info,get_generated_flow_info,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取面板 HTTPS 全局模式。`false` 为宽松模式（未部署 SSL 时仍可 HTTP 访问），`true` 为严格模式。,POST,/site,get_https_mode,get_https_mode,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取网站的 HTTPS 模式及 HTTP→HTTPS 跳转状态。,POST,/site,get_https_settings,get_https_settings,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,查询 Apache/Nginx 守护进程（自动重启）任务的配置状态。,POST,/site,get_restart_task,get_restart_task,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站的 HTTP 安全响应头配置状态。,POST,/site,get_security_headers,get_security_headers,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站的错误日志，自动根据 Web 服务器类型和项目类型定位日志文件。,POST,/site,get_site_errlog,get_site_errlog,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取面板中网站的分类列表。,POST,/site,get_site_types,get_site_types,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,查询指定网站是否关联了 FTP 账户及其信息。,POST,/site,get_sites_ftp,get_sites_ftp,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取指定网站的 Web 日志存储路径。,POST,/site,get_sites_log_path,get_sites_log_path,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,网站管理：按 action 选择功能,POST,/site,get_ssl_protocol,get_ssl_protocol,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,"{""status"": true, ""msg"": ""设置成功""}",POST,/site,set_ssl_protocol,set_ssl_protocol,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取面板在域名相关页面显示的推广横幅 HTML 内容及其显示/隐藏状态。,POST,/site,get_view_title_content,get_view_title_content,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,获取最近一次网站漏洞扫描的缓存信息，包括扫描结果、漏洞数量和网站总数。,POST,/site,list,list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,开启网站的访问日志记录。,POST,/site,logsOpen,logsOpen,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,批量为多个网站开启或关闭防跨站攻击保护（PHP `open_basedir` 限制）。,POST,/site,multiple_basedir,multiple_basedir,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,批量为多个网站设置并发连接数和流量限制。,POST,/site,multiple_limit_net,multiple_limit_net,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,网站管理：按 action 选择功能,POST,/site,open_cdn_ip,open_cdn_ip,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,设置新建网站时的全局默认配置，如 404 页面、默认首页等开关。,POST,/site,set_create_default_conf,set_create_default_conf,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,配置漏洞扫描定时任务的执行周期、消息推送渠道和开关状态。,POST,/site,set_cron_scanin_info,set_cron_scanin_info,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,批量为多个域名设置 DNS API 解析记录（自动添加/更新 DNS 解析）。,POST,/site,set_dns_domains,set_dns_domains,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,设置指定网站的免费流量限制开关，也可设为 `global` 进行全局配置。,POST,/site,set_free_total_status,set_free_total_status,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,网站管理：按 action 选择功能,POST,/site,set_global_http2https,set_global_http2https,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,切换面板 HTTPS 全局模式。宽松模式下未部署 SSL 的网站仍可通过 HTTP 访问，严格模式下强制 HTTPS。,POST,/site,set_https_mode,set_https_mode,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,设置忽略面板域名推广横幅，关闭后在域名相关的页面不再显示推广信息。,POST,/site,set_ignore_view_domain_title,set_ignore_view_domain_title,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,设置 Apache 或 Nginx 守护进程任务，在 Web 服务异常停止时自动重启。,POST,/site,set_restart_task,set_restart_task,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,为指定网站配置 HTTP 安全响应头（如 X-Frame-Options、X-Content-Type-Options 等）。,POST,/site,set_security_headers,set_security_headers,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,批量为多个网站设置到期时间。,POST,/site,set_site_etime_multiple,set_site_etime_multiple,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,设置指定网站是否忽略面板全局的 HTTPS 强制跳转规则。,POST,/site,set_site_ignore_https_mode,set_site_ignore_https_mode,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,为指定网站创建或关联 FTP 账户。,POST,/site,set_sites_ftp,set_sites_ftp,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,设置指定网站 Web 日志的存储目录路径。,POST,/site,set_sites_log_path,set_sites_log_path,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,修改网站的备注名称/别名。,POST,/site,site_rname,site_rname,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,检查指定域名是否已配置有效的 DNS API 密钥，用于 SSL 证书自动续签等场景。,POST,/site,test_domains_api,test_domains_api,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+网站管理,Web 服务器环境预检查，用于安装或切换 Web 服务器（Nginx/Apache/OpenLiteSpeed）前验证环境。,POST,/site,webserverprep,webserverprep,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/site/actions/index.md
+SSH 安全,获取当前 SSH 安全配置状态。,POST,/ssh_security,get_config,get_config,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssh-security/actions/index.md
+SSH 安全,扫描 `/etc/ssh/sshd_config` 中的安全漏洞，返回风险列表及加固建议。,POST,/ssh_security,san_ssh_security,san_ssh_security,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssh-security/actions/index.md
+SSL 证书,获取面板所有网站已部署的 SSL 证书概览，包括自签名、Let's Encrypt 和商用证书。,POST,/ssl,GetCertList,GetCertList,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/actions/index.md
+SSL 证书,获取所有可购买的 SSL 证书产品的详细信息和价格。,POST,/ssl,GetSSLProduct,GetSSLProduct,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/actions/index.md
+SSL 证书,获取面板中所有可用于申请 SSL 证书的域名列表。,POST,/ssl,GetSiteDomain,GetSiteDomain,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/actions/index.md
+SSL 证书,获取当前面板绑定的宝塔账号用户名。,POST,/ssl,GetUserInfo,GetUserInfo,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/actions/index.md
+SSL 证书,将证书夹中已保存的 SSL 证书部署到指定网站，开启 HTTPS。,POST,/ssl,SetCertToSite,SetCertToSite,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/actions/index.md
+SSL 证书,获取证书夹中指定证书的完整信息。,POST,/ssl,get_cert_info,get_cert_info,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/actions/index.md
+SSL 证书,获取面板证书夹中已保存的 SSL 证书列表，包含签发者、到期时间等详细信息。,POST,/ssl,get_cert_list,get_cert_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/actions/index.md
+SSL 证书,获取指定订单的完整信息，包括签发的证书内容。,POST,/ssl,get_order_find,get_order_find,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/actions/index.md
+SSL 证书,获取当前面板账号下所有商用 SSL 证书的订单列表。,POST,/ssl,get_order_list,get_order_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/actions/index.md
+SSL 证书,获取当前可购买的商用 SSL 证书产品，包含价格和折扣信息。,POST,/ssl,get_product_list,get_product_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/actions/index.md
+SSL 证书,获取证书夹中指定证书的备注。,POST,/ssl,get_ssl_ps,get_ssl_ps,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/actions/index.md
+SSL 证书,从已购买的商用 SSL 证书订单中提取证书并部署到指定网站。与 [SetCertToSite](/api/ssl/setcerttosite) 不同，此方法直接通过订单 ID 获取证书。,POST,/ssl,set_cert,set_cert,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/actions/index.md
+SSL 证书,修改证书夹中指定证书的备注。,POST,/ssl,set_ssl_ps,set_ssl_ps,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/actions/index.md
+SSL 证书,添加 DNS 提供商的 API 密钥，用于 SSL 证书的 DNS 验证,POST,/ssl/dnsapi/add_dns_data,,add_dns_data,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/add-dns-data/index.md
+SSL 证书,删除已有的 DNS API 密钥配置,POST,/ssl/dnsapi/del_dns_data,,del_dns_data,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/del-dns-data/index.md
+SSL 证书,获取已配置的 DNS API 密钥列表及支持的 DNS 提供商,POST,/ssl/dnsapi/get_dns_data,,get_dns_data,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/get-dns-data/index.md
+SSL 证书,修改已有的 DNS API 密钥配置,POST,/ssl/dnsapi/upd_dns_data,,upd_dns_data,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/ssl/upd-dns-data/index.md
+系统管理,清理系统垃圾文件和临时数据。,POST,/system,ClearSystem,ClearSystem,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,聚合返回系统全部信息概览。,POST,/system,GetAllInfo,GetAllInfo,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,获取面板完整环境配置信息，包括所有已安装组件的版本和运行状态。,POST,/system,GetConcifInfo,GetConcifInfo,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,"获取 CPU 详细信息。调用 `psutil.cpu_percent(percpu=True, interval=interval)` 采样。",POST,/system,GetCpuInfo,GetCpuInfo,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,获取服务器磁盘分区信息。自动过滤 `/boot`、`/dev/shm`、`/proc`、Docker overlay、snap 等非核心分区。,POST,/system,GetDiskInfo,GetDiskInfo,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,获取系统负载平均值，基于 `/proc/loadavg`。,POST,/system,GetLoadAverage,GetLoadAverage,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,获取服务器内存详细信息，包含物理内存和虚拟内存。结果会被缓存 60 秒。,POST,/system,GetMemInfo,GetMemInfo,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,系统管理：按 action 选择功能,POST,/system,GetNetWork,GetNetWork,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,与 [GetNetWork](/api/system/getnetwork) 行为相同，获取实时网络流量和综合系统数据。,POST,/system,GetNetWorkApi,GetNetWorkApi,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,获取系统统计信息，包含内存、CPU、运行时间、系统版本等综合数据。,POST,/system,GetSystemTotal,GetSystemTotal,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,执行内存释放操作（sync + drop caches），释放后返回当前内存状态。,POST,/system,ReMemory,ReMemory,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,重启宝塔面板服务。,POST,/system,ReWeb,ReWeb,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,管理服务器上各类服务的启动、停止、重启和重载。,POST,/system,ServiceAdmin,ServiceAdmin,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,获取当前磁盘 IO 读写速率（KB/s）。,POST,/system,get_io_info,get_io_info,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,获取面板最近一次升级的日志内容。,POST,/system,get_upgrade_log,get_upgrade_log,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,重启面板的后台任务处理进程。,POST,/system,reload_task,reload_task,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,为指定路径的磁盘分区设置自定义备注名称。,POST,/system,set_rname,set_rname,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,启动面板 Python 运行环境的升级任务（异步执行）。,POST,/system,upgrade_env,upgrade_env,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+系统管理,获取面板 Python 运行环境升级的实时日志和执行状态。,POST,/system,upgrade_env_log,upgrade_env_log,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/system/actions/index.md
+后台任务,获取后台任务队列列表,POST,/task,get_task_lists,get_task_lists,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/task/get-task-lists/index.md
+后台任务,获取后台任务队列列表,POST,/task,get_task_find,get_task_find,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/task/get-task-lists/index.md
+安全扫描,获取安全扫描结果列表,POST,/warning,get_list,get_list,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/warning/get-list/index.md
+SSH 终端,获取 Web SSH 终端配置（命令补全、终端主题、AI Shell）,POST,/xterm,completion_tool_status,completion_tool_status,11.7.0-docs,已整理官方文档，尚未完成客户版本适配和联调,https://docs.bt.cn/api/xterm/completion-tool-status/index.md
+系统管理,旧版面板更新入口；现代版本不得作为无变更预检接口,POST,/ajax,UpdatePanel,UpdatePanel,旧版官方 PDF，示例为 6.x；当前版本需验证,旧版文档已确认；11.7.0/13.1.0 官方实现存在隐式更新分支，需使用现代版本适配器,https://www.bt.cn/api-doc.pdf
