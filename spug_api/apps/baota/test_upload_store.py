@@ -111,6 +111,23 @@ class UploadStoreTests(TransactionTestCase):
                     store.create_bundle(self.user, files)
         self.assertFalse(models.PanelUploadBundle.objects.exists())
 
+    def test_file_limit_can_be_lowered_but_cannot_exceed_transport_hard_cap(self):
+        store = self.store()
+        self.assertEqual(store.limits()['file_bytes'], 20 * 1024**2)
+        with override_settings(BAOTA_UPLOAD_LIMITS={'file_bytes': 20 * 1024**2 + 1}):
+            with self.assertRaisesRegex(ValueError, '上传限制配置无效'):
+                store.limits()
+            with self.assertRaises(ValueError):
+                self.bundle()
+        with override_settings(BAOTA_UPLOAD_LIMITS={'file_bytes': 2, 'reserve_bytes': 0}):
+            self.assertEqual(store.limits()['file_bytes'], 2)
+            with self.assertRaises(ValueError):
+                self.bundle()
+            bundle = self.bundle([{'path': 'small.txt', 'size': 2}])
+            source = store.receive_file(self.user, bundle.pk, bundle.files.get().pk,
+                                       SimpleUploadedFile('small.txt', b'ab'))
+            self.assertEqual(store.blob_path(source).read_bytes(), b'ab')
+
     def test_owner_and_create_permission_required_even_for_manager(self):
         store = self.store()
         bundle = self.bundle()

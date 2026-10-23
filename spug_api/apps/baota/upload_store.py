@@ -36,6 +36,10 @@ def limits():
     result.update(overrides)
     if any(type(v) is not int or v < (0 if key == 'reserve_bytes' else 1) for key, v in result.items()):
         raise ValueError('上传限制配置无效')
+    # First-release transport has a fixed 20 MiB ceiling; configuration may
+    # reduce it but cannot stage a source the panel client will never dispatch.
+    if result['file_bytes'] > 20 * 1024**2:
+        raise ValueError('上传限制配置无效')
     return result
 
 
