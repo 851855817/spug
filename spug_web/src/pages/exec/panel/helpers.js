@@ -5,6 +5,7 @@ export const OPERATION_LABELS = {
   ssl_apply: '申请免费 SSL', ssl_renew: '续签免费 SSL', software_install: '安装软件',
   php_extension_install: '安装 PHP 扩展', software_uninstall: '卸载软件',
   php_update: '更新 PHP（同分支）',
+  file_upload: '上传文件 / 目录',
 };
 export const STATE_LABELS = {
   preflight_queued: '等待预检', preflighting: '预检中', prepared: '预检完成', ready: '待执行',
@@ -129,6 +130,12 @@ export function buildTaskRequest(operation, panels, values, rows = [], resources
 export function summarizeTask(task) {
   const counts = {success: 0, failed: 0, uncertain: 0, remote: 0, ready: 0, already: 0, skipped: 0, cancelled: 0, pending: 0};
   (task.targets || []).forEach(target => {
+    if (task.operation === 'file_upload' && target.summary?.upload) {
+      const summary = target.summary.upload;
+      ['success', 'failed', 'uncertain', 'cancelled'].forEach(key => {counts[key] += Math.max(0, Number(summary[key]) || 0);});
+      counts[task.state === 'prepared' ? 'ready' : 'pending'] += Math.max(0, Number(summary.pending) || 0);
+      return;
+    }
     if (!(target.children || []).length && target.state === 'failed') counts.failed++;
     (target.children || []).forEach(child => {
       if (Object.prototype.hasOwnProperty.call(counts, child.state)) counts[child.state]++;

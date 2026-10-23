@@ -17,6 +17,8 @@ jest.mock('antd', () => {
     Modal: {confirm: jest.fn()}, Form: {useForm: () => [{}]}, message: {success: jest.fn()}};
 });
 jest.mock('./ResolveForm', () => () => null);
+jest.mock('./UploadResults', () => ({taskId, targetId, summary, onResolved}) => <div>文件结果 {taskId}/{targetId} {summary?.files}
+  <button onClick={() => onResolved({id: taskId, operation: 'file_upload', state: 'completed', targets: []})}>模拟文件判定</button></div>);
 
 let container;
 const task = {id: 7, state: 'prepared', operation: 'ssl_apply', required_acknowledgements: ['ssl_panel_sync'], targets: [
@@ -64,4 +66,20 @@ test('an old in-flight poll cannot overwrite the result of start', async () => {
   expect(container.textContent).toContain('执行中');
   expect(button('确认并开始执行')).toBeUndefined();
   jest.useRealTimers();
+});
+
+test('uploads show file counts and a frozen overwrite acknowledgement with per-file resolution only', async () => {
+  http.get.mockResolvedValue({...task, operation: 'file_upload', required_acknowledgements: ['upload_overwrite'], targets: [
+    {id: 3, state: 'prepared', panel: {name: 'A'}, summary: {upload: {files: 9, pending: 7, uncertain: 2, success: 0, failed: 0}},
+      children: [{state: 'uncertain', snapshot: {key: 'upload', label: '上传9个文件', target: {}, plan: {target_dir: '/www/a', file_count: 9}}}]},
+  ]});
+  await act(async () => {ReactDOM.render(<TaskDetail taskId={7}/>, container);});
+  expect(container.textContent).toContain('待执行 7'); expect(container.textContent).toContain('待核实 2');
+  expect(container.textContent).toContain('文件结果 7/3 9');
+  expect(button('人工判定')).toBeUndefined();
+  expect(container.textContent).toContain('覆盖同名文件');
+  expect(button('确认并开始执行').disabled).toBe(true);
+  await act(async () => {container.querySelector('input[type=checkbox]').click();});
+  await act(async () => {button('确认并开始执行').click();});
+  expect(http.post).toHaveBeenCalledWith('/api/baota/tasks/7/start/', {acknowledgements: ['upload_overwrite']});
 });

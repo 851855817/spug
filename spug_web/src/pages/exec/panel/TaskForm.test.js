@@ -8,10 +8,12 @@ jest.mock('libs', () => ({http: {get: jest.fn(), post: jest.fn()}}));
 jest.mock('../../baota/helpers', () => ({buildGroupTree: () => [], descendantIds: () => new Set()}));
 jest.mock('./OperationForm', () => ({panel, value, onChange}) => <button onClick={() => onChange({...value, all_sites: true, enabled: panel.id === 1})}>设置 {panel.name}</button>);
 jest.mock('./SiteGrid', () => () => null);
+jest.mock('./UploadForm', () => ({panels, onPrepared, onBusyChange}) => <div>上传目标 {panels.length}
+  <button onClick={() => onBusyChange(true)}>模拟暂存</button><button onClick={() => {onBusyChange(false); onPrepared(13);}}>模拟完成</button></div>);
 jest.mock('antd', () => {
   const React = require('react');
   const Wrapper = ({children}) => <div>{children}</div>;
-  const Select = ({value, onChange, mode, options = [], placeholder}) => <select aria-label={placeholder} multiple={mode === 'multiple'}
+  const Select = ({value, onChange, mode, options = [], placeholder, disabled}) => <select disabled={disabled} aria-label={placeholder} multiple={mode === 'multiple'}
     value={value || (mode ? [] : '')} onChange={e => onChange(mode ? [...e.target.selectedOptions].map(x => Number(x.value)) : e.target.value)}>
     <option value="">选择</option>{options.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
   </select>;
@@ -48,4 +50,21 @@ test('the operation picker includes PHP updates and SSL has an explicit apply or
   expect(ssl.value).toBe('ssl_apply');
   act(() => {ssl.value = 'ssl_renew'; Simulate.change(ssl);});
   expect(ssl.value).toBe('ssl_renew');
+});
+
+test('file upload replaces generic operation forms and locks selectors during staging', async () => {
+  const prepared = jest.fn();
+  const options = {panels: [{id: 1, name: 'A'}], groups: [], operations: [{code: 'file_upload', label: '上传文件 / 目录'}]};
+  await act(async () => {ReactDOM.render(<TaskForm options={options} onPrepared={prepared}/>, container);});
+  const selects = container.querySelectorAll('select');
+  act(() => {selects[0].options[1].selected = true; Simulate.change(selects[0]); selects[1].value = 'file_upload'; Simulate.change(selects[1]);});
+  expect(container.textContent).toContain('上传目标 1');
+  expect(container.textContent).not.toContain('设置 A');
+  expect(container.textContent).not.toContain('生成冻结预检');
+  act(() => {[...container.querySelectorAll('button')].find(item => item.textContent === '模拟暂存').click();});
+  expect([...container.querySelectorAll('select')].every(select => select.disabled)).toBe(true);
+  act(() => {[...container.querySelectorAll('button')].find(item => item.textContent === '模拟完成').click();});
+  expect(prepared).toHaveBeenCalledWith(13);
+  expect([...container.querySelectorAll('select')].every(select => !select.disabled)).toBe(true);
+  expect(http.post).not.toHaveBeenCalled();
 });

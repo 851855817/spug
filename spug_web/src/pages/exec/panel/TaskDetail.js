@@ -4,6 +4,7 @@ import { hasPermission, http } from 'libs';
 import Evidence, { Status } from './TaskEvidence';
 import ResolveForm from './ResolveForm';
 import TaskItem from './TaskItem';
+import UploadResults from './UploadResults';
 import { OPERATION_LABELS, SSL_ACK, startPayload, summarizeTask } from './helpers';
 import styles from './TaskDetail.module.css';
 
@@ -67,6 +68,7 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
   return <Card title={`任务 #${task.id} · ${OPERATION_LABELS[task.operation] || task.operation}`}>
     {error && <Alert type="error" message={error}/>}
     <Space wrap><Status state={task.state}/><Typography.Text type="secondary">{(task.targets || []).length} 个面板</Typography.Text>
+      {task.operation === 'file_upload' && <Typography.Text type="secondary">按文件统计</Typography.Text>}
       {Object.entries(COUNT_LABELS).filter(([key]) => counts[key] > 0).map(([key, label]) =>
         <Typography.Text key={key} type={key === 'failed' ? 'danger' : key === 'uncertain' ? 'warning' : undefined}>{label} {counts[key]}</Typography.Text>)}
     </Space>
@@ -89,15 +91,18 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
           <Alert type={target.state === 'failed' ? 'error' : 'warning'} message={target.message}/>}
         {(target.children || []).map(child => <div key={child.snapshot.key} className={styles.entry}>
             <TaskItem operation={task.operation} child={child}/>
-            {hasPermission('exec.panel.manage') && ['uncertain', 'remote'].includes(child.state) && <Button style={{marginTop: 8}}
+            {task.operation !== 'file_upload' && hasPermission('exec.panel.manage') && ['uncertain', 'remote'].includes(child.state) && <Button style={{marginTop: 8}}
               onClick={() => setResolution({target, child})}>人工判定</Button>}
           </div>)}
+        {task.operation === 'file_upload' && <UploadResults taskId={task.id} targetId={target.id} summary={target.summary?.upload}
+          active={!['prepared', 'completed', 'cancelled'].includes(task.state)} refreshKey={`${task.state}:${target.state}`}
+          onResolved={result => {actionRevision.current++; setTask(result); if (onTaskChange) onTaskChange(result);}}/>}
       </Collapse.Panel>)}
     </Collapse>
     {ready && <div style={{marginTop: 20}}>
       {required.map(code => <div key={code} style={{marginBottom: 12}}><Checkbox checked={acknowledged.includes(code)} onChange={event => {
         setAcknowledged(value => event.target.checked ? [...value, code] : value.filter(item => item !== code));
-      }}>{acknowledgements[code] || (code === 'ssl_panel_sync' ? SSL_ACK : `确认影响项：${code}`)}</Checkbox></div>)}
+      }}>{acknowledgements[code] || (code === 'ssl_panel_sync' ? SSL_ACK : code === 'upload_overwrite' ? '确认按预检目录上传并覆盖同名文件；已上传的内容不会因取消而撤回。' : `确认影响项：${code}`)}</Checkbox></div>)}
       {hasPermission('exec.panel.execute') && <Button type="primary" disabled={!confirmed} loading={busy} onClick={() => command('start')}>确认并开始执行</Button>}
     </div>}
     <Collapse style={{marginTop: 16}}><Collapse.Panel key="audit" header="任务审计记录"><Evidence value={task.audit}/></Collapse.Panel></Collapse>
