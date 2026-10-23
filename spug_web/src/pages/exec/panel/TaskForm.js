@@ -40,7 +40,9 @@ export default function TaskForm({options, onPrepared}) {
     finally {setBusy(false);}
   }
   return <div>
-    <Alert showIcon type="info" message="选面板 → 填写各面板参数 → 生成预检 → 核对目标和影响范围 → 确认开始" description="支持宝塔 Linux 9.2.0 / 11.7.0 / 13.1.0，最多 50 个面板、200 个子项目。安装软件、更新 PHP、升级面板分别选择。查询可能触发宝塔内部缓存或初始化；只有确认开始后才下发所选变更。"/>
+    <Alert showIcon type="info" message="选面板 → 填写各面板参数 → 生成预检 → 核对目标和影响范围 → 确认开始"
+      description={operation === 'file_upload' ? '支持宝塔 Linux 9.2.0 / 11.7.0 / 13.1.0，最多 50 个面板。先暂存本地文件并生成预检，核对各面板目录及覆盖范围后确认开始。' :
+        '支持宝塔 Linux 9.2.0 / 11.7.0 / 13.1.0，最多 50 个面板、200 个子项目。安装软件、更新 PHP、升级面板分别选择。查询可能触发宝塔内部缓存或初始化；只有确认开始后才下发所选变更。'}/>
     <Form layout="vertical" style={{marginTop: 16}}>
       <Form.Item label="选择面板"><Select mode="multiple" showSearch optionFilterProp="label" placeholder="选择面板" style={{width: '100%'}} value={panelIds} disabled={uploadBusy}
         onChange={setPanelIds} options={(options.panels || []).map(panel => ({value: panel.id, label: `${panel.name} · ${panel.group_name || '未分组'} · ${panel.api_version || '版本未知'}`}))}/></Form.Item>

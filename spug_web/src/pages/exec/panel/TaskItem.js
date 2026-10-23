@@ -20,6 +20,12 @@ export default function TaskItem({operation, child}) {
     const qualifier = observed.version ? '（已读回）' : legacy ? '候选 ' : '目标 ';
     title = `${before.panel_version || '未知版本'} → ${observed.version ? destination + qualifier : qualifier + (destination || '待查询')}`;
     if (legacy) fields.push(['通道', '官方稳定通道']);
+  } else if (operation === 'file_upload') {
+    const target = snapshot.target || {};
+    fields.push(['最终目录', target.target_dir || '目录未确定']);
+    fields.push(['目录来源', target.directory_source === 'individual' ? '单独设置' : '统一设置']);
+    fields.push(['预计新增', `${Number(before.new_files) || 0} 个`]);
+    fields.push(['预计覆盖', `${Number(before.overwrite_files) || 0} 个`]);
   } else {
     if (operation === 'php_update') {
       const destination = observed.version || plan.target_version;

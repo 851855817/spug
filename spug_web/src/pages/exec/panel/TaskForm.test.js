@@ -18,7 +18,7 @@ jest.mock('antd', () => {
     <option value="">选择</option>{options.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
   </select>;
   return {Card: Wrapper, Space: Wrapper, Typography: {Paragraph: Wrapper, Text: Wrapper}, Form: Object.assign(Wrapper, {Item: Wrapper}),
-    Alert: ({message}) => <div>{message}</div>, Collapse: Object.assign(Wrapper, {Panel: Wrapper}), Select, TreeSelect: () => null,
+    Alert: ({message, description}) => <div>{message}{description}</div>, Collapse: Object.assign(Wrapper, {Panel: Wrapper}), Select, TreeSelect: () => null,
     Button: ({children, onClick, loading, disabled}) => <button onClick={onClick} disabled={loading || disabled}>{children}</button>, message: {error: jest.fn()}};
 });
 let container;
@@ -59,6 +59,7 @@ test('file upload replaces generic operation forms and locks selectors during st
   const selects = container.querySelectorAll('select');
   act(() => {selects[0].options[1].selected = true; Simulate.change(selects[0]); selects[1].value = 'file_upload'; Simulate.change(selects[1]);});
   expect(container.textContent).toContain('上传目标 1');
+  expect(container.textContent).not.toContain('200 个子项目');
   expect(container.textContent).not.toContain('设置 A');
   expect(container.textContent).not.toContain('生成冻结预检');
   act(() => {[...container.querySelectorAll('button')].find(item => item.textContent === '模拟暂存').click();});
