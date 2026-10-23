@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button, Progress, Tag } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
 import styles from './index.module.less';
 
 const number = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -37,7 +38,7 @@ function Disk({disk}) {
   return <Meter label={`磁盘 ${disk.path || '—'}`} percent={disk.percent} detail={`${bytes(disk.used_bytes)} / ${bytes(disk.total_bytes)}`}/>;
 }
 
-export default function ResourceCard({card, hideIP, onLink, interval = 60, now}) {
+export default function ResourceCard({card, hideIP, onLink, onCollect, collecting, collectDisabled, collectionResult, interval = 60, now}) {
   const snapshot = card.snapshot;
   const metrics = snapshot?.metrics;
   const disks = metrics?.disks || [];
@@ -46,7 +47,11 @@ export default function ResourceCard({card, hideIP, onLink, interval = 60, now})
     <header className={styles.cardHeader}>
       <div className={styles.identity}><h3 title={card.name}>{card.name}</h3>
         <span className={styles.address}>{hideIP ? '地址已隐藏' : card.address || '—'}</span></div>
-      <Tag color={{ok: 'green', stale: 'orange', error: 'red'}[status]}>{statusLabels[status] || '未知状态'}</Tag>
+      <div className={styles.cardActions}>
+        <Button size="small" icon={<ReloadOutlined/>} loading={collecting} disabled={collectDisabled}
+          onClick={() => onCollect(card.key)}>立即采集</Button>
+        <Tag color={{ok: 'green', stale: 'orange', error: 'red'}[status]}>{statusLabels[status] || '未知状态'}</Tag>
+      </div>
     </header>
     <div className={styles.meta}>
       <span>{card.groups.map(group => group.name).join(' / ') || '未分组'}</span>
@@ -62,6 +67,7 @@ export default function ResourceCard({card, hideIP, onLink, interval = 60, now})
     {disks.length > 1 && <details className={styles.disks}><summary>其余 {disks.length - 1} 个磁盘</summary>
       {disks.slice(1).map((disk, index) => <Disk key={`${disk.path}:${index}`} disk={disk}/>)}</details>}
     {snapshot?.status !== 'ok' && snapshot?.message && <div className={styles.statusMessage} role={status === 'error' ? 'alert' : undefined}>{snapshot.message}</div>}
+    {collectionResult && <div className={styles.collectionResult} role="status">{collecting ? '正在采集…' : collectionResult}</div>}
     <footer className={styles.cardFooter}>
       <div><div>更新：{time(snapshot?.sampled_at)}</div>
         {status !== 'ok' && snapshot?.attempted_at && <div>尝试：{time(snapshot.attempted_at)}</div>}</div>

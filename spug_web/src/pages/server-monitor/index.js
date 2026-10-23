@@ -51,7 +51,7 @@ export default function ServerMonitor() {
   useEffect(() => {
     sampler.update({keys: JSON.parse(keys), interval, active, once: !automatic, force: manualRound, onComplete: () => setManualRound(false)});
     return () => sampler.stop();
-  }, [sampler, keys, interval, active, automatic, manualRound, monitor.revision]);
+  }, [sampler, keys, interval, active, automatic, manualRound, monitor.revision, visible]);
 
   const groups = [...new Map(monitor.cards.flatMap(card => card.groups).map(item => [item.key, item])).values()];
   function filter(setter, value) {sampler.stop(); manualRequest.current++; setManualRound(false); setter(value); setPage(1);}
@@ -94,7 +94,9 @@ export default function ServerMonitor() {
         {monitor.ready && !monitor.cards.length ? <div className={styles.empty}><Empty description="还没有开启监控的服务器"/>
           <p>请在 <a href="/host">主机管理</a> 或 <a href="/baota">宝塔面板管理</a> 中开启监控。</p></div>
           : monitor.ready && !shown.length ? <Empty description="没有符合筛选条件的服务器"/>
-            : <div className={styles.grid}>{shown.map(card => <ResourceCard key={card.key} card={card} hideIP={hideIP} interval={interval} now={now} onLink={setLinkCard}/>)}</div>}
+            : <div className={styles.grid}>{shown.map(card => <ResourceCard key={card.key} card={card} hideIP={hideIP} interval={interval} now={now} onLink={setLinkCard}
+              collecting={!!monitor.collecting[card.key]} collectDisabled={!visible || monitor.loading}
+              collectionResult={monitor.collectionResult[card.key]} onCollect={key => sampler.collect(key)}/>)}</div>}
       </Spin>
       {!!rows.length && <div className={styles.pagination}><Pagination current={currentPage} pageSize={pageSize} total={rows.length}
         showSizeChanger pageSizeOptions={['12', '24', '48']} showTotal={total => `共 ${total} 台服务器`}

@@ -114,3 +114,52 @@ test('an active empty page rereads cards at its interval without collecting or b
   sampler.stop(); advance(300000); await flush();
   expect(beforeRound).toHaveBeenCalledTimes(2);
 });
+
+test('manual requests for the same target share one operation, including an automatic operation', async () => {
+  let complete;
+  const sample = jest.fn().mockReturnValue(new Promise(resolve => {complete = resolve;}));
+  const sampler = make(sample);
+  sampler.update({keys: ['a'], interval: 60, active: true}); await flush();
+  const first = sampler.collect('a');
+  expect(sampler.collect('a')).toBe(first);
+  expect(sample).toHaveBeenCalledTimes(1);
+  complete({key: 'a', snapshot: {status: 'ok', sampled_at: 0}, retry_after: 60, retry_reason: 'collected'});
+  await first;
+  expect(sample).toHaveBeenCalledTimes(1);
+});
+
+test('a failed manual request keeps the shared backoff without blocking another target', async () => {
+  const sample = jest.fn().mockRejectedValueOnce('network').mockResolvedValue({key: 'b', snapshot: null, retry_after: 0});
+  const sampler = make(sample);
+  const failure = await sampler.collect('a');
+  expect(failure).toMatchObject({retry_reason: 'backoff', retry_after: 60});
+  advance(1000);
+  expect(await sampler.collect('a')).toMatchObject({retry_reason: 'backoff', retry_after: 59});
+  await sampler.collect('b');
+  expect(sample.mock.calls).toEqual([['a', 30], ['b', 30]]);
+});
+
+test('stop drops queued manual requests before they can contact another source', async () => {
+  let complete;
+  const sample = jest.fn().mockReturnValue(new Promise(resolve => {complete = resolve;}));
+  const onSnapshot = jest.fn(); const sampler = make(sample, onSnapshot);
+  const first = sampler.collect('a'); await flush();
+  const second = sampler.collect('b'); await flush();
+  sampler.stop();
+  complete({key: 'a', snapshot: {status: 'ok'}, retry_after: 30, retry_reason: 'collected'});
+  await Promise.all([first, second]);
+  expect(sample).toHaveBeenCalledTimes(1);
+  expect(onSnapshot).not.toHaveBeenCalled();
+});
+
+test('a manual sample moves the next automatic deadline without adding a whole extra interval', async () => {
+  const sample = jest.fn().mockImplementation(key => Promise.resolve({key,
+    snapshot: {status: 'ok', sampled_at: now / 1000}, retry_after: 30, retry_reason: 'collected'}));
+  const sampler = make(sample);
+  sampler.update({keys: ['a'], interval: 300, active: true}); await flush();
+  advance(31000); await sampler.collect('a');
+  advance(269000); await flush();
+  expect(sample).toHaveBeenCalledTimes(2);
+  advance(31000); await flush();
+  expect(sample.mock.calls).toEqual([['a', 300], ['a', 30], ['a', 300]]);
+});

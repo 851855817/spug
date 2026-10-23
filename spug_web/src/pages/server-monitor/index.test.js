@@ -195,6 +195,94 @@ test('a failed card list read shows retry feedback rather than a false empty suc
   expect(http.post).not.toHaveBeenCalled();
 });
 
+const collectButton = key => [...container.querySelector(`[data-monitor-key="${key}"]`).querySelectorAll('button')]
+  .find(node => node.textContent === '立即采集');
+
+test('card collection while paused samples only that server and disables repeated clicks until complete', async () => {
+  await render();
+  await act(async () => {container.querySelector('[aria-label="自动刷新"]').click(); await flush();});
+  http.post.mockClear();
+  let complete;
+  http.post.mockReturnValue(new Promise(resolve => {complete = resolve;}));
+  await act(async () => {collectButton('panel:2').click(); await flush();});
+  expect(http.post.mock.calls.map(([, body]) => body)).toEqual([{key: 'panel:2', interval: 30}]);
+  expect(collectButton('panel:2').disabled).toBe(true);
+  expect(collectButton('panel:1').disabled).toBe(false);
+  act(() => collectButton('panel:2').click());
+  expect(http.post).toHaveBeenCalledTimes(1);
+  await act(async () => {complete({key: 'panel:2', snapshot, retry_after: 30, retry_reason: 'collected'}); await flush();});
+  expect(collectButton('panel:2').disabled).toBe(false);
+  expect(container.querySelector('[data-monitor-key="panel:2"]').textContent).toContain('采集完成');
+  await advance(300000);
+  expect(http.post).toHaveBeenCalledTimes(1);
+  expect(container.querySelector('[aria-label="自动刷新"]').getAttribute('aria-checked')).toBe('false');
+});
+
+test('card collection queues behind automatic requests without overlapping and reports cache reuse', async () => {
+  let complete;
+  http.post.mockImplementationOnce(() => new Promise(resolve => {complete = resolve;}))
+    .mockImplementation((path, body) => Promise.resolve({key: body.key, snapshot, retry_after: 20, retry_reason: 'cache'}));
+  await render();
+  expect(collectButton('panel:1').disabled).toBe(true);
+  await act(async () => {collectButton('panel:2').click(); await flush();});
+  expect(collectButton('panel:2').disabled).toBe(true);
+  expect(http.post).toHaveBeenCalledTimes(1);
+  await act(async () => {complete({key: 'panel:1', snapshot, retry_after: 60, retry_reason: 'collected'}); await flush();});
+  await advance(200);
+  expect(http.post.mock.calls.map(([, body]) => body)).toEqual([
+    {key: 'panel:1', interval: 60}, {key: 'panel:2', interval: 30},
+  ]);
+  expect(container.querySelector('[data-monitor-key="panel:2"]').textContent).toContain('已显示缓存');
+});
+
+test.each(['hidden', 'unmount', 'filter'])('%s discards pending card collection and its queued work', async action => {
+  await render();
+  await act(async () => {container.querySelector('[aria-label="自动刷新"]').click(); await flush();});
+  http.post.mockClear();
+  let complete;
+  http.post.mockReturnValue(new Promise(resolve => {complete = resolve;}));
+  await act(async () => {collectButton('panel:2').click(); await flush();});
+  if (action === 'filter') await change('来源筛选', 'host');
+  else await act(async () => {
+    if (action === 'hidden') {
+      Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'hidden'});
+      document.dispatchEvent(new Event('visibilitychange'));
+    } else ReactDOM.unmountComponentAtNode(container);
+    await flush();
+  });
+  await act(async () => {complete({key: 'panel:2', snapshot, retry_after: 30, retry_reason: 'collected'}); await flush();});
+  if (action === 'filter') await change('来源筛选', '');
+  expect(container.textContent).not.toContain('采集完成');
+  expect(container.querySelector('[data-monitor-key="panel:2"]')?.textContent || '').not.toContain('24%');
+  expect(http.post).toHaveBeenCalledTimes(1);
+});
+
+test('card collection reports busy waits and repeated attempts respect the absolute retry deadline', async () => {
+  cards = [card(1)]; await render();
+  await act(async () => {container.querySelector('[aria-label="自动刷新"]').click(); await flush();});
+  http.post.mockClear();
+  http.post.mockResolvedValue({key: 'panel:1', snapshot, retry_after: 120, retry_reason: 'busy'});
+  await act(async () => {collectButton('panel:1').click(); await flush();});
+  expect(container.textContent).toContain('120 秒后重试');
+  await advance(1000);
+  await act(async () => {collectButton('panel:1').click(); await flush();});
+  expect(http.post).toHaveBeenCalledTimes(1);
+  expect(container.textContent).toContain('119 秒后重试');
+});
+
+test('an older automatic list response cannot overwrite a completed manual sample', async () => {
+  cards = [card(1)]; await render();
+  let completeRead;
+  http.get.mockReturnValue(new Promise(resolve => {completeRead = resolve;}));
+  await advance(60000);
+  http.post.mockResolvedValue({key: 'panel:1', snapshot: {...snapshot, sampled_at: now / 1000, metrics: {
+    ...snapshot.metrics, cpu: {percent: 42, cores: 4}}}, retry_after: 30, retry_reason: 'collected'});
+  await act(async () => {collectButton('panel:1').click(); await flush();});
+  expect(container.textContent).toContain('42%');
+  await act(async () => {completeRead({cards: [card(1)]}); await flush();});
+  expect(container.textContent).toContain('42%');
+});
+
 test('an initially empty page discovers a source enabled later on its next automatic refresh', async () => {
   cards = []; await render();
   expect(http.post).not.toHaveBeenCalled();
