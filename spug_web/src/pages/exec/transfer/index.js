@@ -12,7 +12,8 @@ import {
   CloudServerOutlined,
   BulbOutlined,
 } from '@ant-design/icons';
-import { Form, Button, Tooltip, Space, Card, Table, Input, Upload, message } from 'antd';
+import { Form, Button, Tooltip, Space, Card, Input, Upload, message } from 'antd';
+import Table from 'components/ResizableTable';
 import { AuthDiv, Breadcrumb } from 'components';
 import HostSelector from 'pages/host/Selector';
 import Output from './Output';
@@ -124,7 +125,7 @@ function TransferIndex() {
             <Space className="btn"><CloudServerOutlined/>{t('添加主机文件')}</Space>
           </HostSelector>
         </Space>)}>
-          <Table rowKey="id" className={style.table} showHeader={false} pagination={false} size="small"
+          <Table resizeKey="pages/exec/transfer/index:1" rowKey="id" className={style.table} showHeader={false} pagination={false} size="small"
                  dataSource={files}>
             <Table.Column title={t('文件来源')} dataIndex="name"/>
             <Table.Column title={t('文件名称/路径')} render={info => info.type === 'upload' ? info.path.name : (

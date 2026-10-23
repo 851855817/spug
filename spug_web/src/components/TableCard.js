@@ -4,7 +4,8 @@
  * Released under the AGPL-3.0 License.
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { Table, Space, Divider, Popover, Checkbox, Button, Input, Select } from 'antd';
+import { Space, Divider, Popover, Checkbox, Button, Input, Select } from 'antd';
+import Table from 'components/ResizableTable';
 import { ReloadOutlined, SettingOutlined, FullscreenOutlined, SearchOutlined } from '@ant-design/icons';
 import { t } from 'libs';
 import styles from './index.module.less';
@@ -177,6 +178,7 @@ function TableCard(props) {
         onFieldsChange={handleFieldsChange}
         onReload={props.onReload}/>
       <Table
+        resizeKey={props.tKey}
         tableLayout={props.tableLayout}
         scroll={props.scroll}
         rowKey={props.rowKey}

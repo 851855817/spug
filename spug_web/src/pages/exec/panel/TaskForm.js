@@ -58,7 +58,7 @@ export default function TaskForm({options, onPrepared}) {
     {operation === 'file_upload' ? <UploadForm panels={panels} options={options} onPrepared={onPrepared} onBusyChange={setUploadBusy}/> : <>
     {operation === 'site_add' && <SiteGrid panels={panels} rows={rows} onChange={setRows} resources={resources}/>}
     <Collapse activeKey={activeKeys} onChange={setActiveKeys} destroyInactivePanel style={{margin: '16px 0'}}>
-      {panels.map(panel => <Collapse.Panel key={String(panel.id)} header={`${panel.name} (#${panel.id}) · ${panel.api_version || '版本未知'} · ${panel.api_configured ? 'API 已配置' : 'API 未配置'}`}>
+      {panels.map(panel => <Collapse.Panel key={String(panel.id)} header={`${panel.name} (#${panel.id}) · ${resources[panel.id]?.compatibility?.version || panel.api_version || '版本未知'} · ${panel.api_configured ? 'API 已配置' : 'API 未配置'}`}>
         {operation && <OperationForm key={`${operation}:${panel.id}`} panel={panel} blocked={panelBlocker(panel)} operation={operation} value={values[panel.id] || {}}
           active={activeKeys.includes(String(panel.id))} onChange={value => setValues(current => ({...current, [panel.id]: value}))}
           onResource={data => setResources(current => ({...current, [panel.id]: {...current[panel.id], ...data}}))}/ >}

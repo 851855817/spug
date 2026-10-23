@@ -62,6 +62,7 @@ docker compose logs spug | grep password
 
 ## 安装文档
 
+- 本分支完整使用手册：[功能用途、场景示例与操作步骤](./docs/spug-platform-user-manual.md)（含宝塔任务、巡检和服务器监控二开功能）
 - 官网地址：https://ops.spug.cc/docs/install-docker/
 - 使用文档：https://ops.spug.cc/docs/about-spug/
 - 更新日志：https://ops.spug.cc/docs/change-log/

@@ -2,6 +2,7 @@ import React from 'react';
 import { Alert, Button, Checkbox, Form, Input, Select, Spin, Typography } from 'antd';
 import { phpLabel } from './helpers';
 import { useResources } from './resources';
+import { sslStatus } from './sslStatus';
 
 function Field({label, children}) {return <Form.Item label={label}>{children}</Form.Item>;}
 const SITE_OPERATIONS = ['site_basedir', 'site_rewrite', 'ssl_apply', 'ssl_renew'];
@@ -32,7 +33,9 @@ export default function OperationForm({panel, operation, value, onChange, active
     {SITE_OPERATIONS.includes(operation) && <>
       <Field label="网站范围（只属于当前面板）"><Checkbox checked={Boolean(value.all_sites)} onChange={e => change({all_sites: e.target.checked, sites: [], domains: {}})}>本次全部网站（以预检时冻结列表为准）</Checkbox></Field>
       {!value.all_sites && <Field label="选择网站"><Select mode="multiple" style={{width: '100%'}} value={value.sites || []}
-        onChange={sites => change({sites, domains: {}})} options={sites.map(site => ({value: site.id, label: `${site.name} · #${site.id} · ${site.path} · ${site.php_version ? phpLabel(site.php_version) : 'PHP 未识别'}`}))}/></Field>}
+        onChange={sites => change({sites, domains: {}})} options={sites.map(site => ({value: site.id,
+          label: operation.startsWith('ssl_') ? `${site.name} · ${sslStatus(site.ssl)}` :
+            `${site.name} · #${site.id} · ${site.path} · ${site.php_version ? phpLabel(site.php_version) : 'PHP 未识别'}`}))}/></Field>}
     </>}
     {operation === 'site_basedir' && <Field label="防跨站 open_basedir"><Select value={value.enabled !== false} onChange={enabled => change({enabled})}
       options={[{value: true, label: '启用'}, {value: false, label: '关闭'}]}/></Field>}
@@ -48,7 +51,7 @@ export default function OperationForm({panel, operation, value, onChange, active
     {operation.startsWith('ssl_') && <>
       <Alert type="info" message="仅支持 HTTP 验证的单次免费申请 / 同订单续签。默认使用网站现有域名，禁止通配符及 DNS 验证。"/>
       {options.map(item => <div key={item.id} style={{marginTop: 12}}>
-        <Typography.Text>网站 #{item.id} · 域名 {(item.domains || []).map(x => x.name).join(', ')} · SSL {item.ssl?.enabled ? '已启用' : '未启用'}</Typography.Text>
+        <Typography.Text>网站 #{item.id} · {(item.domains || []).map(x => x.name).join(', ')} · {sslStatus(item.ssl)}</Typography.Text>
         {!value.all_sites && <Field label="本次域名（留空使用已存在域名；逗号分隔）"><Input value={value.domains?.[item.id] || ''}
           onChange={e => change({domains: {...value.domains, [item.id]: e.target.value}})}/></Field>}
       </div>)}

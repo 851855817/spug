@@ -6,7 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { observer } from 'mobx-react';
 import { ExclamationCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { Modal, Form, Input, Select, Button, Radio, Table, Tooltip, message } from 'antd';
+import { Modal, Form, Input, Select, Button, Radio, Tooltip, message } from 'antd';
+import Table from 'components/ResizableTable';
 import { ACEditor } from 'components';
 import HostSelector from 'pages/host/Selector';
 import Parameter from './Parameter';
@@ -121,7 +122,7 @@ export default observer(function () {
         </Form.Item>
         <Form.Item label={t('参数化')}>
           {parameters.length > 0 && (
-            <Table pagination={false} bordered rowKey="id" size="small" dataSource={parameters}>
+            <Table resizeKey="pages/exec/template/Form:1" pagination={false} bordered rowKey="id" size="small" dataSource={parameters}>
               <Table.Column title={t('参数名')} dataIndex="name"
                             render={(_, row) => <Tooltip title={row.desc}>{row.name}</Tooltip>}/>
               <Table.Column title={t('变量名')} dataIndex="variable"/>

@@ -6,7 +6,8 @@
 import React from 'react';
 import { observer } from 'mobx-react';
 import { ArrowLeftOutlined } from '@ant-design/icons';
-import { Modal, Form, Table, Row, Col, Checkbox, Button, Alert } from 'antd';
+import { Modal, Form, Row, Col, Checkbox, Button, Alert } from 'antd';
+import Table from 'components/ResizableTable';
 import http from 'libs/http';
 import { t } from 'libs';
 import envStore from '../environment/store';
@@ -90,7 +91,7 @@ class Record extends React.Component {
           <Button type="link" icon={<ArrowLeftOutlined/>} style={{marginRight: 20}}
                   onClick={() => this.setState({page: page - 1})}>{t('上一步')}</Button>
           <Checkbox checked={hideSame} onChange={() => this.setState({hideSame: !hideSame})}>{t('隐藏相同配置')}</Checkbox>
-          <Table pagination={false} dataSource={records} loading={loading} columns={this.getColumns()}/>
+          <Table resizeKey="pages/config/setting/DiffConfig:1" pagination={false} dataSource={records} loading={loading} columns={this.getColumns()}/>
         </div>
       </Modal>
     );

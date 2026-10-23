@@ -5,7 +5,8 @@
  */
 import React, { useState } from 'react';
 import { observer } from 'mobx-react';
-import { Table, Modal, Tag, message } from 'antd';
+import { Modal, Tag, message } from 'antd';
+import Table from 'components/ResizableTable';
 import { PlusOutlined } from '@ant-design/icons';
 import { Action, TableCard, AuthButton } from 'components';
 import { http, hasPermission, t } from 'libs';
@@ -37,7 +38,7 @@ function ComTable() {
 
   function expandedRowRender(record) {
     return (
-      <Table rowKey="id" dataSource={record.child} pagination={false}>
+      <Table resizeKey="pages/deploy/repository/Table:1" rowKey="id" dataSource={record.child} pagination={false}>
         <Table.Column title={t('版本')} render={info => (
           <div style={{color: '#1890ff', cursor: 'pointer'}} onClick={() => store.showDetail(info)}>{info.version}</div>
         )}/>

@@ -5,7 +5,8 @@
  */
 import React from 'react';
 import { observer } from 'mobx-react';
-import { Modal, Table, Tooltip, Tag } from 'antd';
+import { Modal, Tooltip, Tag } from 'antd';
+import Table from 'components/ResizableTable';
 import http from 'libs/http';
 import { t } from 'libs';
 import store from './store';
@@ -65,8 +66,7 @@ class Record extends React.Component {
         title={t('{} - 更改历史记录', store.env.name)}
         onCancel={() => store.recordVisible = false}
         footer={null}>
-        <Table
-          rowKey="id"
+        <Table resizeKey="pages/config/setting/Record:1" rowKey="id"
           loading={loading}
           dataSource={records}
           pagination={{

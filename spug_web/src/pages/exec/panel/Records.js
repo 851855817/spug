@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Select, Space, Table } from 'antd';
+import { Button, Select, Space } from 'antd';
+import Table from 'components/ResizableTable';
 import { http } from 'libs';
 import { OPERATION_LABELS, STATE_LABELS } from './helpers';
 import { Status } from './TaskEvidence';
@@ -25,7 +26,7 @@ export default function Records({revision, onOpen}) {
         options={states.map(value => ({value, label: STATE_LABELS[value]}))}/>
       <Button onClick={() => setRefresh(value => value + 1)}>刷新记录</Button>
     </Space>
-    <Table rowKey="id" dataSource={data.items} loading={loading} scroll={{x: 850}} columns={[
+    <Table resizeKey="pages/exec/panel/Records:1" rowKey="id" dataSource={data.items} loading={loading} scroll={{x: 850}} columns={[
       {title: '任务', dataIndex: 'id', render: id => <Button type="link" onClick={() => onOpen(id)}>#{id}</Button>},
       {title: '操作', dataIndex: 'operation', render: operation => OPERATION_LABELS[operation] || operation},
       {title: '状态', dataIndex: 'state', render: state => <Status state={state}/>},

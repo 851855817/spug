@@ -612,6 +612,33 @@ class PanelTaskTests(TransactionTestCase):
         self.assertIsNone(self.worker.claim_next())
         self.assertEqual(task.targets.get().children[0]['state'], 'uncertain')
 
+    def test_resource_read_updates_saved_version_using_current_configuration(self):
+        self.services()
+        panel = self.configured()
+        models.Panel.objects.filter(pk=panel['id']).update(api_version='9.2.0')
+        result = {'compatibility': {'version': '13.1.0', 'system': 'Linux'}, 'sites': []}
+        with patch('apps.baota.task_views.PanelClient', FixtureClient), patch(
+                'apps.baota.task_views.get_resource', return_value=result):
+            response = self.client.get('/baota/resources/', {'panel_id': panel['id'], 'kind': 'sites'})
+        self.assertFalse(response.json()['error'])
+        saved = models.Panel.objects.get(pk=panel['id'])
+        self.assertEqual(saved.api_version, '13.1.0')
+        self.assertNotEqual(saved.api_checked_at, '2026-10-22 10:00:00')
+
+    def test_resource_read_does_not_approve_concurrently_edited_configuration(self):
+        self.services()
+        panel = self.configured()
+        def reader(*args, **kwargs):
+            models.Panel.objects.filter(pk=panel['id']).update(api_config_revision=2,
+                api_version='', api_checked_at='')
+            return {'compatibility': {'version': '13.1.0', 'system': 'Linux'}, 'sites': []}
+        with patch('apps.baota.task_views.PanelClient', FixtureClient), patch(
+                'apps.baota.task_views.get_resource', side_effect=reader):
+            response = self.client.get('/baota/resources/', {'panel_id': panel['id'], 'kind': 'sites'})
+        self.assertTrue(response.json()['error'])
+        saved = models.Panel.objects.get(pk=panel['id'])
+        self.assertEqual((saved.api_version, saved.api_checked_at), ('', ''))
+
     def test_resource_view_releases_atomic_request_and_does_not_leak_transport_errors(self):
         self.services()
         panel = self.configured()

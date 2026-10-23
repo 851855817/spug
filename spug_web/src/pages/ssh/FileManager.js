@@ -4,7 +4,8 @@
  * Released under the AGPL-3.0 License.
  */
 import React from 'react';
-import { Breadcrumb, Table, Switch, Progress, Modal, Input, message } from 'antd';
+import { Breadcrumb, Switch, Progress, Modal, Input, message } from 'antd';
+import Table from 'components/ResizableTable';
 import {
   DeleteOutlined,
   DownloadOutlined,
@@ -266,8 +267,7 @@ class FileManager extends React.Component {
             )}
           </div>
         </div>
-        <Table
-          size="small"
+        <Table resizeKey="pages/ssh/FileManager:1" size="small"
           rowKey="name"
           loading={this.state.fetching}
           pagination={false}

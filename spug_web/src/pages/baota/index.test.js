@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { act } from 'react-dom/test-utils';
 import { hasPermission, http } from 'libs';
 import BaotaIndex from './index';
+import { message } from 'antd';
 
 jest.mock('libs', () => ({hasPermission: jest.fn(), http: {get: jest.fn(), post: jest.fn()}}));
 jest.mock('components', () => {
@@ -17,11 +18,13 @@ jest.mock('antd', () => {
   const React = require('react');
   const Wrapper = ({children}) => <div>{children}</div>;
   return {
-    Button: ({children, onClick, disabled, loading}) => <button onClick={onClick} disabled={disabled || loading}
-      aria-busy={Boolean(loading)}>{children}</button>,
-    Card: Wrapper, Col: Wrapper, Row: Wrapper, Space: Wrapper, Tag: Wrapper,
+    Button: ({children, onClick, disabled, loading, ...props}) => <button onClick={onClick} disabled={disabled || loading}
+      aria-label={props['aria-label']} aria-busy={Boolean(loading)}>{children}</button>,
+    Switch: ({checked, disabled, loading, onChange}) => <button role="switch" aria-checked={checked} disabled={disabled || loading}
+      onClick={() => onChange(!checked)}/>,
+    Card: Wrapper, Col: Wrapper, Row: Wrapper, Space: Wrapper, Tag: Wrapper, Tooltip: Wrapper,
     Typography: {Text: Wrapper, Paragraph: Wrapper}, Input: {Search: () => null},
-    Empty: () => null, Modal: {confirm: jest.fn()}, message: {success: jest.fn()},
+    Empty: () => null, Modal: {confirm: jest.fn()}, message: {success: jest.fn(), info: jest.fn()},
     Table: ({columns, dataSource}) => <div>{dataSource.map(panel => <div key={panel.id} data-panel-id={panel.id}>
       {columns.map(column => <div key={column.key || column.dataIndex}>{column.render
         ? column.render(panel[column.dataIndex], panel) : panel[column.dataIndex]}</div>)}
@@ -42,7 +45,9 @@ beforeEach(() => {
       api_base_url: 'https://two', has_api_key: true},
   ];
   hasPermission.mockImplementation(permission => ['baota.panel.view', 'baota.panel.edit'].includes(permission));
-  http.get.mockImplementation(path => Promise.resolve(path.endsWith('group/') ? [{id: 1, name: 'Test'}] : panels));
+  http.get.mockImplementation(path => Promise.resolve(path.endsWith('sources/') ?
+    {sources: panels.map(panel => ({id: panel.id, kind: 'panel', enabled: panel.id === 2})), hosts: []} :
+    path.endsWith('group/') ? [{id: 1, name: 'Test'}] : panels));
   http.post.mockReset();
 });
 
@@ -84,4 +89,42 @@ test('row connection check requires edit permission and disables missing saved c
   hasPermission.mockImplementation(permission => permission === 'baota.panel.view');
   await renderPage();
   expect(testButtons()).toHaveLength(0);
+});
+
+test('monitor switches share one source read, persist through settings and reread with list refresh', async () => {
+  await renderPage();
+  const switches = container.querySelectorAll('[role=switch]');
+  expect(switches).toHaveLength(2);
+  expect(http.get.mock.calls.filter(([path]) => path.endsWith('sources/'))).toHaveLength(1);
+  expect(switches[0].getAttribute('aria-checked')).toBe('false');
+  expect(switches[1].getAttribute('aria-checked')).toBe('true');
+  http.post.mockResolvedValue({id: 1, kind: 'panel', enabled: true});
+  await act(async () => {switches[0].click();});
+  expect(http.post).toHaveBeenCalledWith('/api/baota/monitor/settings/', {kind: 'panel', id: 1, enabled: true});
+  expect(switches[0].getAttribute('aria-checked')).toBe('true');
+  await act(async () => {[...container.querySelectorAll('button')].find(button => button.textContent === '刷新').click();});
+  expect(http.get.mock.calls.filter(([path]) => path.endsWith('sources/'))).toHaveLength(2);
+});
+
+test('readonly panel monitor switches show persisted value without permitting writes', async () => {
+  hasPermission.mockImplementation(permission => permission === 'baota.panel.view');
+  await renderPage();
+  expect([...container.querySelectorAll('[role=switch]')].map(node => node.disabled)).toEqual([true, true]);
+});
+
+test('panel list shows only the address host and does not render login URL or account cells', async () => {
+  panels[0] = {...panels[0], url: 'http://192.0.2.10:8888/private-entry', username: 'private-account'};
+  await renderPage();
+  const row = container.querySelector('[data-panel-id="1"]');
+  expect(row.textContent).toContain('192.0.2.10');
+  expect(row.textContent).not.toContain('private-entry');
+  expect(row.textContent).not.toContain('private-account');
+  expect(row.querySelector('a').getAttribute('href')).toBe(panels[0].url);
+});
+
+test('panel monitor icon remains clickable when disabled and reports the reason', async () => {
+  await renderPage();
+  await act(async () => {container.querySelector('[aria-label="查看One监控"]').click();});
+  expect(message.info).toHaveBeenCalledWith('未开启监控');
+  expect(http.post).not.toHaveBeenCalled();
 });

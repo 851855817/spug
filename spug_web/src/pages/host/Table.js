@@ -8,6 +8,8 @@ import { observer } from 'mobx-react';
 import { Table, Modal, Dropdown, Button, Avatar, Tooltip, Space, Tag, Radio, Input, message } from 'antd';
 import { PlusOutlined, DownOutlined, SyncOutlined, FormOutlined, ExportOutlined } from '@ant-design/icons';
 import { Action, TableCard, AuthButton, AuthFragment } from 'components';
+import ResourceMonitorSwitch, { ResourceMonitorProvider } from 'components/ResourceMonitorSwitch';
+import ResourceMonitorButton from 'components/ResourceMonitorButton';
 import IPAddress from './IPAddress';
 import { http, hasPermission, blobToExcel, humanDate, t } from 'libs';
 import store from './store';
@@ -64,6 +66,7 @@ function ComTable() {
   }
 
   return (
+    <ResourceMonitorProvider kind="host" revision={store.rawRecords} enabled={hasPermission('host.host.view')}>
     <TableCard
       tKey="hi"
       rowKey="id"
@@ -163,6 +166,13 @@ function ComTable() {
       <Table.Column hide title={t('到期信息')} dataIndex="expired_time" render={v => <ExpTime value={v}/>}/>
       <Table.Column hide title={t('备注信息')} dataIndex="desc"/>
       <Table.Column
+        title={t('监控')}
+        width={110}
+        render={info => <Space size={8}>
+          <ResourceMonitorButton id={info.id} name={info.name}/>
+          <ResourceMonitorSwitch id={info.id} name={info.name} canEdit={hasPermission('host.host.edit')}/>
+        </Space>}/>
+      <Table.Column
         title={t('状态')}
         dataIndex="is_verified"
         render={v => v ? <Tag color="green">{t('已验证')}</Tag> : <Tag color="orange">{t('未验证')}</Tag>}/>
@@ -175,6 +185,7 @@ function ComTable() {
         )}/>
       )}
     </TableCard>
+    </ResourceMonitorProvider>
   )
 }
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Alert, Button, Input, InputNumber, Select, Space, Table } from 'antd';
+import { Alert, Button, Input, InputNumber, Select, Space } from 'antd';
+import Table from 'components/ResizableTable';
 import { parseSiteRows, phpLabel } from './helpers';
 
 export default function SiteGrid({panels, rows, onChange, resources}) {
@@ -18,7 +19,7 @@ export default function SiteGrid({panels, rows, onChange, resources}) {
   ];
   return <div>
     <Alert showIcon type="info" message="每行显式指定面板；不会把同一域名复制到所有面板。展开下方各面板读取本机 PHP 版本。"/>
-    <Table style={{marginTop: 12}} size="small" rowKey={(_, index) => index} dataSource={rows} columns={columns} scroll={{x: 1300}} pagination={false}/>
+    <Table resizeKey="pages/exec/panel/SiteGrid:1" style={{marginTop: 12}} size="small" rowKey={(_, index) => index} dataSource={rows} columns={columns} scroll={{x: 1300}} pagination={false}/>
     <Button style={{margin: '12px 0'}} onClick={() => onChange([...rows, {domains: '', path: '', port: 80, remark: ''}])}>增加建站行</Button>
     <Input.TextArea rows={3} value={paste} onChange={e => setPaste(e.target.value)} placeholder="从表格粘贴 TSV（不含标题）：面板 ID ⇥ 主域名,附加域名 ⇥ 根目录 ⇥ PHP 标识（74 / 00）⇥ 端口 ⇥ 备注"/>
     <Space style={{marginTop: 8}}><Button disabled={!paste.trim()} onClick={() => {onChange([...rows, ...parseSiteRows(paste)]); setPaste('');}}>导入粘贴行</Button></Space>
