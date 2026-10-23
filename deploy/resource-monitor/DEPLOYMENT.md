@@ -1,5 +1,23 @@
 # 2026-10-23 服务器监控发布记录
 
+## 单台主动采集更新
+
+已热发布 `f21255f0867a9e6d04357f73ce0343d7fda053aa`：每张卡片右上角新增“立即采集”，只针对选中服务器，自动刷新暂停时仍可使用。采集中显示加载状态并防止重复提交；缓存、繁忙、失败退避均有简短结果提示。手动请求采用 30 秒最小采样间隔，复用全局串行队列和服务端限流；隐藏、离开、筛选后丢弃过时结果。补齐列表读取与手动采样交错、手动后自动周期计算的回归。
+
+- 本机前端 16 套件、141 项通过，监控模块 ESLint 和 diff 检查通过；生产构建成功，保留既有 `AutoDeploy.js` Hook 告警。构建仅在本机进行，压缩工作进程限制为 1，避免本机并行压缩内存不足。
+- 独立代码复核无剩余 Critical / Important。[提交 CI](https://github.com/851855817/spug/actions/runs/39929136559) 和 [PR CI](https://github.com/851855817/spug/actions/runs/39929141653) 全部成功。
+- 归档 `monitor-manual-f21255f.tar.gz`，SHA-256 `cd6fe718407cf895e8249e0b50da43fd388ac3a3ad486f2887ac03a770a28db2`；25 个资源摘要校验通过。主资源 `main.bba50785.chunk.js`、`main.cfd817f4.chunk.css`。
+- 在线及启动静态目录先复制资源、最后原子替换入口，保留旧哈希。Compose 已指向仅 COPY 静态文件的持久镜像 `spug-baota:f21255f`，ID `c95e706076786274db9c8b0abc26a0214a788b91a6f3d1eb548ff55b038b68be`。镜像 3 项离线检查通过。运行容器仍基于 `d48d73b`，未重启容器或任务进程，无数据库迁移。
+- 原业务数据、监控偏好（含启用状态和关联）、密钥摘要及解密结果前后一致。监控快照和租约由正常采集更新，不纳入静态发布一致性摘要。八服务 RUNNING、容器 healthy、HTTP 200。
+- 入口备份 `/data/spug-ui-backups/f21255f0867a9e6d04357f73ce0343d7fda053aa`；Compose、前后私有摘要和发布结果 `/opt/spug/backups/monitor-manual-f21255f`。回退本次 UI 可恢复两处入口与原 Compose，保留数据库和监控设置。
+- 浏览器验证正式三张已启用卡片均显示按钮，未改客户开关或关联；独立夹具实际验证选中卡片加载、更新与完成提示，900 px 窄屏按钮未溢出。正式页面按用户已有启用设置继续正常自动采集。
+
+以下截图为独立夹具，非客户数据：
+
+![单台主动采集完成](screenshots/monitor-manual-fixture.png)
+
+## 首次监控功能发布
+
 已部署源码 `d48d73b4dcbd2634e01b2d94423d4c0d36c358e5`，分支 `feature/server-resource-monitor`，基础分支 `feature/baota-panel-tasks`。开发记录保留于[草稿 PR #3](https://github.com/851855817/spug/pull/3)，未合并。
 
 ## 验证结果
