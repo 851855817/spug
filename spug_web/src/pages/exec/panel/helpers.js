@@ -102,6 +102,8 @@ export function buildTaskRequest(operation, panels, values, rows = [], resources
         if (Object.keys(domains).length) params.domains = domains;
       }
     } else if (operation === 'panel_upgrade') {
+      if (resources[panel.id]?.upgrade_loading) throw new Error(`面板 ${panel.name} 升级信息读取中，请稍候`);
+      if (resources[panel.id]?.upgrade_available === false) throw new Error(`面板 ${panel.name} 升级信息暂不可用，请重新读取`);
       const mode = resources[panel.id]?.upgrade_mode;
       if (!['legacy_stable', 'exact'].includes(mode)) throw new Error(`请先展开面板 ${panel.name} 并读取升级信息`);
       params = mode === 'legacy_stable' ? {channel: required(value.channel, '官方升级通道')} : {version: required(value.version, '升级目标版本')};

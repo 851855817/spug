@@ -43,6 +43,8 @@ class UpgradePanel(Operation):
                 version = value.get('version')
                 version_tuple(version)
                 output.add(version)
+        if not output:
+            raise PanelAPIError('官方升级候选字段缺失或无效')
         return output
 
     @staticmethod

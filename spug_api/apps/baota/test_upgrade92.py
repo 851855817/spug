@@ -1,6 +1,7 @@
 """9.2's legacy upgrade protocol, isolated from the modern-panel fixture."""
 import copy
 from unittest import TestCase
+from unittest.mock import patch
 
 from . import resources
 from .client import PanelAPIError
@@ -89,6 +90,56 @@ class Upgrade92Tests(TestCase):
         self.client.cloud['untrusted_extra'] = 'REMOTE_SECRET'
         self.assertEqual(self.op.legacy_candidate(self.client),
                          {'checked_version': '13.1.0', 'update_time': 1792659850})
+
+    def test_upgrade_resource_outage_preserves_mode_without_fabricating_candidates(self):
+        original = self.client.request
+        def unavailable(path, action=None, params=None, **kwargs):
+            if action == 'upgrade_panel':
+                raise PanelAPIError('HTTP 404 REMOTE_SECRET')
+            return original(path, action, params, **kwargs)
+        with patch.object(self.client, 'request', side_effect=unavailable):
+            data = resources.get_resource(self.client, 'upgrade_versions')
+        self.assertEqual(data['upgrade_mode'], 'legacy_stable')
+        self.assertEqual(data['current_version'], '9.2.0')
+        self.assertFalse(data['upgrade_available'])
+        self.assertEqual(data['versions'], [])
+        self.assertNotIn('checked_version', data)
+        self.assertIn('重新读取', data['upgrade_error'])
+        self.assertNotIn('REMOTE_SECRET', str(data))
+        self.assertFalse(self.client.started)
+        self.assertEqual(self.mutations(), [])
+
+    def test_new_resource_read_recovers_from_outage_without_cached_version(self):
+        with patch.object(UpgradePanel, 'legacy_candidate', side_effect=PanelAPIError('unavailable')):
+            data = resources.get_resource(self.client, 'upgrade_versions')
+        self.assertFalse(data['upgrade_available'])
+        self.client.cloud['version'] = '13.2.0'
+        recovered = resources.get_resource(self.client, 'upgrade_versions')
+        self.assertTrue(recovered['upgrade_available'])
+        self.assertEqual(recovered['checked_version'], '13.2.0')
+        self.assertNotIn('upgrade_error', recovered)
+        self.assertEqual(self.mutations(), [])
+
+    def test_modern_empty_cloud_is_an_outage_but_valid_current_version_is_not(self):
+        self.client.info['version'] = '13.1.0'
+        original = self.client.request
+        for cloud, available in (({}, False), ({'OfficialVersion': [], 'OfficialVersionLatest': None}, False),
+                                 ({'OfficialVersion': {'version': '13.1.0'}}, True)):
+            def response(path, action=None, params=None, **kwargs):
+                if action == 'upgrade_panel':
+                    return {'cloud': cloud}
+                return original(path, action, params, **kwargs)
+            with self.subTest(cloud=cloud), patch.object(self.client, 'request', side_effect=response):
+                data = resources.get_resource(self.client, 'upgrade_versions')
+                self.assertEqual(data['upgrade_mode'], 'exact')
+                self.assertEqual(data['upgrade_available'], available)
+                self.assertEqual(data['versions'], [])
+
+    def test_identity_failure_is_not_downgraded_to_an_upgrade_outage(self):
+        with patch.object(self.client, 'request', side_effect=PanelAPIError('identity unavailable')):
+            with self.assertRaises(PanelAPIError):
+                resources.get_resource(self.client, 'upgrade_versions')
+        self.assertEqual(self.mutations(), [])
 
     def test_invalid_legacy_metadata_blocks_before_any_mutation(self):
         for patch in ({'version': '13.1.0;id'}, {'hash': 'short'},

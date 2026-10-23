@@ -73,3 +73,14 @@ test('upgrade payload follows freshly read resource mode after panel version cha
     .toEqual({channel: 'stable'});
   expect(() => buildTaskRequest('panel_upgrade', [panel], {1: {channel: 'stable'}})).toThrow(/读取.*升级/);
 });
+
+test('a failed or pending upgrade query cannot submit a previously selected channel', () => {
+  const panel = {...panels[0], api_version: '9.2.0'};
+  const values = {1: {channel: 'stable'}};
+  expect(() => buildTaskRequest('panel_upgrade', [panel], values, [], {1: {
+    upgrade_mode: 'legacy_stable', upgrade_available: false, upgrade_error: '升级信息暂不可用，请重新读取'}}))
+    .toThrow(/升级信息暂不可用/);
+  expect(() => buildTaskRequest('panel_upgrade', [panel], values, [], {1: {
+    upgrade_mode: 'legacy_stable', upgrade_available: true, upgrade_loading: true}}))
+    .toThrow(/读取中/);
+});

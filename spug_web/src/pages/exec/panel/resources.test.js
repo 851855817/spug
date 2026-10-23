@@ -45,3 +45,29 @@ test('changing panel or PHP branch discards stale responses', async () => {
   expect(container.textContent).not.toContain('old');
   act(() => {ReactDOM.unmountComponentAtNode(container);});
 });
+
+test('upgrade retry invalidates a previous candidate and failed retry stays unavailable', async () => {
+  const pending = [];
+  http.get.mockImplementation(() => new Promise((resolve, reject) => pending.push({resolve, reject})));
+  const observed = jest.fn();
+  const container = document.createElement('div');
+  let reader;
+  function Reader() {
+    reader = useResources(3, [{kind: 'upgrade_versions'}], true, observed);
+    return <div>{JSON.stringify(reader.data)}</div>;
+  }
+  await act(async () => {ReactDOM.render(<Reader/>, container);});
+  expect(observed).toHaveBeenLastCalledWith({upgrade_available: false, upgrade_loading: true});
+  await act(async () => {pending[0].resolve({upgrade_mode: 'legacy_stable', upgrade_available: true, checked_version: '13.1.0'});});
+  expect(observed).toHaveBeenLastCalledWith(expect.objectContaining({upgrade_available: true, upgrade_loading: false}));
+  await act(async () => {
+    reader.reload();
+    expect(observed).toHaveBeenLastCalledWith({upgrade_available: false, upgrade_loading: true});
+  });
+  expect(container.textContent).not.toContain('13.1.0');
+  await act(async () => {pending[1].reject('连接超时');});
+  expect(observed).toHaveBeenLastCalledWith({upgrade_available: false, upgrade_loading: false});
+  expect(reader.errors.upgrade_versions).toBe('连接超时');
+  act(() => {ReactDOM.unmountComponentAtNode(container);});
+  http.get.mockReset();
+});

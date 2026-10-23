@@ -238,14 +238,24 @@ def get_resources(client, php_version=None, site_id=None):
 def get_upgrade_resources(client):
     from .operations.upgrade import UpgradePanel, version_tuple
     info = system_info(client)
-    if info['version'] == '9.2.0':
-        candidate = UpgradePanel.legacy_candidate(client)
-        return {'current_version': info['version'], 'upgrade_mode': 'legacy_stable',
-                'versions': [], 'checked_version': candidate['checked_version'],
-                'candidate_update_time': candidate['update_time'], 'notice': UpgradePanel.LEGACY_NOTICE}
-    return {'current_version': info['version'], 'upgrade_mode': 'exact', 'versions': sorted(
-        (v for v in UpgradePanel.offered(client) if v in EXACT_UPGRADE_TARGETS
-         and version_tuple(v) > version_tuple(info['version'])), key=version_tuple)}
+    result = {'current_version': info['version'], 'upgrade_mode':
+              'legacy_stable' if info['version'] == '9.2.0' else 'exact', 'versions': []}
+    try:
+        if result['upgrade_mode'] == 'legacy_stable':
+            candidate = UpgradePanel.legacy_candidate(client)
+            result.update(checked_version=candidate['checked_version'],
+                          candidate_update_time=candidate['update_time'], notice=UpgradePanel.LEGACY_NOTICE)
+        else:
+            result['versions'] = sorted(
+                (v for v in UpgradePanel.offered(client) if v in EXACT_UPGRADE_TARGETS
+                 and version_tuple(v) > version_tuple(info['version'])), key=version_tuple)
+    except (PanelAPIError, ValueError):
+        # System identity succeeded. A failure in this separate read must not be
+        # reported as bad credentials, nor turn into an empty successful catalog.
+        result.update(upgrade_available=False, upgrade_error=
+            '基础 API 连接正常，但客户宝塔暂未返回有效升级信息。请重新读取；若持续失败，请检查客户宝塔自身的升级页面及其到宝塔官方节点的连接。')
+        return result
+    return {**result, 'upgrade_available': True}
 
 
 def site_options(client, site_id):

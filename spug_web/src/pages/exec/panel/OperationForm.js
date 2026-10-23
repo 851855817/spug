@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Checkbox, Form, Input, Select, Spin, Typography } from 'antd';
+import { Alert, Button, Checkbox, Form, Input, Select, Spin, Typography } from 'antd';
 import { phpLabel } from './helpers';
 import { useResources } from './resources';
 
@@ -56,14 +56,16 @@ export default function OperationForm({panel, operation, value, onChange, active
     {operation === 'site_add' && <Typography.Paragraph>本面板已读取 {sites.length} 个网站；可用版本：{(base.data.php_versions || []).map(item => phpLabel(item.version)).join('、') || '暂无'}。在上方建站表格逐行填写。</Typography.Paragraph>}
     {operation === 'panel_upgrade' && <>
       <Typography.Paragraph>当前版本：{base.data.current_version || panel.api_version || '读取中'}。</Typography.Paragraph>
-      {base.data.upgrade_mode === 'legacy_stable' ? <>
-        <Alert showIcon type="warning" message={`9.2 按官方稳定通道升级，当前候选 ${base.data.checked_version || '读取中'}。旧接口无法锁定后台实际版本；升级会暂时断开面板，执行前需单独确认。`}/>
-        <Field label="升级通道"><Select value={value.channel} onChange={channel => change({channel})}
+      {base.data.upgrade_error && <Alert showIcon type="error" message={base.data.upgrade_error}/>}
+      {(base.data.upgrade_mode || (panel.api_version === '9.2.0' ? 'legacy_stable' : 'exact')) === 'legacy_stable' ? <>
+        <Alert showIcon type="warning" message={`9.2 按官方稳定通道升级，当前候选 ${base.data.checked_version || (base.loading ? '读取中' : '暂不可用')}。旧接口无法锁定后台实际版本；升级会暂时断开面板，执行前需单独确认。`}/>
+        <Field label="升级通道"><Select disabled={base.loading || base.data.upgrade_available === false || Boolean(base.errors.upgrade_versions)} value={value.channel} onChange={channel => change({channel})}
           options={[{value: 'stable', label: '宝塔官方稳定通道'}]}/></Field>
       </> : <>
-        <Field label="本面板提供的升级版本"><Select value={value.version} onChange={version => change({version})} options={(base.data.versions || []).map(version => ({value: version, label: version}))}/></Field>
-        {!loading && !Object.keys(errors).length && !(base.data.versions || []).length && <Typography.Paragraph>当前没有已适配的更高版本可供升级。</Typography.Paragraph>}
+        <Field label="本面板提供的升级版本"><Select disabled={base.loading || base.data.upgrade_available === false || Boolean(base.errors.upgrade_versions)} value={value.version} onChange={version => change({version})} options={(base.data.versions || []).map(version => ({value: version, label: version}))}/></Field>
+        {!loading && base.data.upgrade_available !== false && !Object.keys(errors).length && !(base.data.versions || []).length && <Typography.Paragraph>当前没有已适配的更高版本可供升级。</Typography.Paragraph>}
       </>}
+      <Button loading={base.loading} disabled={base.loading} onClick={base.reload}>重新读取升级信息</Button>
     </>}
     {['software_install', 'software_uninstall'].includes(operation) && <>
       <Typography.Paragraph>软件来自当前客户宝塔的软件商店，例如 Nginx、Apache、MySQL、Redis、PHP；可选项以本面板实际返回为准。</Typography.Paragraph>

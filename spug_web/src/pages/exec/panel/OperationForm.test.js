@@ -9,9 +9,32 @@ jest.mock('antd', () => {
   const React = require('react');
   const Wrapper = ({children, label}) => <div>{label}{children}</div>;
   return {Form: Object.assign(Wrapper, {Item: Wrapper}), Spin: Wrapper, Typography: {Paragraph: Wrapper, Text: Wrapper},
+    Button: ({children, onClick, disabled}) => <button onClick={onClick} disabled={disabled}>{children}</button>,
     Alert: ({message}) => <div>{message}</div>, Checkbox: Wrapper, Input: Object.assign(() => null, {TextArea: () => null}),
-    Select: ({options = [], value, onChange}) => <select value={value || ''} onChange={e => onChange(e.target.value)}>
+    Select: ({options = [], value, onChange, disabled}) => <select value={value || ''} disabled={disabled} onChange={e => onChange(e.target.value)}>
       <option value="">选择</option>{options.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select>};
+});
+
+test('failed 9.2 upgrade lookup keeps the correct mode and can recover with one explicit retry', async () => {
+  http.get.mockReset();
+  http.get.mockResolvedValueOnce({current_version: '9.2.0', upgrade_mode: 'legacy_stable',
+    upgrade_available: false, versions: [], upgrade_error: '客户宝塔暂未返回有效升级信息，请重新读取'});
+  http.get.mockResolvedValueOnce({current_version: '9.2.0', upgrade_mode: 'legacy_stable',
+    upgrade_available: true, checked_version: '13.1.0', versions: []});
+  const container = document.createElement('div');
+  await act(async () => {ReactDOM.render(<OperationForm panel={{id: 3, api_version: '9.2.0'}}
+    operation="panel_upgrade" active value={{channel: 'stable'}} onChange={() => {}}/>, container);});
+  expect(container.textContent).toContain('客户宝塔暂未返回有效升级信息');
+  expect(container.textContent).not.toContain('本面板提供的升级版本');
+  expect(container.querySelector('select').disabled).toBe(true);
+  const retry = Array.from(container.querySelectorAll('button')).find(button => button.textContent === '重新读取升级信息');
+  expect(retry).toBeDefined();
+  await act(async () => {Simulate.click(retry);});
+  expect(container.textContent).toContain('13.1.0');
+  expect(container.textContent).not.toContain('暂未返回');
+  expect(container.querySelector('select').disabled).toBe(false);
+  expect(http.get).toHaveBeenCalledTimes(2);
+  act(() => {ReactDOM.unmountComponentAtNode(container);});
 });
 
 test('software choices and versions remain tied to the panel that provided them', async () => {
