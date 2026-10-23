@@ -59,16 +59,19 @@ def main():
     parser.add_argument('--app-root', default='/data/spug/spug_api')
     parser.add_argument('--backup-dir', default='/data/spug/backups/inspection-templates')
     parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--expect-count', type=int, default=12)
+    parser.add_argument('--interpreter', choices=('python', 'sh'), default='python')
     args = parser.parse_args()
     raw = Path(args.bundle).read_bytes()
     if len(raw) > 2 * 1024 * 1024 or hashlib.sha256(raw).hexdigest() != args.sha256:
         raise ValueError('bundle size or SHA256 mismatch')
     bundle = json.loads(raw)
-    if bundle['schema'] != 1 or len(bundle['templates']) != 12:
-        raise ValueError('expected reviewed schema and 12 templates')
+    if (bundle['schema'] != 1 or not 1 <= args.expect_count <= 50
+            or len(bundle['templates']) != args.expect_count):
+        raise ValueError('unexpected schema or template count')
     for item in bundle['templates']:
         if (hashlib.sha256(item['body'].encode('utf-8')).hexdigest() != item['sha256']
-                or item['interpreter'] != 'python' or item['host_ids'] != []
+                or item['interpreter'] != args.interpreter or item['host_ids'] != []
                 or len(item['name']) > 50 or len(item['type']) > 50 or len(item['desc']) > 255):
             raise ValueError('template metadata/hash mismatch')
 

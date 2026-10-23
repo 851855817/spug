@@ -1,8 +1,28 @@
 # 通用巡检、网站与 PHP 模板
 
-这批模板依据用户指定范围整理，导入只创建模板，不选择主机、不创建执行任务。它们是参考公开命令文档和检查思路的独立加固实现，不是把第三方仓库整包搬进生产环境。
+这批模板依据用户指定范围整理，包含12个Python模板及8个原生Shell模板。导入只创建模板，不选择主机、不创建执行任务。它们是参考公开命令文档和检查思路的独立加固实现，不是把第三方仓库整包搬进生产环境。
 
-## 模板清单
+## Shell 版本
+
+「Shell通用巡检」6项：系统版本与运行时间、CPU负载与内存、磁盘空间与Inode、进程资源TOP20、TCP与UDP监听端口、失败的系统服务。「Shell PHP检查」2项：宝塔PHP CLI版本（可填7.4）、PHP-FPM进程。名称均以 `Shell·` 开头，脚本语言为Shell，直接运行Bash，无其他语言运行依赖。
+
+要求Linux、Bash、GNU coreutils（特别是timeout/head/tr）、awk以及对应查询命令（procps、ss、systemctl等）；不自动安装。正文使用清理环境后的Bash heredoc，参数只作为带引号的环境数据传入。每次查询6秒、整个模板50秒预算，超时发送TERM再KILL；每查询最多32KiB，并限制行数，失败或超时明确报错。输出只保留ASCII可打印字符和制表/换行，可能过滤非ASCII程序名称。
+
+Shell查询失败通常退出2，外层timeout可能退出124或137，均表示检查未完成；内核不可中断IO仍可能延迟终止。
+
+这些Shell模板只查询固定系统文件／命令，不读完整配置、日志或命令参数。PHP路径在检查时拒绝软链接，要求本机PHP安装和父目录受信任；Shell的路径检查不是目录FD原子打开，不能抵御拥有修改这些系统目录权限的本机攻击者并发替换。PHP `-n -v` 仍会启动本机受信任程序。FPM使用有界进程快照，找不到进程不等于全机未运行，所有结果均不证明网站健康。
+
+Shell构建与导入：
+
+```bash
+python3 deploy/inspection-templates/build.py /tmp/shell-bundle.json shell-manifest.json
+shellcheck --shell=bash deploy/inspection-templates/shell/*.sh
+python3 /tmp/import_templates.py --bundle /tmp/shell-bundle.json --sha256 REVIEWED_SHA256 --expect-count 8 --interpreter sh
+```
+
+确认预览后加 `--apply` 导入；同样采用哈希核验、私有备份、同名冲突拒绝，既有Python模板保留。
+
+## Python 模板清单
 
 | 分类 | 模板 | 参数 / 依赖 |
 | --- | --- | --- |
@@ -48,7 +68,7 @@ python3 deploy/inspection-templates/build.py /tmp/inspection-bundle.json
 sha256sum /tmp/inspection-bundle.json
 ```
 
-构建器将 `common.py` 与每个 `checks/*.py` 拼成独立正文，不需要在客户主机安装本项目。模板正文与来源信息、SHA256写入bundle；不提交重复生成的正文。
+构建器将 `common.py` 与每个 `checks/*.py` 拼成独立Python正文，或将 `shell/common.sh` 与 `shell/*.sh` 拼成独立Shell正文，不需要在客户主机安装本项目。模板正文与来源信息、SHA256写入bundle；不提交重复生成的正文。
 
 在Spug应用容器内先预览，再明确加 `--apply` 导入：
 

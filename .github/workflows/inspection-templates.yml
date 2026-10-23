@@ -23,3 +23,15 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python -m unittest discover -s deploy/inspection-templates/tests -v
       - run: python deploy/inspection-templates/build.py /tmp/inspection-bundle.json
+      - run: python deploy/inspection-templates/build.py /tmp/shell-bundle.json shell-manifest.json
+      - name: ShellCheck source fragments and generated bodies
+        run: |
+          shellcheck --shell=bash deploy/inspection-templates/shell/*.sh
+          python - <<'PY'
+          import json, pathlib, subprocess
+          bundle = json.loads(pathlib.Path('/tmp/shell-bundle.json').read_text())
+          for item in bundle['templates']:
+              path = pathlib.Path('/tmp') / ('spug-check-' + item['key'] + '.sh')
+              path.write_text(item['body'])
+              subprocess.run(['shellcheck', '--shell=sh', str(path)], check=True)
+          PY

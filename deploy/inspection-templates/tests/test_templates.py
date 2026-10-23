@@ -150,6 +150,56 @@ class SafetyTests(unittest.TestCase):
 
 
 class BundleTests(unittest.TestCase):
+    def test_shell_bundle_contains_eight_native_shell_templates(self):
+        build = load('build')
+        bundle = build.build_bundle('shell-manifest.json')
+        self.assertEqual(len(bundle['templates']), 8)
+        for item in bundle['templates']:
+            self.assertEqual(item['interpreter'], 'sh')
+            self.assertEqual(item['host_ids'], [])
+            self.assertIn('timeout', item['body'])
+            self.assertNotIn('python', item['body'].lower())
+            self.assertIn('https://github.com/', item['body'])
+
+    @unittest.skipUnless(os.name == 'posix', 'Native Linux Shell fixture tests')
+    def test_shell_bad_php_parameter_is_rejected_without_execution(self):
+        import subprocess
+        build = load('build')
+        bundle = build.build_bundle('shell-manifest.json')
+        body = next(x['body'] for x in bundle['templates'] if x['key'] == 'php_versions')
+        for value in ('../../etc', '74; touch /tmp/SPUG_MUST_NOT_RUN', '$(id)', 'all\n74'):
+            result = subprocess.run(['/bin/sh'], input=body, text=True,
+                                    env={'_SPUG_PHP_VERSION': value}, capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn('PHP_VERSION', result.stdout)
+
+    @unittest.skipUnless(os.name == 'posix', 'Native Linux Shell fixture tests')
+    def test_shell_query_failure_and_output_limits_are_explicit(self):
+        import subprocess
+        common_shell = (ROOT / 'shell/common.sh').read_text(encoding='utf-8')
+        bad = subprocess.run(['/bin/bash'], input=common_shell +
+                             '\nrun 5 /bin/sh -c \'echo SECRET >&2; exit 7\'\n',
+                             text=True, capture_output=True, timeout=10)
+        self.assertEqual(bad.returncode, 2)
+        self.assertIn('exit 7', bad.stdout)
+        self.assertNotIn('SECRET', bad.stdout + bad.stderr)
+        large = subprocess.run(['/bin/bash'], input=common_shell + '\nrun 5 seq 100000\n',
+                               text=True, capture_output=True, timeout=10)
+        self.assertLessEqual(len(large.stdout), 33000)
+        self.assertLessEqual(len([x for x in large.stdout.splitlines() if x.isdigit()]), 5)
+
+    @unittest.skipUnless(os.name == 'posix', 'Native Linux Shell fixture tests')
+    def test_shell_hung_query_is_terminated(self):
+        import subprocess
+        import time
+        common_shell = (ROOT / 'shell/common.sh').read_text(encoding='utf-8')
+        started = time.monotonic()
+        result = subprocess.run(['/bin/bash'], input=common_shell + '\nrun 5 sleep 20\n',
+                                text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn('timed out', result.stdout)
+        self.assertLess(time.monotonic() - started, 9)
+
     def test_import_is_idempotent_and_refuses_user_edits(self):
         importer = load('import_templates')
         self.assertIsNotNone(importer, 'Create-only import planning must exist')
