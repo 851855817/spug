@@ -1,0 +1,73 @@
+{
+  "bundle_sha256": "b55864a0ad7a075aaccfed6f2a2340ac613604feafa32c5142f59665ebef686b",
+  "owner_id": 1,
+  "created": [
+    {
+      "id": 1,
+      "name": "巡检·系统版本与运行时间",
+      "sha256": "fe30fd6a1da6dfd820e8c7dfbc3ff31f9a557fb186d2ab87a591eda73a36d4ef"
+    },
+    {
+      "id": 2,
+      "name": "巡检·CPU负载与内存",
+      "sha256": "8e6ed4eb0b3f534bd0d7f4fdd0954c3e247320a1bcb3784ac7d52bd7d60e1d79"
+    },
+    {
+      "id": 3,
+      "name": "巡检·磁盘空间与Inode",
+      "sha256": "85fde433acf2bcc4b76e0932485de9be45930e670182fee745d773c98fefc324"
+    },
+    {
+      "id": 4,
+      "name": "巡检·进程资源TOP20",
+      "sha256": "b6a1d4830882fd9a6f7f9b7d1092cda27900bf69a6a89d8878aba6ffb7ae9019"
+    },
+    {
+      "id": 5,
+      "name": "巡检·TCP与UDP监听端口",
+      "sha256": "95c3072402d2640583fcc5ef77528a2784737cebafb18a8a64190a8ac25c4954"
+    },
+    {
+      "id": 6,
+      "name": "巡检·失败的系统服务",
+      "sha256": "8d44dc2efce05cec63e77a209a761011f284cf0d3c739996cf39ac34d2ca4d5c"
+    },
+    {
+      "id": 7,
+      "name": "PHP检查·宝塔CLI版本",
+      "sha256": "5858caf752b0720f948df7dd58f00eb18f20a9d248f513e4d039dff69c1c58da"
+    },
+    {
+      "id": 8,
+      "name": "PHP检查·安全相关配置",
+      "sha256": "96e97979a866f889cb4d99b363559dc41e6520b3aa76dadd2dc795d0566ce2af"
+    },
+    {
+      "id": 9,
+      "name": "PHP检查·已配置扩展",
+      "sha256": "9c37a3c5244566aec1a03707303f77207b4ece7a2decd28fefc736fc0045bc50"
+    },
+    {
+      "id": 10,
+      "name": "PHP检查·FPM进程",
+      "sha256": "89dd8760c826258d9cbef8f1f37d7e9de4175f2f9c2205aa703e627cf84684d4"
+    },
+    {
+      "id": 11,
+      "name": "网站检查·HTTPS可用性",
+      "sha256": "255f902a989bc9953e4e02004774b27810f23c1f6462ee613d1b12ef7375d359"
+    },
+    {
+      "id": 12,
+      "name": "网站检查·TLS证书到期",
+      "sha256": "a2ef335ae1d9e94d68a6e8c2bcb04e8763b485524da108efe440e60e2f4568b1"
+    }
+  ],
+  "templates_before": 0,
+  "histories_before": 0,
+  "skipped": [],
+  "backup_file": "/data/spug/backups/inspection-templates/20261023T063753941760Z-before.json",
+  "templates_after": 12,
+  "histories_after": 0,
+  "executed_by_importer": false
+}
