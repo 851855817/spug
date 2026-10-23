@@ -11,8 +11,26 @@ jest.mock('antd', () => {
   return {Form: Object.assign(Wrapper, {Item: Wrapper}), Spin: Wrapper, Typography: {Paragraph: Wrapper, Text: Wrapper},
     Button: ({children, onClick, disabled}) => <button onClick={onClick} disabled={disabled}>{children}</button>,
     Alert: ({message}) => <div>{message}</div>, Checkbox: Wrapper, Input: Object.assign(() => null, {TextArea: () => null}),
-    Select: ({options = [], value, onChange, disabled}) => <select value={value || ''} disabled={disabled} onChange={e => onChange(e.target.value)}>
+    Select: ({options = [], value, onChange, disabled, mode}) => <select multiple={mode === 'multiple'} value={value || (mode ? [] : '')} disabled={disabled} onChange={e => onChange(e.target.value)}>
       <option value="">选择</option>{options.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select>};
+});
+
+test.each(['ssl_apply', 'ssl_renew'])('%s website choices show expiry, expired, unconfigured and unknown SSL', async operation => {
+  http.get.mockResolvedValue({sites: [
+    {id: 1, name: 'valid.example.com', ssl: {state: 'configured', expires_at: '2099-01-20'}},
+    {id: 2, name: 'expired.example.com', ssl: {state: 'configured', expires_at: '2020-01-20'}},
+    {id: 3, name: 'plain.example.com', ssl: {state: 'unconfigured', expires_at: ''}},
+    {id: 4, name: 'unknown.example.com', ssl: {state: 'unknown', expires_at: ''}},
+  ]});
+  const container = document.createElement('div');
+  await act(async () => {ReactDOM.render(<OperationForm panel={{id: 7}} operation={operation} active value={{}} onChange={() => {}}/>, container);});
+  const choices = [...container.querySelectorAll('option')].map(item => item.textContent);
+  expect(choices).toContain('valid.example.com · SSL 到期 2099-01-20');
+  expect(choices).toContain('expired.example.com · SSL 已过期 2020-01-20');
+  expect(choices).toContain('plain.example.com · SSL 未配置');
+  expect(choices).toContain('unknown.example.com · SSL 状态未知');
+  expect(http.get).toHaveBeenCalledWith('/api/baota/resources/', {params: {panel_id: 7, kind: 'sites'}});
+  act(() => {ReactDOM.unmountComponentAtNode(container);});
 });
 
 test('failed 9.2 upgrade lookup keeps the correct mode and can recover with one explicit retry', async () => {

@@ -7,7 +7,7 @@ from django.db import transaction
 from django.utils.decorators import method_decorator
 from django.views import View
 
-from libs import json_response
+from libs import human_datetime, json_response
 from .client import PanelClient
 from .models import Panel, PanelGroup, PanelTaskTarget
 from .operations import operation_descriptors
@@ -132,9 +132,13 @@ class TaskResourcesView(TaskBaseView):
                                       php_version=request.GET.get('php_version'))
         except Exception:
             raise ValueError('资源读取失败，请核对 API 配置、资源类型及选择参数') from None
-        if not Panel.objects.filter(pk=panel.pk, api_config_revision=revision).exists():
+        payload = s.safe_tree(s.bounded(result, maximum=4 * s.MAX_JSON_BYTES))
+        # Reuse the live identity already fetched by get_resource. An external
+        # upgrade must not leave the task/list version at the last connection test.
+        if not Panel.objects.filter(pk=panel.pk, api_config_revision=revision).update(
+                api_version=result['compatibility']['version'], api_checked_at=human_datetime()):
             raise ValueError('资源读取期间 API 配置变化，请刷新')
-        return json_response(s.safe_tree(s.bounded(result, maximum=4 * s.MAX_JSON_BYTES)))
+        return json_response(payload)
 
 
 @lru_cache(maxsize=1)

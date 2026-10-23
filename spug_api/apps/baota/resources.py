@@ -1,6 +1,7 @@
 """Bounded target-panel readers. Never expose transport responses to the browser."""
 import re
 import posixpath
+from datetime import date
 
 from .client import PanelAPIError
 from .validation import is_linux_system, positive_id
@@ -70,6 +71,19 @@ def php_branch(value):
     return ''
 
 
+def site_ssl_summary(value):
+    """getData already includes this public metadata. Never return its raw object."""
+    if type(value) is int and value == -1:
+        return {'state': 'unconfigured', 'expires_at': ''}
+    expiry = value.get('notAfter') if isinstance(value, dict) else None
+    if isinstance(expiry, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', expiry):
+        try:
+            return {'state': 'configured', 'expires_at': date.fromisoformat(expiry).isoformat()}
+        except ValueError:
+            pass
+    return {'state': 'unknown', 'expires_at': ''}
+
+
 def sites(client):
     result = []
     for row in table(client, 'sites'):
@@ -84,7 +98,7 @@ def sites(client):
         result.append({'id': positive_id(row['id']), 'name': name, 'path': path.rstrip('/') or '/',
                        'project_type': project,
                        'php_version': php_branch(row.get('php_version')),
-                       'status': str(status)})
+                       'status': str(status), 'ssl': site_ssl_summary(row.get('ssl'))})
     return result
 
 

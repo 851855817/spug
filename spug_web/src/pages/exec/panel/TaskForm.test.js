@@ -6,7 +6,10 @@ import TaskForm from './TaskForm';
 
 jest.mock('libs', () => ({http: {get: jest.fn(), post: jest.fn()}}));
 jest.mock('../../baota/helpers', () => ({buildGroupTree: () => [], descendantIds: () => new Set()}));
-jest.mock('./OperationForm', () => ({panel, value, onChange}) => <button onClick={() => onChange({...value, all_sites: true, enabled: panel.id === 1})}>设置 {panel.name}</button>);
+jest.mock('./OperationForm', () => ({panel, value, onChange, onResource}) => <>
+  <button onClick={() => onChange({...value, all_sites: true, enabled: panel.id === 1})}>设置 {panel.name}</button>
+  <button onClick={() => onResource({compatibility: {version: '13.1.0'}})}>读取 {panel.name}</button>
+</>);
 jest.mock('./SiteGrid', () => () => null);
 jest.mock('./UploadForm', () => ({panels, onPrepared, onBusyChange}) => <div>上传目标 {panels.length}
   <button onClick={() => onBusyChange(true)}>模拟暂存</button><button onClick={() => {onBusyChange(false); onPrepared(13);}}>模拟完成</button></div>);
@@ -18,7 +21,7 @@ jest.mock('antd', () => {
     <option value="">选择</option>{options.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
   </select>;
   return {Card: Wrapper, Space: Wrapper, Typography: {Paragraph: Wrapper, Text: Wrapper}, Form: Object.assign(Wrapper, {Item: Wrapper}),
-    Alert: ({message, description}) => <div>{message}{description}</div>, Collapse: Object.assign(Wrapper, {Panel: Wrapper}), Select, TreeSelect: () => null,
+    Alert: ({message, description}) => <div>{message}{description}</div>, Collapse: Object.assign(Wrapper, {Panel: ({header, children}) => <div>{header}{children}</div>}), Select, TreeSelect: () => null,
     Button: ({children, onClick, loading, disabled}) => <button onClick={onClick} disabled={loading || disabled}>{children}</button>, message: {error: jest.fn()}};
 });
 let container;
@@ -50,6 +53,18 @@ test('the operation picker includes PHP updates and SSL has an explicit apply or
   expect(ssl.value).toBe('ssl_apply');
   act(() => {ssl.value = 'ssl_renew'; Simulate.change(ssl);});
   expect(ssl.value).toBe('ssl_renew');
+});
+
+test('a live resource version replaces an older saved version in the panel heading', async () => {
+  const options = {panels: [{id: 2, name: 'A', api_version: '9.2.0', api_configured: true, api_checked: true}],
+    groups: [], operations: [{code: 'site_basedir', label: '防跨站'}]};
+  await act(async () => {ReactDOM.render(<TaskForm options={options}/>, container);});
+  const selects = container.querySelectorAll('select');
+  act(() => {selects[0].options[1].selected = true; Simulate.change(selects[0]); selects[1].value = 'site_basedir'; Simulate.change(selects[1]);});
+  expect(container.textContent).toContain('A (#2) · 9.2.0');
+  act(() => {[...container.querySelectorAll('button')].find(button => button.textContent === '读取 A').click();});
+  expect(container.textContent).toContain('A (#2) · 13.1.0');
+  expect(container.textContent).not.toContain('A (#2) · 9.2.0');
 });
 
 test('file upload replaces generic operation forms and locks selectors during staging', async () => {

@@ -83,7 +83,7 @@ export default function BaotaIndex() {
       <Tag color={panel.api_checked_at ? 'green' : panel.has_api_key && panel.api_base_url ? 'orange' : 'default'}>
         {panel.api_checked_at ? `宝塔 ${panel.api_version}` : panel.has_api_key && panel.api_base_url ? '待验证' : '未配置'}
       </Tag>
-      {panel.api_checked_at && <div><Typography.Text type="secondary">{panel.api_checked_at}</Typography.Text></div>}
+      {panel.api_checked_at && <div><Typography.Text type="secondary">上次检测：{panel.api_checked_at}</Typography.Text></div>}
     </div>},
     {title: '所属分组', dataIndex: 'group_id', width: 130,
       render: id => groups.find(group => group.id === id)?.name || '—'},
