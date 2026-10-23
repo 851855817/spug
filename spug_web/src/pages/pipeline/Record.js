@@ -5,7 +5,8 @@
  */
 import React from 'react';
 import { observer } from 'mobx-react';
-import { Drawer, Table, Tag, Popconfirm, message } from 'antd';
+import { Drawer, Tag, Popconfirm, message } from 'antd';
+import Table from 'components/ResizableTable';
 import { Action } from 'components';
 import { http, hasPermission, t } from 'libs';
 import S, { STATUS_COLORS } from './store';
@@ -32,8 +33,7 @@ function Record() {
       open={S.historyVisible}
       title={t('执行记录 - {}', S.record.name)}
       onClose={() => S.historyVisible = false}>
-      <Table
-        rowKey="id"
+      <Table resizeKey="pages/pipeline/Record:1" rowKey="id"
         loading={S.historyFetching}
         dataSource={S.histories}
         locale={{emptyText: t('暂无执行记录')}}

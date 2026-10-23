@@ -12,6 +12,8 @@ on:
       - 'spug_web/src/pages/server-monitor/**'
       - 'spug_web/src/pages/host/Table.js'
       - 'spug_web/src/components/ResourceMonitor*'
+      - 'spug_web/src/components/ResizableTable*'
+      - 'spug_web/src/components/TableCard.js'
       - 'spug_web/src/components/useResourceMonitorSources.js'
       - 'spug_web/src/routes.js'
       - 'deploy/baota/**'

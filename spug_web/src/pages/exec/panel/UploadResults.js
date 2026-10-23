@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Form, Input, Modal, Select, Space, Table, Typography } from 'antd';
+import { Alert, Button, Form, Input, Modal, Select, Space, Typography } from 'antd';
+import Table from 'components/ResizableTable';
 import { hasPermission, http } from 'libs';
 import { Status } from './TaskEvidence';
 import { formatBytes } from './uploadHelpers';
@@ -64,7 +65,7 @@ export default function UploadResults({taskId, targetId, summary, active = false
     <div><Button onClick={() => setExpanded(value => !value)}>{expanded ? '收起文件结果' : '查看文件结果'}</Button></div>
     {expanded && <div style={{marginTop: 12}}>
       {error && <Alert type="error" message={error}/>}
-      <Table rowKey="id" size="small" loading={loading} dataSource={data.items} scroll={{x: 600}} columns={[
+      <Table resizeKey="pages/exec/panel/UploadResults:1" rowKey="id" size="small" loading={loading} dataSource={data.items} scroll={{x: 600}} columns={[
         {title: '相对路径', dataIndex: 'relative_path', render: (path, row) => <span title={`${row.target_path || path} · ${formatBytes(row.size)}`} style={{overflowWrap: 'anywhere'}}>{String(path || '')}</span>},
         {title: '状态', dataIndex: 'state', width: 130, render: state => <Status state={state}/>},
         {title: '结果说明', dataIndex: 'message', render: (message, row) => <div>{typeof message === 'string' ? message : ''}

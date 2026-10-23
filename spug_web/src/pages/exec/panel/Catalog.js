@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Input, Select, Space, Table, Tag } from 'antd';
+import { Alert, Input, Select, Space, Tag } from 'antd';
+import Table from 'components/ResizableTable';
 import { http } from 'libs';
 
 export default function Catalog() {
@@ -20,7 +21,7 @@ export default function Catalog() {
       <Select allowClear placeholder="分类筛选" style={{width: 200}} value={query.category} options={data.categories.map(value => ({value, label: value}))}
         onChange={category => setQuery({...query, category, page: 1})}/>
     </Space>
-    <Table size="small" loading={loading} dataSource={data.items} rowKey={row => `${row['请求路径']}:${row.action}:${row['文档版本']}`} scroll={{x: 1400}} columns={[
+    <Table resizeKey="pages/exec/panel/Catalog:1" size="small" loading={loading} dataSource={data.items} rowKey={row => `${row['请求路径']}:${row.action}:${row['文档版本']}`} scroll={{x: 1400}} columns={[
       {title: '分类', dataIndex: '分类', width: 140}, {title: '接口', dataIndex: 'action', width: 180},
       {title: '说明', dataIndex: '操作名称或说明', width: 320}, {title: '方法', dataIndex: '方法', width: 80},
       {title: '路径', dataIndex: '请求路径', width: 180}, {title: '接入状态', dataIndex: '接入状态', width: 240, render: value => <Tag>{value}</Tag>},

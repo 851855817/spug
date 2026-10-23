@@ -5,7 +5,8 @@
  */
 import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
-import { Modal, Row, Col, Tree, Table, Button, Space, Input, Alert } from 'antd';
+import { Modal, Row, Col, Tree, Button, Space, Input, Alert } from 'antd';
+import Table from 'components/ResizableTable';
 import { FolderOpenOutlined, FolderOutlined, PlusOutlined } from '@ant-design/icons';
 import IPAddress from './IPAddress';
 import { t } from 'libs';
@@ -195,8 +196,7 @@ function HostSelector(props) {
                 <Button type="link" style={{paddingRight: 0}} onClick={() => setSelectedRowKeys([])}>{t('取消选择')}</Button>
               </Space>
             </div>
-            <Table
-              rowKey="id"
+            <Table resizeKey="pages/host/Selector:1" rowKey="id"
               dataSource={store.dataSource}
               pagination={false}
               scroll={{y: 480}}

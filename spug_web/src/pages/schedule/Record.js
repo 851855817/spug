@@ -5,7 +5,8 @@
  */
 import React from 'react';
 import { observer } from 'mobx-react';
-import { Modal, Table, Tag } from 'antd';
+import { Modal, Tag } from 'antd';
+import Table from 'components/ResizableTable';
 import { LinkButton } from 'components';
 import { http, t } from 'libs';
 import store from './store';
@@ -48,8 +49,7 @@ class Record extends React.Component {
         title={t('任务执行记录 - {}', store.record.name)}
         onCancel={() => store.recordVisible = false}
         footer={null}>
-        <Table
-          rowKey="id"
+        <Table resizeKey="pages/schedule/Record:1" rowKey="id"
           columns={this.columns}
           dataSource={this.state.records}
           pagination={{

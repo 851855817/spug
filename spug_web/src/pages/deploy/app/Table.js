@@ -13,7 +13,8 @@ import {
   UpSquareOutlined,
   PlusOutlined
 } from '@ant-design/icons';
-import { Table, Modal, Tag, Divider, message } from 'antd';
+import { Modal, Tag, Divider, message } from 'antd';
+import Table from 'components/ResizableTable';
 import { http, hasPermission, t } from 'libs';
 import { Action, TableCard, AuthButton } from "components";
 import CloneConfirm from './CloneConfirm';
@@ -84,8 +85,7 @@ function ComTable() {
 
   function expandedRowRender(record) {
     return (
-      <Table
-        rowKey="id"
+      <Table resizeKey="pages/deploy/app/Table:1" rowKey="id"
         loading={record['deploys'] === undefined}
         dataSource={record['deploys']}
         pagination={false}>

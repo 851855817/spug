@@ -6,7 +6,8 @@
 import React from 'react';
 import { observer } from 'mobx-react';
 import { SyncOutlined } from '@ant-design/icons';
-import { Modal, Table, Input, Button, Select } from 'antd';
+import { Modal, Input, Button, Select } from 'antd';
+import Table from 'components/ResizableTable';
 import { SearchForm } from 'components';
 import { t } from 'libs';
 import store from '../template/store';
@@ -87,8 +88,7 @@ class TemplateSelector extends React.Component {
             <Button type="primary" icon={<SyncOutlined/>} onClick={store.fetchRecords}>{t('刷新')}</Button>
           </SearchForm.Item>
         </SearchForm>
-        <Table
-          rowKey="id"
+        <Table resizeKey="pages/exec/task/TemplateSelector:1" rowKey="id"
           rowSelection={{
             selectedRowKeys: selectedRows.map(item => item.id),
             type: 'radio',

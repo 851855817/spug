@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button, Tooltip, message } from 'antd';
-import { MonitorOutlined } from '@ant-design/icons';
+import { LineChartOutlined } from '@ant-design/icons';
 import { hasPermission } from 'libs';
 import { useResourceMonitorContext } from './ResourceMonitorSwitch';
 import ResourceMonitorDetail from './ResourceMonitorDetail';
@@ -17,7 +17,7 @@ export default function ResourceMonitorButton({id, name}) {
   }
   return <>
     <Tooltip title={source?.enabled ? '查看监控' : '未开启监控'}>
-      <Button type="text" size="small" aria-label={`查看${name || ''}监控`} icon={<MonitorOutlined/>}
+      <Button type="text" size="small" aria-label={`查看${name || ''}监控`} icon={<LineChartOutlined/>}
         style={{color: source?.enabled ? '#2563fc' : '#98a2b3'}} disabled={!monitor?.enabled || !!monitor?.saving[id]}
         onClick={open}/>
     </Tooltip>

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Card, Col, Empty, Input, Modal, Row, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Card, Col, Empty, Input, Modal, Row, Space, Tag, Typography, message } from 'antd';
+import Table from 'components/ResizableTable';
 import { ExportOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { AuthDiv, Breadcrumb } from 'components';
 import ResourceMonitorSwitch, { ResourceMonitorProvider } from 'components/ResourceMonitorSwitch';
@@ -121,7 +122,7 @@ export default function BaotaIndex() {
               {hasPermission('baota.group.manage') ? '先点击左侧“＋”新建分组，再添加宝塔面板。' : '请联系管理员创建分组后再添加面板。'}
             </Typography.Paragraph>}
             <ResourceMonitorProvider kind="panel" revision={monitorRevision} enabled={canView && ready}>
-            <Table rowKey="id" columns={columns} dataSource={rows} loading={loading} scroll={{x: 1500}}
+            <Table resizeKey="pages/baota/index:1" rowKey="id" columns={columns} dataSource={rows} loading={loading} scroll={{x: 1500}}
                    locale={{emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={search ? '没有匹配的面板' : '还没有宝塔面板'}/>}}
                    pagination={{current: page, pageSize, showSizeChanger: true, total: rows.length,
                      showTotal: total => `共 ${total} 个面板`, onChange: (value, size) => { setPage(value); setPageSize(size); }}}/>

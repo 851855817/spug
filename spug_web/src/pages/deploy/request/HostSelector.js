@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { observer } from 'mobx-react';
-import { Modal, Table, Button, Alert, Tag } from 'antd';
+import { Modal, Button, Alert, Tag } from 'antd';
+import Table from 'components/ResizableTable';
 import { t } from 'libs';
 import hostStore from 'pages/host/store';
 
@@ -60,8 +61,7 @@ export default observer(function (props) {
         message={<span>{t('已选择')} <b style={{color: '#2563fc', fontSize: 18}}>{selectedRowKeys.length}</b> {t('台主机')}</span>}
         action={<Button type="link" disabled={selectedRowKeys.length === 0}
                         onClick={() => setSelectedRowKeys([])}>{t('取消选择')}</Button>}/>
-      <Table
-        rowKey="id"
+      <Table resizeKey="pages/deploy/request/HostSelector:1" rowKey="id"
         dataSource={hostStore.records.filter(x => props.app_host_ids.includes(x.id))}
         pagination={false}
         scroll={{y: 480}}

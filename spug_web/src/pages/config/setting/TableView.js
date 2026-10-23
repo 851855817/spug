@@ -5,7 +5,8 @@
  */
 import React from 'react';
 import { observer } from 'mobx-react';
-import { Table, Modal, Tooltip, message } from 'antd';
+import { Modal, Tooltip, message } from 'antd';
+import Table from 'components/ResizableTable';
 import { Action } from 'components';
 import ComForm from './Form';
 import { http, hasPermission, includes, t } from 'libs';
@@ -72,8 +73,7 @@ class TableView extends React.Component {
     if (store.f_name) data = data.filter(x => includes(x.key, store.f_name))
     return (
       <React.Fragment>
-        <Table
-          size="small"
+        <Table resizeKey="pages/config/setting/TableView:1" size="small"
           rowKey="id"
           loading={store.isFetching}
           dataSource={data}

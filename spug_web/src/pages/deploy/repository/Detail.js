@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { observer } from 'mobx-react';
-import { Drawer, Descriptions, Table, Button } from 'antd';
+import { Drawer, Descriptions, Button } from 'antd';
+import Table from 'components/ResizableTable';
 import { AuthDiv } from 'components';
 import { http, t } from 'libs';
 import store from './store';
@@ -59,7 +60,7 @@ export default observer(function (props) {
         <Descriptions.Item label={t('构建人')}>{record.created_by_user}</Descriptions.Item>
       </Descriptions>
       <Descriptions title={<span style={{fontSize: 22}}>{t('发布记录')}</span>} style={{marginTop: 24}}/>
-      <Table rowKey="id" loading={fetching} dataSource={requests} pagination={false}>
+      <Table resizeKey="pages/deploy/repository/Detail:1" rowKey="id" loading={fetching} dataSource={requests} pagination={false}>
         <Table.Column title={t('发布申请')} dataIndex="name"/>
         <Table.Column title={t('主机数量')} dataIndex="host_ids" render={v => t('{}台', v.length)}/>
         <Table.Column title={t('状态')} dataIndex="status_alias"/>
