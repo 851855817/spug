@@ -64,7 +64,20 @@ class RollbackImageTests(ImageTests):
                         self.entrypoint.index('exec supervisord -c /etc/supervisord.conf'))
 
 
+class UploadRollbackImageTests(ImageTests):
+    def test_no_reverse_schema_generation_with_existing_worker_wiring(self):
+        self.assertEqual(self.programs(), ORIGINAL_PROGRAMS | {'spug-panel-worker'})
+        self.assertFalse(self.config['program:spug-panel-worker'].getboolean('autostart'))
+        self.assertFalse(self.config['program:spug-panel-worker'].getboolean('autorestart'))
+        self.assertNotIn('updatedb', self.entrypoint)
+        self.assertNotIn('makemigrations', self.entrypoint)
+        self.assertEqual(self.entrypoint.splitlines().count('python3 manage.py migrate --noinput'), 1)
+        actual = Path('/opt/spug/spug_api/apps/baota/models.py').read_bytes()
+        self.assertEqual(actual, Path('/compat-source/models.py').read_bytes())
+        self.assertIn(b'class PanelUploadResult', actual)
+
+
 if __name__ == '__main__':
-    cases = {'worker': WorkerImageTests, 'rollback': RollbackImageTests}
+    cases = {'worker': WorkerImageTests, 'rollback': RollbackImageTests, 'upload-rollback': UploadRollbackImageTests}
     case = cases[sys.argv.pop(1)]
     unittest.main(defaultTest=case.__name__)

@@ -18,7 +18,7 @@ MAX_CHILDREN = 200
 MAX_JSON_BYTES = 1024 * 1024
 TERMINAL = frozenset(('success', 'failed', 'already', 'skipped', 'cancelled'))
 ACTIVE = frozenset(('preflighting', 'running', 'dispatching', 'reconciling'))
-ACK_CODES = frozenset(('ssl_panel_sync', 'legacy_panel_upgrade', 'php_update_restart'))
+ACK_CODES = frozenset(('ssl_panel_sync', 'legacy_panel_upgrade', 'php_update_restart', 'upload_overwrite'))
 
 
 def now():
@@ -125,6 +125,8 @@ def prepare(user, data, retry_parent=None):
     strict(data, ('operation', 'panel_ids', 'group_ids', 'params', 'params_by_panel'), ('operation',))
     operation = get_operation(data['operation'])
     panels = selected_panels(data)
+    if operation.code == 'file_upload':
+        return prepare_upload(user, data, panels, operation, retry_parent)
     if ('params' in data) == ('params_by_panel' in data):
         raise ValueError('请提供公共参数或每个面板的参数映射之一')
     mapping = data.get('params_by_panel')
@@ -153,6 +155,43 @@ def prepare(user, data, retry_parent=None):
                                if panel.pk in blocked else {}))
             for panel in panels])
         refresh_task(task)
+    return task
+
+
+def prepare_upload(user, data, panels, operation, retry_parent=None):
+    from . import upload_store as store
+    from .models import PanelUploadBinding
+    common, mapping = data.get('params', {}), data.get('params_by_panel', {})
+    strict(common, ('bundle_id', 'target_dir'), ('bundle_id',))
+    common_dir = common.get('target_dir', '')
+    if not isinstance(common_dir, str):
+        raise ValueError('统一目标目录无效')
+    if common_dir.strip():
+        store.absolute_directory(common_dir.strip())
+    ids = {str(panel.pk) for panel in panels}
+    if not isinstance(mapping, dict) or not set(mapping).issubset(ids):
+        raise ValueError('单独参数包含未选择的面板')
+    clean = {}
+    for panel in panels:
+        override = mapping.get(str(panel.pk), {})
+        strict(override, ('target_dir',))
+        individual = override.get('target_dir')
+        try:
+            directory = store.effective_directory(common_dir, individual)
+        except ValueError:
+            raise ValueError('面板“' + panel.name + '”的目标目录缺失或无效') from None
+        clean[str(panel.pk)] = operation.validate({'bundle_id': common['bundle_id'], 'target_dir': directory,
+            'directory_source': 'individual' if isinstance(individual, str) and individual.strip() else 'common'})
+    with transaction.atomic():
+        # Discard/cleanup also locks this row, so a sealed source cannot expire
+        # between ownership validation and binding it to the durable task.
+        bundle = store.owned_bundle(user, common['bundle_id'], sealed=True, lock=True)
+        task = PanelTask.objects.create(operation=operation.code, owner=user, params_by_panel=bounded(clean),
+            retry_parent=retry_parent, audit=[{'action': 'prepare', 'actor_id': user.pk, 'at': now()}])
+        for panel in panels:
+            target = PanelTaskTarget.objects.create(task=task, panel=panel, panel_snapshot=safe_panel(panel),
+                                                   params=clean[str(panel.pk)])
+            PanelUploadBinding.objects.create(target=target, bundle=bundle)
     return task
 
 
@@ -245,6 +284,18 @@ def cancel(user, task_id):
         task.cancel_requested = True
         task.save(update_fields=['cancel_requested', 'updated_at'])
         for target in task.targets.select_for_update():
+            if task.operation == 'file_upload':
+                from . import upload_runner as uploads
+                uploads.cancel_unsent(target)
+                if target.state in ACTIVE:
+                    target.summary = {**target.summary, 'upload': uploads.summary(target)}
+                    target.save(update_fields=['summary', 'updated_at'])
+                elif target.children:
+                    uploads.sync(target)
+                else:
+                    target.state = 'cancelled'
+                    target.save(update_fields=['state', 'updated_at'])
+                continue
             for child in target.children:
                 if child['state'] == 'ready' and not child['intents']:
                     child['state'] = 'cancelled'
@@ -287,6 +338,10 @@ def resolve(user, task_id, data):
         target = task.targets.select_for_update().get(pk=positive_id(data['target_id']))
         if target.state in ACTIVE:
             raise ValueError('调用仍在执行，不能人工覆盖')
+        if task.operation == 'file_upload':
+            from .upload_runner import resolve_file
+            resolve_file(user, task, target, data)
+            return task
         child = next((c for c in target.children if c['snapshot']['key'] == data['child_key']), None)
         if not child or child['state'] not in ('remote', 'uncertain'):
             raise ValueError('仅可处理待确认或不确定子项')
@@ -303,6 +358,13 @@ def resolve(user, task_id, data):
 
 def retry(user, task_id):
     source = owned(user, task_id, 'create')
+    if source.operation == 'file_upload':
+        values = source.params_by_panel
+        return prepare(user, {'operation': source.operation,
+            'panel_ids': list(source.targets.values_list('panel_id', flat=True)),
+            'params': {'bundle_id': next(iter(values.values()))['bundle_id'], 'target_dir': ''},
+            'params_by_panel': {key: {'target_dir': value['target_dir']} for key, value in values.items()}},
+            retry_parent=source)
     return prepare(user, {'operation': source.operation,
                          'panel_ids': list(source.targets.values_list('panel_id', flat=True)),
                          'params_by_panel': source.params_by_panel}, retry_parent=source)

@@ -9,7 +9,7 @@ from django.views import View
 
 from libs import json_response
 from .client import PanelClient
-from .models import Panel, PanelGroup
+from .models import Panel, PanelGroup, PanelTaskTarget
 from .operations import operation_descriptors
 from .resources import get_resource
 from .validation import parse_body, positive_id
@@ -86,14 +86,35 @@ def read_permission(user):
 class TaskOptionsView(TaskBaseView):
     def get(self, request):
         read_permission(request.user)
+        from .upload_store import limits
         return json_response({'panels': [s.safe_panel(p) for p in Panel.objects.select_related('group').order_by('id')],
                               'groups': [g.to_view() for g in PanelGroup.objects.all()],
                               'operations': operation_descriptors(),
                               'limits': {'panels': s.MAX_PANELS, 'children': s.MAX_CHILDREN, 'parallel': 2},
+                              'upload_limits': limits(),
                               'acknowledgements': {
                                   'ssl_panel_sync': '宝塔会自动同步同域名证书至面板内其他符合条件的位置（包括未选网站、孤立副本和面板 TLS），并可能重载 Web 服务；续签还可能临时调整强制 HTTPS。冻结清单不完整。',
                                   'legacy_panel_upgrade': '确认按宝塔官方稳定通道升级：9.2 接口由后台决定实际版本，无法锁定预检候选；升级期间面板会暂时断开，结果需重新连接核实。',
-                                  'php_update_restart': '确认在当前 PHP 分支内执行官方更新：补丁由在线官方脚本决定，预检目标是预计值；相关 PHP 服务可能重启，使用此分支的网站可能暂时中断，结果需核实。'}})
+                                  'php_update_restart': '确认在当前 PHP 分支内执行官方更新：补丁由在线官方脚本决定，预检目标是预计值；相关 PHP 服务可能重启，使用此分支的网站可能暂时中断，结果需核实。',
+                                  'upload_overwrite': '确认覆盖最终目标目录内本次清单的同名文件；无法自动回滚，上传期间文件可能短暂不完整。'}})
+
+
+class UploadResultsView(TaskBaseView):
+    def get(self, request, target_id):
+        s.strict(request.GET, ('page', 'page_size'))
+        page, size = positive_id(request.GET.get('page', 1)), positive_id(request.GET.get('page_size', 20))
+        if page > 100000 or size > 100:
+            raise ValueError('分页范围无效')
+        target = PanelTaskTarget.objects.get(pk=positive_id(target_id))
+        s.owned(request.user, target.task_id, 'view')
+        if target.task.operation != 'file_upload':
+            raise ValueError('该任务不是上传任务')
+        rows = target.upload_files.select_related('source').order_by('source_id')
+        return json_response(s.safe_tree({'total': rows.count(), 'page': page, 'page_size': size,
+            'items': [{'id': row.pk, 'source_id': row.source_id, 'relative_path': row.source.relative_path,
+                'size': row.source.size, 'sha256': row.source.sha256, 'state': row.state,
+                'message': row.message, 'before': row.before, 'result': row.result}
+                for row in rows[(page-1)*size:page*size]]}))
 
 
 class TaskResourcesView(TaskBaseView):

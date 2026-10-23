@@ -60,6 +60,12 @@ jobs:
           docker run --rm --network none --read-only --memory 128m --pids-limit 32 \
             -v "$GITHUB_WORKSPACE/deploy/baota/test_image.py:/test_image.py:ro" \
             --entrypoint python3 baota-worker-ci /test_image.py worker
+          docker build --network none --build-arg ROLLBACK_IMAGE=baota-worker-ci \
+            -f "$baota_context/deploy/baota/upload-rollback.Dockerfile" -t baota-upload-rollback-ci "$baota_context"
+          docker run --rm --network none --read-only --memory 128m --pids-limit 32 \
+            -v "$GITHUB_WORKSPACE/deploy/baota/test_image.py:/test_image.py:ro" \
+            -v "$GITHUB_WORKSPACE/spug_api/apps/baota:/compat-source:ro" \
+            --entrypoint python3 baota-upload-rollback-ci /test_image.py upload-rollback
       - name: Check guarded rollback patch on fixed upstream runtime
         run: |
           baota_context="$RUNNER_TEMP/baota-image-context"
@@ -116,7 +122,7 @@ jobs:
             -e BAOTA_CI_DB_HOST=baota-ci-db -e BAOTA_CI_DB_PASSWORD=disposable-ci-password \
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test apps.baota.test_tasks --settings=spug.baota_ci_settings --noinput
+            manage.py test apps.baota.test_tasks apps.baota.test_upload_store apps.baota.test_upload_tasks --settings=spug.baota_ci_settings --noinput
       - name: Remove disposable database
         if: always()
         run: |

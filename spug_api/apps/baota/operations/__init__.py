@@ -4,11 +4,12 @@ from .sites import AddSite, Basedir, Rewrite
 from .software import InstallPHPExtension, InstallSoftware, UninstallSoftware
 from .upgrade import UpgradePanel
 from .php_update import UpdatePHP
+from .uploads import FileUpload
 
 
 OPERATIONS = {operation.code: operation for operation in (
     UpgradePanel(), AddSite(), Basedir(), Rewrite(), ApplyCertificate(), RenewCertificate(),
-    InstallSoftware(), InstallPHPExtension(), UninstallSoftware(), UpdatePHP())}
+    InstallSoftware(), InstallPHPExtension(), UninstallSoftware(), UpdatePHP(), FileUpload())}
 
 
 def get_operation(code):

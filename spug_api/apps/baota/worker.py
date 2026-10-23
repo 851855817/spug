@@ -55,6 +55,16 @@ class StopAwareClient:
             raise WorkerStopping()
         return self.client.read_site_public_certificate(*args, **kwargs)
 
+    def upload_file(self, *args, **kwargs):
+        if self.stop_event.is_set():
+            raise WorkerStopping()
+        return self.client.upload_file(*args, **kwargs)
+
+    def file_sha256(self, *args, **kwargs):
+        if self.stop_event.is_set():
+            raise WorkerStopping()
+        return self.client.file_sha256(*args, **kwargs)
+
     def __getattr__(self, name):
         return getattr(self.client, name)
 
@@ -84,6 +94,9 @@ def recover_interrupted():
             if target.state == 'preflighting':
                 target.state = 'cancelled' if task.cancel_requested else 'preflight_queued'
                 target.save(update_fields=['state', 'updated_at'])
+            elif task.operation == 'file_upload':
+                from .upload_runner import recover
+                recover(target)
             else:
                 for child in target.children:
                     if child['state'] in ('dispatching', 'remote', 'reconciling'):
@@ -160,6 +173,9 @@ class PanelWorker:
 
     def process_target(self, target_id):
         target = PanelTaskTarget.objects.select_related('task', 'panel').get(pk=target_id)
+        if target.task.operation == 'file_upload':
+            from .upload_runner import process
+            return process(self, target)
         if target.state == 'preflighting':
             self.preflight(target)
             return
@@ -375,10 +391,15 @@ class PanelWorker:
             connection.close()
 
     def run(self):
+        from .upload_store import cleanup_expired
+        next_cleanup = 0
         # SQLite's in-memory connection cannot be shared safely by this queue's
         # coordinator and worker threads; production uses MariaDB.
         if connection.vendor == 'sqlite':
             while not self.stop_event.is_set():
+                if time.monotonic() >= next_cleanup:
+                    cleanup_expired()
+                    next_cleanup = time.monotonic() + 3600
                 if not self.run_once():
                     self.stop_event.wait(0.5)
             return
@@ -386,6 +407,9 @@ class PanelWorker:
         failed = False
         with ThreadPoolExecutor(max_workers=self.max_parallel) as pool:
             while not self.stop_event.is_set() or futures:
+                if not self.stop_event.is_set() and time.monotonic() >= next_cleanup:
+                    cleanup_expired()
+                    next_cleanup = time.monotonic() + 3600
                 for future, target_id in list(futures.items()):
                     if future.done():
                         self.inflight.discard(target_id)

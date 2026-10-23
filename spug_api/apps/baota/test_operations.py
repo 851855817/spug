@@ -191,10 +191,10 @@ class OperationTests(TestCase):
 
     def mutations(self): return [c for c in self.client.calls if c[3]]
 
-    def test_registry_has_ten_codes_nine_categories(self):
+    def test_registry_has_eleven_codes_ten_categories(self):
         self.assertIsNotNone(self.api, 'Controlled operation adapters must exist')
-        self.assertEqual(len(self.api.OPERATIONS), 10)
-        self.assertEqual(len({v.category for v in self.api.OPERATIONS.values()}), 9)
+        self.assertEqual(len(self.api.OPERATIONS), 11)
+        self.assertEqual(len({v.category for v in self.api.OPERATIONS.values()}), 10)
         with self.assertRaises(ValueError): self.api.get_operation('shell')
 
     def test_validation_rejects_unknown_fields_and_shell_tokens(self):
