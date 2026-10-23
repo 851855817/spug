@@ -1,0 +1,53 @@
+{
+  "bundle_sha256": "099b7f8a56395d9fa445b5089f6f0a4aaa49626fe17e7dd9b1363f8d21555b33",
+  "owner_id": 1,
+  "created": [
+    {
+      "id": 13,
+      "name": "Shell·系统版本与运行时间",
+      "sha256": "0c06ac4191f4a64b297ab8ce51b2fb7138e0c0c4252c4748605188310b3facc4"
+    },
+    {
+      "id": 14,
+      "name": "Shell·CPU负载与内存",
+      "sha256": "4f6cb20261bceac9ad5020ce47b99c416725b6e7df0c10b59a5562a35e1bf1eb"
+    },
+    {
+      "id": 15,
+      "name": "Shell·磁盘空间与Inode",
+      "sha256": "eda1452d7f4d616f233902823be7dbdd8663c261c0736df0fc7c4bf3e775e5e6"
+    },
+    {
+      "id": 16,
+      "name": "Shell·进程资源TOP20",
+      "sha256": "a3fa11fbf0a75d63407a21d789361b302798de9f3bfb990b515e6ab1914fbe5b"
+    },
+    {
+      "id": 17,
+      "name": "Shell·TCP与UDP监听端口",
+      "sha256": "d292d3753e9b71da4b875b8b0a53c5b22c4b90251cd52f173a394e1bbae7f744"
+    },
+    {
+      "id": 18,
+      "name": "Shell·失败的系统服务",
+      "sha256": "f8473f5a190394e78ce25a315a631cfb217f63838971ca9941c429172ca8b706"
+    },
+    {
+      "id": 19,
+      "name": "Shell·宝塔PHP CLI版本",
+      "sha256": "65b30fac7a683d0975667f84669ea196f3f88a742d27b5cb320e0cc6de561ae3"
+    },
+    {
+      "id": 20,
+      "name": "Shell·PHP-FPM进程",
+      "sha256": "92e5e618a3774a96d963d8438ac597c5d26d0a233f77da72708683208e8b2c6c"
+    }
+  ],
+  "templates_before": 12,
+  "histories_before": 2,
+  "skipped": [],
+  "backup_file": "/data/spug/backups/inspection-templates/20261023T065902189913Z-before.json",
+  "templates_after": 20,
+  "histories_after": 2,
+  "executed_by_importer": false
+}
