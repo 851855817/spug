@@ -6,12 +6,15 @@ import json
 import math
 import os
 import re
+import secrets
 import socket
 import ssl
+import stat
 import tempfile
 import time
+import unicodedata
 from contextvars import ContextVar
-from urllib.parse import urlsplit
+from urllib.parse import unquote_to_bytes, urlsplit
 
 import requests
 from cryptography import x509
@@ -19,7 +22,7 @@ from cryptography.hazmat.primitives import hashes
 from requests.adapters import HTTPAdapter
 from urllib3.connection import HTTPConnection, HTTPSConnection
 from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
-from urllib3.exceptions import ReadTimeoutError
+from urllib3.exceptions import HTTPError as Urllib3HTTPError, ReadTimeoutError
 
 from .security import SecretError
 from .validation import api_base_url, api_configuration
@@ -27,6 +30,8 @@ from .validation import api_base_url, api_configuration
 
 DEFAULT_TIMEOUT = (5, 20)
 MAX_RESPONSE_BYTES = 1024 * 1024
+MAX_FILE_BYTES = 20 * 1024 * 1024
+FILE_CHUNK_BYTES = 8192
 RESERVED_PARAMS = frozenset(('request_time', 'request_token', 'action'))
 _request_deadline = ContextVar('baota_request_deadline', default=None)
 
@@ -94,6 +99,18 @@ class _DeadlineConnectionMixin:
         if deadline is not None:
             deadline.remaining()  # Do not send a signature after a slow connect consumed the budget.
 
+    def send(self, data):
+        deadline = _request_deadline.get()
+        if deadline is not None:
+            if self.sock is None and self.auto_open:
+                self.connect()
+            remaining = deadline.remaining()
+            if self.sock is not None:
+                # urllib3 sends each body chunk separately. Refresh the remaining budget
+                # for headers and every sendall, including pooled keep-alive sockets.
+                self.sock.settimeout(min(self.timeout, remaining) if self.timeout else remaining)
+        return super().send(data)
+
 
 class _DeadlineHTTPConnection(_DeadlineConnectionMixin, HTTPConnection):
     pass
@@ -147,6 +164,125 @@ def _timeout(value):
                              or not math.isfinite(v) or v <= 0 for v in pair) or not math.isfinite(sum(pair)):
         raise PanelAPIError('面板请求超时配置无效')
     return tuple(pair)
+
+
+def _file_limit(maximum):
+    if isinstance(maximum, bool) or not isinstance(maximum, int) or not 0 < maximum <= MAX_FILE_BYTES:
+        raise PanelAPIError('文件传输大小限制无效')
+    return maximum
+
+
+def _contains_timeout(error):
+    # Requests wraps a blocked send as ConnectionError(ProtocolError(..., TimeoutError)).
+    pending, seen = [error], set()
+    while pending:
+        current = pending.pop()
+        if id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, (socket.timeout, requests.exceptions.Timeout, ReadTimeoutError)):
+            return True
+        pending.extend(arg for arg in current.args if isinstance(arg, BaseException))
+    return False
+
+
+def _file_component(value):
+    if (not isinstance(value, str) or not value or value in ('.', '..')
+            or any(character in '/\\&|' or unicodedata.category(character) in ('Cc', 'Cf', 'Cs')
+                   for character in value) or len(value.encode('utf-8')) > 255):
+        raise PanelAPIError('文件名格式无效')
+    return value
+
+
+def _file_path(value, *, directory=False):
+    # /download html.unescape()s its filename and splits on '|'. Never allow
+    # either aliasing mechanism, nor dot components or alternate separators.
+    if (not isinstance(value, str) or not value.startswith('/') or len(value) > 4096
+            or value == '/' and not directory):
+        raise PanelAPIError('文件绝对路径格式无效')
+    if value != '/':
+        for component in value[1:].split('/'):
+            _file_component(component)
+    if len(value.encode('utf-8')) > 4096:
+        raise PanelAPIError('文件绝对路径格式无效')
+    return value
+
+
+class _MultipartFile:
+    """Known-length multipart body; only framing and one small file chunk live in memory."""
+    def __init__(self, directory, filename, stream, signature, maximum):
+        try:
+            if not isinstance(stream, io.BytesIO) and not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                raise ValueError()
+            if not stream.seekable():
+                raise ValueError()
+            position = stream.tell()
+            try:
+                end = stream.seek(0, os.SEEK_END)
+            finally:
+                stream.seek(position)
+            if not 0 <= position <= end or end - position > maximum:
+                raise ValueError()
+            if not isinstance(stream.read(0), bytes):
+                raise ValueError()
+        except (AttributeError, OSError, TypeError, ValueError):
+            raise PanelAPIError('上传文件不可读取或超出大小限制') from None
+        self.stream, self.remaining = stream, end - position
+        self.boundary = secrets.token_hex(24)
+        prefix = bytearray()
+        for name, value in {'action': 'UploadFile', 'path': directory, **signature}.items():
+            prefix.extend(('--' + self.boundary + '\r\nContent-Disposition: form-data; name="'
+                           + name + '"\r\n\r\n' + value + '\r\n').encode('utf-8'))
+        escaped = filename.replace('"', '\\"')
+        prefix.extend(('--' + self.boundary + '\r\nContent-Disposition: form-data; name="zunfile"; '
+                       + 'filename="' + escaped + '"\r\nContent-Type: application/octet-stream\r\n\r\n').encode('utf-8'))
+        suffix = ('\r\n--' + self.boundary + '--\r\n').encode('ascii')
+        self.prefix, self.suffix = io.BytesIO(prefix), io.BytesIO(suffix)
+        self.length = len(prefix) + self.remaining + len(suffix)
+
+    def __len__(self):
+        return self.length
+
+    def read(self, size=-1):
+        size = min(size, FILE_CHUNK_BYTES) if size >= 0 else FILE_CHUNK_BYTES
+        result = bytearray(self.prefix.read(size))
+        if len(result) < size and self.remaining:
+            count = min(size - len(result), self.remaining)
+            chunk = self.stream.read(count)
+            if not isinstance(chunk, bytes) or not chunk or len(chunk) > count:
+                raise OSError('Upload source changed or is not binary')
+            self.remaining -= len(chunk)
+            result.extend(chunk)
+        if len(result) < size and not self.remaining:
+            result.extend(self.suffix.read(size - len(result)))
+        return bytes(result)
+
+
+def _download_disposition(disposition, expected):
+    """Accept one attachment basename, including Werkzeug's Unicode fallback + filename*."""
+    match = re.match(r'attachment(?=\s*;)', disposition, re.I)
+    if not match or re.search(r'[\x00-\x1f\x7f-\x9f]', disposition):
+        return False
+    rest, values = disposition[match.end():], {}
+    parameter = re.compile(r'\s*;\s*(filename\*?)\s*=\s*(?:"((?:[^"\\]|\\["\\])*)"|([^;\s]+))\s*', re.I)
+    while rest:
+        match = parameter.match(rest)
+        if not match or match.group(1).lower() in values:
+            return False
+        name = match.group(1).lower()
+        value = re.sub(r'\\(["\\])', r'\1', match.group(2)) if match.group(2) is not None else match.group(3)
+        values[name], rest = value, rest[match.end():]
+    if 'filename*' in values:
+        encoded = values['filename*']
+        if not encoded.lower().startswith("utf-8''") or re.search(r'%(?![a-fA-F0-9]{2})', encoded):
+            return False
+        try:
+            name = unquote_to_bytes(encoded[7:]).decode('utf-8')
+        except (UnicodeError, ValueError):
+            return False
+        fallback = unicodedata.normalize('NFKD', expected).encode('ascii', 'ignore').decode('ascii')
+        return name == expected and ('filename' not in values or values['filename'] in (expected, fallback))
+    return values.get('filename') == expected
 
 
 class PanelClient:
@@ -267,6 +403,114 @@ class PanelClient:
             if time.monotonic() >= deadline.expires_at:
                 raise PanelAPIError('面板 API 请求超时', uncertain=mutating) from None
             raise PanelAPIError('无法连接面板 API，请检查地址和网络', uncertain=mutating) from None
+        finally:
+            try:
+                if response is not None:
+                    response.close()
+            finally:
+                _request_deadline.reset(deadline_token)
+
+    def _file_signature(self):
+        request_time = str(int(time.time()))
+        return {'request_time': request_time, 'request_token': hashlib.md5(
+            (request_time + hashlib.md5(self._key.encode('utf-8')).hexdigest()).encode('ascii')).hexdigest()}
+
+    def upload_file(self, directory, filename, stream, *, maximum=MAX_FILE_BYTES, timeout=None):
+        """One bounded signed UploadFile request; caller retains ownership of the source stream.
+
+        Reads from its current position without buffering the file or rewinding after sending.
+        Any failure after starting the request is uncertain: the panel may have written bytes.
+        """
+        if self._closed:
+            raise PanelAPIError('面板连接已关闭')
+        directory, filename = _file_path(directory, directory=True), _file_component(filename)
+        timeout, maximum = _timeout(timeout), _file_limit(maximum)
+        multipart = _MultipartFile(directory, filename, stream, self._file_signature(), maximum)
+        deadline = _RequestDeadline(timeout)
+        deadline_token = _request_deadline.set(deadline)
+        response = None
+        try:
+            response = self.session.post(self.base_url + '/files', data=multipart,
+                                         headers={'Content-Type': 'multipart/form-data; boundary=' + multipart.boundary},
+                                         timeout=timeout, allow_redirects=False, verify=self.verify, stream=True)
+            if 300 <= response.status_code < 400:
+                raise PanelAPIError('面板上传返回重定向，请检查 API 地址', uncertain=True)
+            if response.status_code != 200:
+                raise PanelAPIError('面板文件上传 HTTP 请求失败', uncertain=True)
+            length = response.headers.get('Content-Length', '')
+            if length.isdigit() and int(length) > MAX_RESPONSE_BYTES:
+                raise PanelAPIError('面板上传响应过大', uncertain=True)
+            body = bytearray()
+            for chunk in response.iter_content(chunk_size=FILE_CHUNK_BYTES):
+                body.extend(chunk)
+                if len(body) > MAX_RESPONSE_BYTES:
+                    raise PanelAPIError('面板上传响应过大', uncertain=True)
+            try:
+                result = json.loads(body)
+            except (ValueError, UnicodeError, RecursionError):
+                raise PanelAPIError('面板上传响应格式错误', uncertain=True) from None
+            if not isinstance(result, dict) or result.get('status') is not True:
+                raise PanelAPIError('面板未确认文件上传成功', uncertain=True)
+            deadline.remaining()
+            return result
+        except PanelAPIError:
+            raise
+        except requests.exceptions.SSLError:
+            raise PanelAPIError('面板 HTTPS 证书验证失败，请检查 CA 或固定指纹', uncertain=True) from None
+        except (requests.exceptions.Timeout, socket.timeout):
+            raise PanelAPIError('面板文件上传超时', uncertain=True) from None
+        except (requests.exceptions.RequestException, OSError, ValueError) as exc:
+            if time.monotonic() >= deadline.expires_at or _contains_timeout(exc):
+                raise PanelAPIError('面板文件上传超时', uncertain=True) from None
+            raise PanelAPIError('面板文件上传连接失败，请核对 API 和文件状态', uncertain=True) from None
+        finally:
+            try:
+                if response is not None:
+                    response.close()
+            finally:
+                _request_deadline.reset(deadline_token)
+
+    def file_sha256(self, filename, maximum, *, timeout=None):
+        """Hash one canonical file through signed readonly /download; never return its contents."""
+        if self._closed:
+            raise PanelAPIError('面板连接已关闭')
+        filename = _file_path(filename)
+        maximum, timeout = _file_limit(maximum), _timeout(timeout)
+        expected = filename.rsplit('/', 1)[1]
+        image_types = {'.png': {'image/png'}, '.gif': {'image/gif'},
+                       '.jpg': {'image/jpeg', 'image/jpg'}, '.jpeg': {'image/jpeg', 'image/jpg'}}
+        allowed_types = {'application/octet-stream'} | image_types.get(os.path.splitext(expected)[1].lower(), set())
+        deadline = _RequestDeadline(timeout)
+        deadline_token = _request_deadline.set(deadline)
+        response = None
+        try:
+            response = self.session.get(self.base_url + '/download', params={'filename': filename},
+                                        data=self._file_signature(), headers={'Accept-Encoding': 'identity'},
+                                        timeout=timeout, allow_redirects=False, verify=self.verify, stream=True)
+            content_type = response.headers.get('Content-Type', '').split(';', 1)[0].strip().lower()
+            if (response.status_code != 200 or content_type not in allowed_types
+                    or response.headers.get('Content-Encoding', 'identity').lower() != 'identity'
+                    or not _download_disposition(response.headers.get('Content-Disposition', ''), expected)):
+                raise PanelAPIError('文件只读下载失败或返回格式无效')
+            length = response.headers.get('Content-Length', '')
+            if length.isdigit() and int(length) > maximum:
+                raise PanelAPIError('文件超出校验大小限制')
+            digest, size = hashlib.sha256(), 0
+            while True:
+                deadline.remaining()
+                chunk = response.raw.read(min(FILE_CHUNK_BYTES, maximum - size + 1), decode_content=False)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > maximum:
+                    raise PanelAPIError('文件超出校验大小限制')
+                digest.update(chunk)
+            deadline.remaining()
+            return {'sha256': digest.hexdigest(), 'size': size}
+        except PanelAPIError:
+            raise
+        except (requests.exceptions.RequestException, OSError, ValueError, Urllib3HTTPError):
+            raise PanelAPIError('文件只读校验失败，请核对 API 和文件状态') from None
         finally:
             try:
                 if response is not None:
