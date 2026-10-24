@@ -24,6 +24,10 @@ class ImageTests(unittest.TestCase):
         self.assertIn('inventory.models import', (root / 'models.py').read_text())
         for name in ('__init__.py', 'models.py', 'readers.py', 'worker.py', 'service.py'):
             self.assertTrue((root / 'inventory' / name).is_file(), 'Missing inventory package: ' + name)
+        # The pre-task rollback predates resource monitoring too. Current
+        # baota.models imports both packages during Django model discovery.
+        for name in ('__init__.py', 'models.py'):
+            self.assertTrue((root / 'resource_monitor' / name).is_file(), 'Missing monitor model: ' + name)
 
     def test_persistent_key_wrapper_is_preserved(self):
         wrapper = Path('/baota-entrypoint.sh').read_text()

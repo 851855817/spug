@@ -12,3 +12,4 @@ RUN test -x /baota-entrypoint.sh \
 RUN python3 -c "import configparser; from pathlib import Path; p=Path('/etc/supervisord.conf'); c=configparser.ConfigParser(interpolation=None); c.read(p); names=('program:spug-panel-worker','program:spug-ops-worker'); assert all(c[n].getboolean('autostart') and c[n].getboolean('autorestart') for n in names); [(c.set(n,k,'false')) for n in names for k in ('autostart','autorestart')]; f=p.open('w'); c.write(f); f.close()"
 COPY spug_api/apps/baota/models.py /opt/spug/spug_api/apps/baota/models.py
 COPY spug_api/apps/baota/inventory/ /opt/spug/spug_api/apps/baota/inventory/
+COPY spug_api/apps/baota/resource_monitor/__init__.py spug_api/apps/baota/resource_monitor/models.py /opt/spug/spug_api/apps/baota/resource_monitor/
