@@ -44,4 +44,4 @@
 - 恢复静态入口：从上面的两份编号目录，将 `index.html`、`asset-manifest.json`、`ui-release.json` 分别还原到 `/opt/spug/spug_web/build` 与 `/data/spug/spug_web/build`。
 - 恢复宿主机备份的 Compose 文件，使未来重建回到此前镜像；**不执行容器重建或数据还原**。
 
-完整使用说明见 [平台健康指南](platform-health-guide.md)。本次交付只包含平台健康阶段，巡检汇总、分批执行和配置差异功能尚未实现。
+完整使用说明见 [平台健康指南](platform-health-guide.md)。本文保留第一阶段 `a8af512` 的历史发布结果。后续版本 `2a2eb36` 已交付巡检汇总、分批执行和配置差异，健康检查扩展至 15 项；当前发布与回退资料见 [运维增强发布记录](operations-center-deployment-2026-10-24.md)。
