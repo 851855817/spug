@@ -173,3 +173,4 @@ class PanelUploadQuota(models.Model):
 # Additive monitor tables remain in this app's model registry for updatedb.
 from .resource_monitor.models import (ResourceMonitorPreference, ResourceMonitorSnapshot,
                                       ResourceMonitorLease)  # noqa: E402,F401
+from .inventory.models import PanelInventorySnapshot, PanelInventoryLease  # noqa: E402,F401

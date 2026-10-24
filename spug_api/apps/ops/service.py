@@ -102,6 +102,8 @@ def run_view(run, detail=True):
     targets = list(run.targets.all())
     counts = {state: sum(x.state == state for x in targets) for state in STATES}
     counts['total'] = len(targets)
+    counts['warning_checks'] = sum(check.get('status') == 'warning' for target in targets for check in target.checks)
+    counts['unknown_checks'] = sum(check.get('status') == 'unknown' for target in targets for check in target.checks)
     response = {'id': run.id, 'job': run.job, 'job_name': run.job_name, 'version': run.version,
                 'params': run.params, 'state': run.state, 'batch_size': run.batch_size,
                 'failure_threshold': run.failure_threshold, 'batch_done': run.batch_done,

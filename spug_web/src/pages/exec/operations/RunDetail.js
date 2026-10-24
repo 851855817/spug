@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Input, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
 import Table from 'components/ResizableTable';
 import { hasPermission, http } from 'libs';
-import { ACTIVE_STATES, CATEGORY_LABELS, CHECK_LABELS, DIFF_LABELS, RUN_LABELS, TARGET_LABELS, displayValue, downloadReport, hostName } from './helpers';
+import { ACTIVE_STATES, CATEGORY_LABELS, CHECK_LABELS, DIFF_LABELS, RUN_LABELS, TARGET_LABELS, displayValue, downloadReport, failureHint, hostName, needsAttention, resultIssues, resultSummary } from './helpers';
 
 const POLL_INTERVAL = 5000;
 const MAX_POLLS = 60;
@@ -34,6 +34,7 @@ export default function RunDetail({runId}) {
   const [pollStopped, setPollStopped] = useState(false);
   const [stateFilter, setStateFilter] = useState();
   const [categoryFilter, setCategoryFilter] = useState();
+  const [attentionOnly, setAttentionOnly] = useState(false);
   const [baselines, setBaselines] = useState([]);
   const [baselineError, setBaselineError] = useState(false);
   const [baselineLoading, setBaselineLoading] = useState(false);
@@ -181,13 +182,17 @@ export default function RunDetail({runId}) {
   if (!run) return <Card title={`作业 #${runId}`}>{error ? <Alert type="error" message="作业读取失败。"/> : <Spin/>}<Button onClick={refresh} loading={loading}>刷新详情</Button></Card>;
   const targets = run.targets || [];
   const counts = run.counts || {};
-  const visibleTargets = targets.filter(target => (!stateFilter || target.state === stateFilter) && (!categoryFilter || target.category === categoryFilter));
+  const attentionTargets = targets.filter(needsAttention);
+  const visibleTargets = targets.filter(target => (!attentionOnly || needsAttention(target)) && (!stateFilter || target.state === stateFilter) && (!categoryFilter || target.category === categoryFilter));
   const successTargets = targets.filter(target => target.state === 'success');
   const compatibleBaselines = baselines.filter(item => compatibleBaseline(item, run));
   const busy = Boolean(action);
-  const warnings = targets.flatMap(target => target.checks || []).filter(check => check.status === 'warning').length;
-  const unknownChecks = targets.flatMap(target => target.checks || []).filter(check => check.status === 'unknown').length;
+  const warnings = targets.reduce((total, target) => total + resultIssues(target).warnings.length, 0);
+  const unknownChecks = targets.reduce((total, target) => total + resultIssues(target).unknowns.length, 0);
   return <Card title={`作业 #${run.id} · ${run.job_name || run.job} · v${run.version}`}>
+    <Alert showIcon type={attentionTargets.length ? 'warning' : 'info'} style={{marginBottom: 16}}
+      message={`需处理 ${attentionTargets.length} 台 · 采集失败 ${targets.filter(target => target.state === 'failed').length} 台 · 中断待核实 ${targets.filter(target => target.state === 'unknown').length} 台 · 指标异常 ${warnings} 项 · 指标未知 ${unknownChecks} 项`}
+      description="采集成功仅表示取得结果，不代表主机健康。请核对下方逐台检查摘要，展开查看检查项；未执行和未知结果不能判定正常。"/>
     <Space wrap style={{marginBottom: 16}}>
       <State value={run.state} labels={RUN_LABELS}/>
       <Button loading={loading} disabled={busy} onClick={() => {pollCount.current = 0; setPollStopped(false); setPollRevision(value => value + 1); refresh();}}>刷新详情</Button>
@@ -203,16 +208,19 @@ export default function RunDetail({runId}) {
       <strong>共 {counts.total ?? targets.length} 台</strong>
       {Object.entries(TARGET_LABELS).map(([state, label]) => <span key={state}>{label} {counts[state] || 0}</span>)}
     </Space>
-    <Typography.Paragraph>指标需关注 {warnings} 项 · 指标未知 {unknownChecks} 项。采集成功仅表示取得结果，请同时核对指标状态。</Typography.Paragraph>
     <Space wrap style={{marginBottom: 16}}>
+      <Button type={attentionOnly ? 'primary' : 'default'} aria-pressed={attentionOnly} onClick={() => setAttentionOnly(value => !value)}>只看需处理</Button>
       <Select allowClear placeholder="结果状态" style={{width: 190}} value={stateFilter} onChange={setStateFilter} options={Object.entries(TARGET_LABELS).map(([value, label]) => ({value, label}))}/>
       <Select allowClear placeholder="失败分类" style={{width: 190}} value={categoryFilter} onChange={setCategoryFilter} options={Object.entries(CATEGORY_LABELS).map(([value, label]) => ({value, label}))}/>
+      <span>当前显示 {visibleTargets.length} / {targets.length} 台</span>
     </Space>
-    <Table resizeKey="operations-targets" rowKey="id" dataSource={visibleTargets} pagination={false} scroll={{x: 850}} columns={[
+    <Table resizeKey="operations-targets" rowKey="id" dataSource={visibleTargets} pagination={false} scroll={{x: 1420}} columns={[
       {title: '主机', dataIndex: 'host', width: 270, render: hostName},
       {title: '采集状态', dataIndex: 'state', width: 140, render: state => <State value={state} labels={TARGET_LABELS}/>},
+      {title: '检查摘要', key: 'summary', width: 300, render: (_, target) => <Typography.Text type={needsAttention(target) ? 'warning' : undefined}>{resultSummary(target)}</Typography.Text>},
       {title: '失败分类', dataIndex: 'category', width: 170, render: category => category ? CATEGORY_LABELS[category] || '检查异常' : '—'},
       {title: '结果说明', dataIndex: 'message', width: 270, render: (value, target) => value || (target.state === 'success' ? '展开查看结构化检查项' : TARGET_LABELS[target.state])},
+      {title: '处理建议', key: 'hint', width: 270, render: (_, target) => failureHint(target)},
     ]} expandable={{expandedRowRender: target => target.checks?.length ? <Checks checks={target.checks}/> : <Typography.Text type="secondary">尚无可用检查项，不能判定指标正常。</Typography.Text>}}/>
     <Card size="small" title="配置基线与差异" style={{marginTop: 20}}>
       <Typography.Paragraph type="secondary">从成功采集的主机保存不可变基线。仅比较相同作业、版本及参数（含 PHP 分支）；缺失、采集失败与未知字段均需单独核实。</Typography.Paragraph>

@@ -15,6 +15,7 @@ def upload_results(request, target_id):
 
 
 urlpatterns = [
+    path('inventory/', include('apps.baota.inventory.urls')),
     path('monitor/', include('apps.baota.resource_monitor.urls')),
     path('', PanelView.as_view()),
     path('group/', GroupView.as_view()),

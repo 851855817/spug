@@ -9,3 +9,4 @@ RUN test -x /baota-entrypoint.sh \
     && test "$(grep -Fxc 'python3 manage.py migrate --noinput' /entrypoint.sh)" -eq 1 \
     && ! grep -Eq 'updatedb|makemigrations' /entrypoint.sh
 COPY spug_api/apps/baota/models.py spug_api/apps/baota/views.py spug_api/apps/baota/validation.py /opt/spug/spug_api/apps/baota/
+COPY spug_api/apps/baota/inventory/ /opt/spug/spug_api/apps/baota/inventory/

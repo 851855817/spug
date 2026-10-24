@@ -19,6 +19,12 @@ class ImageTests(unittest.TestCase):
         return {section[len('program:'):] for section in self.config.sections()
                 if section.startswith('program:')}
 
+    def test_inventory_model_package_is_present(self):
+        root = Path('/opt/spug/spug_api/apps/baota')
+        self.assertIn('inventory.models import', (root / 'models.py').read_text())
+        for name in ('__init__.py', 'models.py', 'readers.py', 'worker.py', 'service.py'):
+            self.assertTrue((root / 'inventory' / name).is_file(), 'Missing inventory package: ' + name)
+
     def test_persistent_key_wrapper_is_preserved(self):
         wrapper = Path('/baota-entrypoint.sh').read_text()
         self.assertIn("path = Path(os.environ.get('BAOTA_KEY_FILE', '/data/baota.key'))", wrapper)

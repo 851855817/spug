@@ -14,4 +14,4 @@
 - [ ] 集成审查：独立规格及代码审查、全量后端和前端、生产构建、MariaDB互斥测试，修复后补有意义的回归。
 - [ ] 发布：记录当前版本/空闲状态与配对备份；新增迁移、兼容回退镜像、受控API和资产发布，核对业务/密钥摘要，浏览器不向客户下发采集验收，更新指南、发布记录与GitHub PR。
 
-后端命令：`../spug-testenv/Scripts/python.exe manage.py test apps.baota.inventory --settings=spug.test_settings --noinput`（从spug_api使用实际相对路径）。前端：固定Node执行`react-app-rewired test --watchAll=false --runInBand`。每个实现任务先观察行为测试失败，再实现、运行通过；最终不重复无变化的测试。
+后端命令：测试环境 Python 执行 `manage.py test apps.baota.inventory.tests --settings=spug.test_settings --noinput`（工作目录为 spug_api）。前端：固定 Node 执行 `react-app-rewired test --watchAll=false --runInBand`。每个实现任务先观察行为测试失败，再实现、运行通过；最终不重复无变化的测试。

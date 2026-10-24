@@ -7,7 +7,7 @@ import Records from './Records';
 import TaskDetail from './TaskDetail';
 import TaskForm from './TaskForm';
 
-export default function PanelTasks() {
+export default function PanelTasks({location}) {
   const [options, setOptions] = useState(null);
   const [error, setError] = useState('');
   const [taskId, setTaskId] = useState(null);
@@ -29,7 +29,7 @@ export default function PanelTasks() {
       <Tabs activeKey={tab} onChange={setTab}>
         {hasPermission('exec.panel.create') && <Tabs.TabPane key="create" tab="新建面板任务">
           {error ? <Space><Alert type="error" message={error}/><Button onClick={() => setRefresh(value => value + 1)}>重试读取</Button></Space> :
-            options ? <TaskForm options={options} onPrepared={open}/> : <Spin/>}
+            options ? <TaskForm key={location?.search || ''} options={options} initialSearch={location?.search || ''} onPrepared={open}/> : <Spin/>}
         </Tabs.TabPane>}
         <Tabs.TabPane key="records" tab="执行记录"><Records revision={revision} onOpen={open}/></Tabs.TabPane>
         <Tabs.TabPane key="catalog" tab="官方接口目录（只读）"><Catalog/></Tabs.TabPane>

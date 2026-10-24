@@ -6,14 +6,18 @@ import { http, hasPermission } from 'libs';
 import Operations from './index';
 import RunForm from './RunForm';
 import RunDetail from './RunDetail';
+import Records from './Records';
 
-jest.mock('libs', () => ({http: {get: jest.fn(), post: jest.fn()}, hasPermission: jest.fn()}));
+jest.mock('libs', () => ({http: {get: jest.fn(), post: jest.fn()}, hasPermission: jest.fn(), history: {
+  get location() {return global.window.location;},
+  replace: location => global.window.history.replaceState(global.window.history.state, '', `${location.pathname}${location.search}${location.hash}`),
+}}));
 jest.mock('components', () => {
   const React = require('react');
   const Wrapper = ({children}) => <div>{children}</div>;
   return {Breadcrumb: Object.assign(Wrapper, {Item: Wrapper})};
 });
-jest.mock('components/ResizableTable', () => ({columns, dataSource = [], expandable}) => <div>{dataSource.map((row, i) => <section key={row.id || i}>
+jest.mock('components/ResizableTable', () => ({columns, dataSource = [], expandable}) => <div><div>{columns.map((col, i) => <span key={i}>{col.title}</span>)}</div>{dataSource.map((row, i) => <section key={row.id || i}>
   {columns.map((col, j) => <div key={j}>{col.render ? col.render(row[col.dataIndex], row) : row[col.dataIndex]}</div>)}
   {expandable?.expandedRowRender?.(row)}</section>)}</div>);
 jest.mock('antd', () => {
@@ -23,12 +27,13 @@ jest.mock('antd', () => {
     value={value ?? (mode ? [] : '')} onChange={event => onChange(mode ? [...event.target.selectedOptions].map(option => options.find(item => String(item.value) === option.value).value) : options.find(item => String(item.value) === event.target.value)?.value)}>
     {!mode && <option value="">选择</option>}{options.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</select>;
   return {Card: Wrapper, Space: Wrapper, Spin: Wrapper, Tag: Wrapper, Empty: Wrapper,
-    Tabs: Object.assign(Wrapper, {TabPane: Wrapper}), Typography: {Paragraph: Wrapper, Text: Wrapper},
+    Tabs: Object.assign(({children, activeKey, defaultActiveKey, onChange}) => <div data-active-tab={activeKey || defaultActiveKey}>
+      {React.Children.map(children, child => <button onClick={() => onChange?.(child.key)}>{child.props.tab}</button>)}{children}</div>, {TabPane: Wrapper}), Typography: {Paragraph: Wrapper, Text: Wrapper},
     Form: Object.assign(Wrapper, {Item: Wrapper}), Select,
     Input: ({value, onChange, placeholder, disabled}) => <input aria-label={placeholder} value={value} onChange={onChange} disabled={disabled}/>,
     InputNumber: ({value, onChange, disabled, ...props}) => <input type="number" aria-label={props['aria-label']} value={value} disabled={disabled} onChange={event => onChange(Number(event.target.value))}/>,
     Alert: ({message, description}) => <div>{message}{description}</div>,
-    Button: ({children, onClick, loading, disabled}) => <button onClick={onClick} disabled={loading || disabled}>{children}</button>,
+    Button: ({children, onClick, loading, disabled, 'aria-pressed': pressed}) => <button onClick={onClick} disabled={loading || disabled} aria-pressed={pressed}>{children}</button>,
     Modal: {confirm: jest.fn()}, message: {success: jest.fn(), error: jest.fn()}};
 });
 
@@ -48,6 +53,8 @@ function choose(label, values) {
   act(() => {for (const option of element.options) option.selected = values.map(String).includes(option.value); Simulate.change(element);});
 }
 beforeEach(() => {
+  window.history.replaceState({}, '', '/exec/operations');
+  HTMLElement.prototype.scrollIntoView = jest.fn();
   container = document.createElement('div'); document.body.appendChild(container);
   hasPermission.mockReturnValue(true);
   http.post.mockResolvedValue({...run, state: 'queued'});
@@ -63,10 +70,12 @@ test('operations is admin-only and denied visitors never fetch job or run data',
 });
 
 test('catalog displays read-only descriptions, dependencies and limitations', async () => {
+  http.get.mockImplementation(url => Promise.resolve(url === '/api/ops/catalog/' ? {...catalog, jobs: [{...catalog.jobs[0], limitations: ['不读取完整配置。', '仅检查根分区。']}]} : {items: [], total: 0}));
   await act(async () => {ReactDOM.render(<Operations/>, container);});
   expect(container.textContent).toContain('基础指标与版本');
   expect(container.textContent).toContain('SSH 与 sh');
   expect(container.textContent).toContain('不读取完整配置');
+  expect(container.textContent).toContain('不读取完整配置；仅检查根分区');
 });
 
 test('creation waits for explicit confirmation and submits the frozen selectors, defaults and PHP branch', async () => {
@@ -240,4 +249,104 @@ test('download is a current JSON snapshot and retains collection failure and sta
     if (originalCreate) Object.defineProperty(URL, 'createObjectURL', originalCreate); else delete URL.createObjectURL;
     if (originalRevoke) Object.defineProperty(URL, 'revokeObjectURL', originalRevoke); else delete URL.revokeObjectURL;
   }
+});
+
+test('records expose check counts and an explicit result action that locates the accessible result heading', async () => {
+  window.history.replaceState({keep: true}, '', '/exec/operations?view=recent#results');
+  http.get.mockImplementation(url => Promise.resolve(url === '/api/ops/catalog/' ? catalog : url === '/api/ops/runs/' ?
+    {items: [{...run, counts: {...run.counts, warning_checks: 3, unknown_checks: 2}}], total: 1} : url.includes('/baselines/') ? {items: []} : run));
+  await act(async () => {ReactDOM.render(<Operations/>, container);});
+  expect(container.textContent).toContain('检查异常 3 项');
+  expect(container.textContent).toContain('指标未知 2 项');
+  await act(async () => {button('查看结果').click();});
+  const heading = container.querySelector('h2');
+  expect(heading.textContent).toContain('巡检结果 · 作业 #7');
+  expect(document.activeElement).toBe(heading);
+  expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
+  expect(container.querySelector('[data-active-tab]').getAttribute('data-active-tab')).toBe('records');
+  expect(window.location.search).toBe('?view=recent&run_id=7');
+  expect(window.location.hash).toBe('#results');
+  expect(window.history.state).toEqual({keep: true});
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('older record payloads show unavailable check counts instead of zero', async () => {
+  http.get.mockResolvedValue({items: [run], total: 1});
+  await act(async () => {ReactDOM.render(<Records onOpen={jest.fn()}/>, container);});
+  expect(container.textContent).toContain('指标统计待读取');
+  expect(container.textContent).not.toContain('检查异常 0 项');
+});
+
+test.each(['7', '2147483647'])('reload restores bounded run_id %s and only reads the selected result', async id => {
+  window.history.replaceState({}, '', `/exec/operations?run_id=${id}`);
+  await act(async () => {ReactDOM.render(<Operations/>, container);});
+  expect(http.get).toHaveBeenCalledWith(`/api/ops/runs/${id}/`);
+  expect(container.querySelector('[data-active-tab]').getAttribute('data-active-tab')).toBe('records');
+  expect(document.activeElement).toBe(container.querySelector('h2'));
+  expect(http.post).not.toHaveBeenCalled();
+  expect(Modal.confirm).not.toHaveBeenCalled();
+});
+
+test.each(['0', '-1', '1.5', '1e2', '01', '2147483648', '9007199254740992', '7/continue', '7&run_id=8'])('invalid run_id %s cannot request or execute a run', async id => {
+  window.history.replaceState({}, '', `/exec/operations?run_id=${id}`);
+  await act(async () => {ReactDOM.render(<Operations/>, container);});
+  expect(http.get.mock.calls.some(([url]) => /^\/api\/ops\/runs\/[^/]+\/$/.test(url))).toBe(false);
+  expect(http.post).not.toHaveBeenCalled();
+  expect(container.querySelector('h2')).toBeNull();
+});
+
+test('confirmed creation switches to records and focuses its result without continuing work', async () => {
+  await act(async () => {ReactDOM.render(<Operations/>, container);});
+  choose('选择主机', [1]);
+  act(() => {button('确认执行').click();});
+  await act(async () => {await Modal.confirm.mock.calls[0][0].onOk();});
+  expect(container.querySelector('[data-active-tab]').getAttribute('data-active-tab')).toBe('records');
+  expect(document.activeElement).toBe(container.querySelector('h2'));
+  expect(window.location.search).toBe('?run_id=7');
+  expect(http.post).toHaveBeenCalledTimes(1);
+  expect(http.post.mock.calls[0][0]).toBe('/api/ops/runs/');
+});
+
+test('attention filtering includes successful hosts with abnormal or unknown checks and shows fixed failure advice', async () => {
+  const attentionRun = {...run, targets: [run.targets[0], run.targets[1],
+    {id: 13, host: {id: 3, name: '告警主机', hostname: '192.0.2.3'}, state: 'success', checks: [
+      {key: 'disk', label: '根分区使用', status: 'warning', value: 99}, {key: 'kernel', label: '内核', status: 'unknown', value: null}]},
+    {id: 14, host: {id: 4, name: '待核实主机'}, state: 'unknown', category: 'interrupted', checks: []},
+    {id: 15, host: {id: 5, name: '尚未执行主机'}, state: 'pending', checks: []},
+  ]};
+  http.get.mockImplementation(url => Promise.resolve(url.includes('/baselines/') ? {items: []} : attentionRun));
+  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
+  expect(container.textContent).toContain('采集成功仅表示取得结果');
+  expect(container.textContent).toContain('需处理 3 台');
+  expect(container.textContent).toContain('指标异常 1 项');
+  expect(container.textContent).toContain('指标未知 1 项');
+  expect(container.textContent).toContain('异常 1 项（根分区使用）');
+  expect(container.textContent).toContain('未知 1 项（内核）');
+  expect(container.textContent).toContain('核对 SSH 用户、密钥及登录权限');
+  expect(container.textContent).toContain('核对 Worker 状态');
+  act(() => {button('只看需处理').click();});
+  expect(button('只看需处理').getAttribute('aria-pressed')).toBe('true');
+  expect(container.textContent).toContain('告警主机');
+  expect(container.textContent).toContain('待核实主机');
+  expect(container.textContent).not.toContain('Debian 12');
+  expect(container.textContent).not.toContain('尚未执行主机');
+  act(() => {button('只看需处理').click();});
+  expect(container.textContent).toContain('Debian 12');
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('switching selected results prevents an older response from filling the new result section', async () => {
+  let resolveOld;
+  const otherRun = {...run, id: 8, job_name: '新选择作业', targets: []};
+  http.get.mockImplementation(url => url === '/api/ops/runs/7/' ? new Promise(resolve => {resolveOld = resolve;}) : Promise.resolve(
+    url === '/api/ops/catalog/' ? catalog : url === '/api/ops/runs/' ? {items: [run, otherRun], total: 2} : url.includes('/baselines/') ? {items: []} : otherRun));
+  await act(async () => {ReactDOM.render(<Operations/>, container);});
+  await act(async () => {[...container.querySelectorAll('button')].filter(item => item.textContent === '查看结果')[0].click();});
+  await act(async () => {[...container.querySelectorAll('button')].filter(item => item.textContent === '查看结果')[1].click();});
+  await act(async () => {resolveOld({...run, job_name: '旧响应作业'});});
+  expect(container.querySelector('h2').textContent).toContain('#8');
+  expect(container.textContent).toContain('作业 #8 · 新选择作业');
+  expect(container.textContent).not.toContain('旧响应作业');
+  expect(window.location.search).toBe('?run_id=8');
+  expect(http.post).not.toHaveBeenCalled();
 });

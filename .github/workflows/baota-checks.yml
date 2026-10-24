@@ -16,6 +16,7 @@ on:
       - 'spug_web/src/pages/baota/**'
       - 'spug_web/src/pages/exec/panel/**'
       - 'spug_web/src/pages/exec/operations/**'
+      - 'spug_web/src/pages/panel-inventory/**'
       - 'spug_web/src/pages/server-monitor/**'
       - 'spug_web/src/pages/host/Table.js'
       - 'spug_web/src/components/ResourceMonitor*'
@@ -28,6 +29,7 @@ on:
       - 'deploy/resource-monitor/**'
       - 'deploy/platform-health/**'
       - 'deploy/operations/**'
+      - 'deploy/inventory/**'
       - '.github/workflows/baota-checks.yml'
   workflow_dispatch:
 
@@ -62,9 +64,11 @@ jobs:
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api \
             --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test "${baota_test_modules[@]}" apps.setting.test_health apps.ops.tests --settings=spug.test_settings --noinput
+            manage.py test "${baota_test_modules[@]}" apps.setting.test_health apps.ops.tests apps.ops.test_result_counts apps.baota.inventory.tests --settings=spug.test_settings --noinput
       - name: Test independent host diagnostics
         run: python3 -m unittest discover -s deploy/platform-health/tests
+      - name: Test release backup failure handling
+        run: python3 -m unittest discover -s deploy/inventory -p 'test_*.py'
       - name: Check whitespace
         run: git diff --check HEAD^ HEAD
       - name: Build worker image with disposable static assets
@@ -144,7 +148,7 @@ jobs:
             -e BAOTA_CI_DB_HOST=baota-ci-db -e BAOTA_CI_DB_PASSWORD=disposable-ci-password \
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test apps.baota.test_tasks apps.baota.test_batches apps.baota.test_upload_store apps.baota.test_upload_tasks apps.baota.test_resource_monitor apps.ops.tests --settings=spug.baota_ci_settings --noinput
+            manage.py test apps.baota.test_tasks apps.baota.test_batches apps.baota.test_upload_store apps.baota.test_upload_tasks apps.baota.test_resource_monitor apps.ops.tests apps.ops.test_result_counts apps.baota.inventory.tests --settings=spug.baota_ci_settings --noinput
       - name: Remove disposable database
         if: always()
         run: |

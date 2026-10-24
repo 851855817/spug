@@ -25,12 +25,15 @@ export default function Records({jobs, revision, onOpen}) {
       <Button loading={loading} onClick={() => setRefresh(value => value + 1)}>刷新记录</Button>
     </Space>
     {error && <Alert type="error" showIcon message="记录读取失败，当前列表可能已过期，请刷新重试。"/>}
-    <Table resizeKey="operations-records" rowKey="id" loading={loading} dataSource={data.items} scroll={{x: 900}} columns={[
+    <Table resizeKey="operations-records" rowKey="id" loading={loading} dataSource={data.items} scroll={{x: 1260}} columns={[
       {title: '作业编号', dataIndex: 'id', width: 100, render: id => <Button type="link" onClick={() => onOpen(id)}>#{id}</Button>},
       {title: '标准作业', dataIndex: 'job_name', width: 200, render: (value, row) => `${value || (jobs || []).find(item => item.code === row.job)?.name || row.job} · v${row.version}`},
       {title: '状态', dataIndex: 'state', width: 180, render: state => RUN_LABELS[state] || '未知'},
       {title: '主机汇总', dataIndex: 'counts', width: 260, render: counts => counts ? `成功 ${counts.success || 0} / 失败 ${counts.failed || 0} / 待核实 ${counts.unknown || 0} / 共 ${counts.total || 0}` : '待核实'},
+      {title: '检查异常 / 未知', dataIndex: 'counts', width: 240, render: counts => Number.isInteger(counts?.warning_checks) && counts.warning_checks >= 0 && Number.isInteger(counts?.unknown_checks) && counts.unknown_checks >= 0 ?
+        `检查异常 ${counts.warning_checks} 项 / 指标未知 ${counts.unknown_checks} 项` : '指标统计待读取'},
       {title: '创建时间', dataIndex: 'created_at', width: 180},
+      {title: '结果', key: 'result', width: 100, fixed: 'right', render: (_, row) => <Button type="link" onClick={() => onOpen(row.id)}>查看结果</Button>},
     ]} pagination={{current: query.page, pageSize: query.page_size, total: data.total, showSizeChanger: true,
       onChange: (page, page_size) => setQuery({...query, page, page_size}), showTotal: total => `共 ${total} 个作业`}}/>
   </div>;
