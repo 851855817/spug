@@ -62,6 +62,7 @@ class PanelTask(models.Model):
     state = models.CharField(max_length=24, default='preflight_queued', db_index=True)
     retry_parent = models.ForeignKey('self', null=True, on_delete=models.PROTECT, related_name='retries')
     acknowledgements = models.JSONField(default=list)
+    execution_policy = models.JSONField(default=dict)
     audit = models.JSONField(default=list)
     cancel_requested = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -172,3 +173,4 @@ class PanelUploadQuota(models.Model):
 # Additive monitor tables remain in this app's model registry for updatedb.
 from .resource_monitor.models import (ResourceMonitorPreference, ResourceMonitorSnapshot,
                                       ResourceMonitorLease)  # noqa: E402,F401
+from .inventory.models import PanelInventorySnapshot, PanelInventoryLease  # noqa: E402,F401

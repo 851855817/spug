@@ -178,6 +178,12 @@ def begin(worker, target_id, result_id):
         row = target.upload_files.select_for_update().get(pk=result_id)
         if target.state != 'running' or row.state != 'ready' or row.intent:
             return False
+        if task.execution_policy and not s.batch_allows(task, target):
+            # A concurrent panel can trip the batch while this upload performs
+            # bounded pre-write reads. Recheck under task -> target -> file locks.
+            s.settle_target(target)
+            s.refresh_task(task)
+            return False
         if worker.stop_event.is_set() or task.cancel_requested:
             if task.cancel_requested:
                 cancel_unsent(target)

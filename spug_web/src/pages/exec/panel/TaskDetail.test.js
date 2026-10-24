@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { act } from 'react-dom/test-utils';
 import { http, hasPermission } from 'libs';
 import TaskDetail from './TaskDetail';
+import { Modal } from 'antd';
 
 jest.mock('libs', () => ({http: {get: jest.fn(), post: jest.fn()}, hasPermission: jest.fn()}));
 jest.mock('antd', () => {
@@ -14,6 +15,7 @@ jest.mock('antd', () => {
     Descriptions: Object.assign(Wrapper, {Item: Wrapper}), Spin: Wrapper, Empty: Wrapper,
     Button: ({children, onClick, disabled, loading}) => <button disabled={disabled || loading} onClick={onClick}>{children}</button>,
     Checkbox: ({children, checked, onChange}) => <label><input type="checkbox" checked={checked} onChange={onChange}/>{children}</label>,
+    InputNumber: ({value, onChange, min, max, ...props}) => <input {...props} type="number" value={value} min={min} max={max} onChange={e => onChange(Number(e.target.value))}/>,
     Modal: {confirm: jest.fn()}, Form: {useForm: () => [{}]}, message: {success: jest.fn()}};
 });
 jest.mock('./ResolveForm', () => () => null);
@@ -40,7 +42,7 @@ test('frozen SSL preview requires an unchecked explicit acknowledgement and star
   expect(container.querySelector('input').checked).toBe(false);
   await act(async () => {container.querySelector('input').click();});
   await act(async () => {button('确认并开始执行').click();});
-  expect(http.post).toHaveBeenCalledWith('/api/baota/tasks/7/start/', {acknowledgements: ['ssl_panel_sync']});
+  expect(http.post).toHaveBeenCalledWith('/api/baota/tasks/7/start/', {acknowledgements: ['ssl_panel_sync'], execution_policy: {batch_size: 1, failure_threshold: 1}});
 });
 
 test('manage permission does not grant execute; readonly reconcile never resends start', async () => {
@@ -81,5 +83,65 @@ test('uploads show file counts and a frozen overwrite acknowledgement with per-f
   expect(button('确认并开始执行').disabled).toBe(true);
   await act(async () => {container.querySelector('input[type=checkbox]').click();});
   await act(async () => {button('确认并开始执行').click();});
-  expect(http.post).toHaveBeenCalledWith('/api/baota/tasks/7/start/', {acknowledgements: ['upload_overwrite']});
+  expect(http.post).toHaveBeenCalledWith('/api/baota/tasks/7/start/', {acknowledgements: ['upload_overwrite'], execution_policy: {batch_size: 1, failure_threshold: 1}});
+});
+
+test('new starts opt into one-panel batches and can explicitly keep legacy execution', async () => {
+  http.get.mockResolvedValue({...task, required_acknowledgements: []});
+  await act(async () => ReactDOM.render(<TaskDetail taskId={7}/>, container));
+  expect(container.textContent).toContain('分批执行');
+  const checkbox = [...container.querySelectorAll('label')].find(label => label.textContent.includes('分批执行')).querySelector('input');
+  expect(checkbox.checked).toBe(true);
+  await act(async () => checkbox.click());
+  await act(async () => button('确认并开始执行').click());
+  expect(http.post).toHaveBeenCalledWith('/api/baota/tasks/7/start/', {acknowledgements: []});
+});
+
+test('paused batches poll read-only and continue only after explicit trip confirmation', async () => {
+  jest.useFakeTimers();
+  http.get.mockResolvedValue({...task, state: 'paused', batch: {enabled: true, index: 1, total: 3,
+    state: 'tripped', pending: 2, requires_acknowledgement: true, pause_reason: '本批失败达到阈值'}});
+  await act(async () => ReactDOM.render(<TaskDetail taskId={7}/>, container));
+  expect(container.textContent).toContain('第 1 / 3 批');
+  expect(container.textContent).toContain('本批失败达到阈值');
+  await act(async () => jest.advanceTimersByTime(2500));
+  expect(http.post).not.toHaveBeenCalled();
+  await act(async () => button('核对结果并继续').click());
+  expect(http.post).not.toHaveBeenCalled();
+  await act(async () => Modal.confirm.mock.calls[0][0].onOk());
+  expect(http.post).toHaveBeenCalledWith('/api/baota/tasks/7/continue/', {acknowledge: true});
+  jest.useRealTimers();
+});
+
+test('only execute permission can continue and unresolved batches remain held', async () => {
+  hasPermission.mockImplementation(code => code === 'exec.panel.manage' || code === 'exec.panel.view');
+  http.get.mockResolvedValue({...task, state: 'paused', batch: {enabled: true, index: 1, total: 3,
+    state: 'tripped', pending: 2, unresolved: true, requires_acknowledgement: true}});
+  await act(async () => ReactDOM.render(<TaskDetail taskId={7}/>, container));
+  expect(button('核对结果并继续')).toBeUndefined();
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('verified SSL deployment has a separate explicit confirmation for the fixed current child', async () => {
+  http.get.mockResolvedValue({...task, state: 'paused', batch: {enabled: true, index: 1, total: 3,
+    state: 'tripped', pending: 2, unresolved: true, deployable: [{target_id: 3, child_key: 'site:10', panel_name: 'Panel A', label: 'a.com'}]}});
+  await act(async () => ReactDOM.render(<TaskDetail taskId={7}/>, container));
+  expect(button('核对结果并继续')).toBeUndefined();
+  expect(container.textContent).toContain('确认继续当前证书部署阶段');
+  expect(http.post).not.toHaveBeenCalled();
+  await act(async () => button('确认继续当前证书部署阶段').click());
+  expect(Modal.confirm.mock.calls[0][0].content).toContain('a.com');
+  expect(http.post).not.toHaveBeenCalled();
+  await act(async () => Modal.confirm.mock.calls[0][0].onOk());
+  expect(http.post).toHaveBeenCalledWith('/api/baota/tasks/7/continue/', {
+    acknowledge: true, deploy: {target_id: 3, child_key: 'site:10'}});
+});
+
+test('SSL phase authorization is hidden without execute permission or while active', async () => {
+  hasPermission.mockImplementation(code => code !== 'exec.panel.execute');
+  http.get.mockResolvedValue({...task, state: 'paused', batch: {enabled: true, state: 'tripped', active: false,
+    deployable: [{target_id: 3, child_key: 'site:10'}]}});
+  await act(async () => ReactDOM.render(<TaskDetail taskId={7}/>, container));
+  expect(button('确认继续当前证书部署阶段')).toBeUndefined();
+  expect(http.post).not.toHaveBeenCalled();
 });

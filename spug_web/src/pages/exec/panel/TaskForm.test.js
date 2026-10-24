@@ -84,3 +84,34 @@ test('file upload replaces generic operation forms and locks selectors during st
   expect([...container.querySelectorAll('select')].every(select => !select.disabled)).toBe(true);
   expect(http.post).not.toHaveBeenCalled();
 });
+
+test('certificate inventory context selects only a configured panel and site without preparing or reading resources', async () => {
+  const options = {panels: [{id: 1, name: 'A', api_configured: true, api_checked: true, api_version: '13.1.0'}],
+    groups: [], operations: [{code: 'ssl_apply', label: 'SSL 申请'}, {code: 'ssl_renew', label: 'SSL 续签'}]};
+  await act(async () => {ReactDOM.render(<TaskForm options={options} onPrepared={() => {}} initialSearch="?panel_id=1&site_id=7&operation=ssl_apply&execute=true"/>, container);});
+  expect([...container.querySelectorAll('select')[0].selectedOptions].map(option => option.value)).toEqual(['1']);
+  expect(container.querySelectorAll('select')[1].value).toBe('ssl');
+  expect(container.querySelectorAll('select')[2].value).toBe('ssl_apply');
+  expect(http.get).not.toHaveBeenCalled();
+  expect(http.post).not.toHaveBeenCalled();
+  await act(async () => {[...container.querySelectorAll('button')].find(button => button.textContent === '生成冻结预检').click();});
+  expect(http.post).toHaveBeenCalledWith('/api/baota/tasks/', {
+    operation: 'ssl_apply', panel_ids: [1], params_by_panel: {'1': {sites: [7]}},
+  });
+});
+
+test.each(['?panel_id=8&site_id=7&operation=ssl_apply', '?panel_id=1&site_id=0&operation=ssl_apply',
+  '?panel_id=1&site_id=7&operation=site_add'])('invalid inventory context is ignored: %s', async initialSearch => {
+  const options = {panels: [{id: 1, name: 'A', api_configured: true}], groups: [], operations: [{code: 'ssl_apply', label: 'SSL'}]};
+  await act(async () => {ReactDOM.render(<TaskForm options={options} initialSearch={initialSearch}/>, container);});
+  expect([...container.querySelectorAll('select')[0].selectedOptions]).toHaveLength(0);
+  expect(container.querySelectorAll('select')[1].value).toBe('');
+  expect(http.get).not.toHaveBeenCalled(); expect(http.post).not.toHaveBeenCalled();
+});
+
+test('unconfigured panel cannot be preselected by certificate context', async () => {
+  const options = {panels: [{id: 1, name: 'A', api_configured: false}], groups: [], operations: [{code: 'ssl_apply', label: 'SSL'}]};
+  await act(async () => {ReactDOM.render(<TaskForm options={options} initialSearch="?panel_id=1&site_id=7&operation=ssl_apply"/>, container);});
+  expect([...container.querySelectorAll('select')[0].selectedOptions]).toHaveLength(0);
+  expect(http.post).not.toHaveBeenCalled();
+});

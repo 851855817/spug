@@ -15,6 +15,7 @@ def upload_results(request, target_id):
 
 
 urlpatterns = [
+    path('inventory/', include('apps.baota.inventory.urls')),
     path('monitor/', include('apps.baota.resource_monitor.urls')),
     path('', PanelView.as_view()),
     path('group/', GroupView.as_view()),
@@ -23,7 +24,7 @@ urlpatterns = [
     path('tasks/', TasksView.as_view()),
     path('tasks/<int:task_id>/', TaskDetailView.as_view()),
     *[path('tasks/<int:task_id>/' + action + '/', TaskActionView.as_view(), {'action': action})
-      for action in ('start', 'cancel', 'reconcile', 'resolve', 'retry')],
+      for action in ('start', 'continue', 'cancel', 'reconcile', 'resolve', 'retry')],
     path('task-options/', TaskOptionsView.as_view()),
     path('resources/', TaskResourcesView.as_view()),
     path('catalog/', TaskCatalogView.as_view()),

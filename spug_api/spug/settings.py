@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'apps.account',
     'apps.host',
     'apps.baota',
+    'apps.ops',
     'apps.setting',
     'apps.exec',
     'apps.schedule',
