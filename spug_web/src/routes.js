@@ -42,6 +42,7 @@ import AlarmContact from './pages/alarm/contact';
 import SystemAccount from './pages/system/account';
 import SystemRole from './pages/system/role';
 import SystemSetting from './pages/system/setting';
+import SystemHealth from './pages/system/health';
 import SystemLogin from './pages/system/login';
 import SystemCredential from './pages/system/credential';
 import WelcomeIndex from './pages/welcome/index';
@@ -110,6 +111,7 @@ export default [
       {title: t('账户管理'), auth: 'system.account.view', path: '/system/account', component: SystemAccount},
       {title: t('角色管理'), auth: 'system.role.view', path: '/system/role', component: SystemRole},
       {title: t('系统设置'), auth: 'system.setting.view', path: '/system/setting', component: SystemSetting},
+      {title: t('平台健康'), auth: 'admin', path: '/system/health', component: SystemHealth},
     ]
   },
   {path: '/welcome/index', component: WelcomeIndex},

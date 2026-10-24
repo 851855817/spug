@@ -4,6 +4,7 @@ LABEL org.opencontainers.image.source="https://github.com/851855817/spug" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
       org.opencontainers.image.version="4.1.1-baota.2"
 COPY spug_api/apps/baota /opt/spug/spug_api/apps/baota
+COPY spug_api/apps/setting /opt/spug/spug_api/apps/setting
 COPY spug_api/spug/settings.py spug_api/spug/urls.py /opt/spug/spug_api/spug/
 COPY spug_web/build/ /opt/spug/spug_web/build/
 COPY deploy/baota/entrypoint.sh /baota-entrypoint.sh

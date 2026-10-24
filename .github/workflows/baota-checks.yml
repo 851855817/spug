@@ -2,10 +2,13 @@ name: Baota module checks
 
 on:
   push:
-    branches: [feature/baota-panel-tasks, feature/server-resource-monitor]
+    branches: [feature/baota-panel-tasks, feature/server-resource-monitor, feature/operations-reliability]
   pull_request:
     paths:
       - 'spug_api/apps/baota/**'
+      - 'spug_api/apps/setting/health*.py'
+      - 'spug_api/apps/setting/test_health.py'
+      - 'spug_api/apps/setting/urls.py'
       - 'spug_api/spug/test_*.py'
       - 'spug_web/src/pages/baota/**'
       - 'spug_web/src/pages/exec/panel/**'
@@ -16,8 +19,10 @@ on:
       - 'spug_web/src/components/TableCard.js'
       - 'spug_web/src/components/useResourceMonitorSources.js'
       - 'spug_web/src/routes.js'
+      - 'spug_web/src/pages/system/health/**'
       - 'deploy/baota/**'
       - 'deploy/resource-monitor/**'
+      - 'deploy/platform-health/**'
       - '.github/workflows/baota-checks.yml'
   workflow_dispatch:
 
@@ -52,7 +57,9 @@ jobs:
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api \
             --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test "${baota_test_modules[@]}" --settings=spug.test_settings --noinput
+            manage.py test "${baota_test_modules[@]}" apps.setting.test_health --settings=spug.test_settings --noinput
+      - name: Test independent host diagnostics
+        run: python3 -m unittest discover -s deploy/platform-health/tests
       - name: Check whitespace
         run: git diff --check HEAD^ HEAD
       - name: Build worker image with disposable static assets
@@ -60,6 +67,7 @@ jobs:
           baota_context="$RUNNER_TEMP/baota-image-context"
           mkdir -p "$baota_context/spug_api/apps" "$baota_context/spug_api/spug" "$baota_context/spug_web/build"
           cp -a spug_api/apps/baota "$baota_context/spug_api/apps/"
+          cp -a spug_api/apps/setting "$baota_context/spug_api/apps/"
           cp spug_api/spug/settings.py spug_api/spug/urls.py "$baota_context/spug_api/spug/"
           cp -a deploy "$baota_context/"
           printf '<html>CI image wiring check only</html>\n' > "$baota_context/spug_web/build/index.html"
