@@ -1,5 +1,6 @@
 """Durable task commands. Browser input can never supply a dispatch snapshot."""
 import copy
+import hashlib
 import json
 import re
 
@@ -207,9 +208,153 @@ def required_acks(targets):
     return sorted(codes)
 
 
+def validate_execution_policy(value):
+    strict(value, ('batch_size', 'failure_threshold'), ('batch_size', 'failure_threshold'))
+    size, threshold = value['batch_size'], value['failure_threshold']
+    if type(size) is not int or not 1 <= size <= 10 or type(threshold) is not int or not 1 <= threshold <= size:
+        raise ValueError('每批须为 1 至 10 个面板，失败阈值须为 1 至每批面板数')
+    return {'batch_size': size, 'failure_threshold': threshold}
+
+
+def batch_failed_target(task, target):
+    baseline = task.execution_policy.get('failure_baseline', {}).get(str(target.pk), 0)
+    if task.operation == 'file_upload':
+        # The aggregate child intentionally includes failed preflight files;
+        # execution failures are only new failures above the frozen file count.
+        return target.summary.get('upload', {}).get('failed', 0) > baseline
+    return (target.state == 'failed' or any(c['state'] == 'failed' and c['snapshot'].get('state') == 'ready'
+                                          for c in target.children)
+            or target.summary.get('upload', {}).get('failed', 0) > baseline)
+
+
+def current_batch_targets(task, targets):
+    policy = task.execution_policy
+    start = (policy['index'] - 1) * policy['batch_size']
+    ids = policy['target_ids'][start:start + policy['batch_size']]
+    return [target for target in targets if target.pk in ids]
+
+
+def verified_deployment(task, target, child):
+    remote = child.get('result', {}).get('remote', {})
+    verification = child.get('deploy_verification', {})
+    return (task.operation in ('ssl_apply', 'ssl_renew') and not task.cancel_requested
+            and target.state in ('remote', 'running') and child['state'] == 'remote'
+            and remote.get('next_action') == 'deploy' and not remote.get('ambiguous')
+            and not child.get('uncertain_provenance') and verification.get('token')
+            and verification.get('remote') == remote
+            and any(intent['phase'] == 'apply' for intent in child['intents'])
+            and not any(intent['phase'] == 'deploy' for intent in child['intents']))
+
+
+def deployment_observation(targets):
+    # Target state changes remote -> running at claim, while all persisted
+    # outcome envelopes remain fixed until a result or a write intent changes.
+    observed = [{'target_id': target.pk, 'children': target.children, 'summary': target.summary}
+                for target in targets]
+    return hashlib.sha256(json.dumps(observed, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()
+
+
+def deployment_authorized(task, target, child, targets=None):
+    authorization = task.execution_policy.get('deployment')
+    if not authorization or not verified_deployment(task, target, child):
+        return False
+    targets = list(task.targets.all()) if targets is None else targets
+    current = current_batch_targets(task, targets)
+    return (target.pk in [value.pk for value in current]
+            and authorization['target_id'] == target.pk and authorization['child_key'] == child['snapshot']['key']
+            and authorization['verification'] == child['deploy_verification']['token']
+            and authorization['observation'] == deployment_observation(current)
+            and not any(value.state in ACTIVE and value.pk != target.pk for value in current))
+
+
+def invalidate_deployment(task, targets):
+    """Caller owns task row; changed outcomes require a fresh read-only check."""
+    authorization = task.execution_policy.get('deployment')
+    if not authorization:
+        return
+    selected = next((target for target in targets if target.pk == authorization['target_id']), None)
+    child = next((value for value in selected.children if value['snapshot']['key'] == authorization['child_key']), None) if selected else None
+    if child and deployment_authorized(task, selected, child, targets):
+        return
+    task.execution_policy.pop('deployment')
+    task.save(update_fields=['execution_policy', 'updated_at'])
+    if child and child.pop('deploy_verification', None):
+        # All writers serialize on task first. Explicitly lock this sibling
+        # before updating it, preserving the task -> target order on MariaDB.
+        task.targets.select_for_update().get(pk=selected.pk)
+        selected.save(update_fields=['children', 'updated_at'])
+
+
+def batch_status(task, targets=None):
+    """GET task/list batch contract; reads never admit or continue work.
+
+    enabled=false denotes legacy execution. Otherwise index is 1-based, total
+    counts runnable batches, pending counts later targets, remaining_in_batch
+    counts queued current targets, and state is running/paused/tripped/completed
+    or cancelled. active/unresolved disable ordinary POST continue; tripped requires its
+    exact boolean acknowledge=true. failure_count counts execution-failed panels.
+    deployable lists fixed SSL children verified read-only as ready for deploy;
+    POST continue {acknowledge:true,deploy:{target_id,child_key}} authorizes exactly
+    one new deployment phase, without admitting any other target or batch.
+
+    The frozen target_ids contain only runnable targets, excluding preflight-only
+    failures and terminal/empty previews. refresh never admits another batch.
+    """
+    policy = task.execution_policy
+    if not policy:
+        return {'enabled': False}
+    targets = list(task.targets.all()) if targets is None else targets
+    ids, size, index = policy['target_ids'], policy['batch_size'], policy['index']
+    current_ids = ids[(index - 1) * size:index * size]
+    current = [target for target in targets if target.pk in current_ids]
+    failed = [t.pk for t in current if batch_failed_target(task, t)]
+    unresolved = any(t.state in ('remote', 'uncertain') or any(c['state'] in ('remote', 'uncertain') for c in t.children)
+                     for t in current)
+    active = any(t.state in ACTIVE for t in current)
+    finished = bool(current) and all(t.state in TERMINAL | {'completed'} for t in current)
+    pending = max(0, len(ids) - index * size)
+    new_failures = set(failed) - set(policy.get('acknowledged_failure_ids', []))
+    tripped = unresolved or len(new_failures) >= policy['failure_threshold']
+    state = policy['state']
+    if task.cancel_requested:
+        state = 'cancelled'
+    elif finished and not pending:
+        state = 'completed'
+    elif tripped:
+        state = 'tripped'
+    elif finished:
+        state = 'paused' if state != 'tripped' else state
+    reason = ('存在远端处理中或待核实结果，请先只读核验或人工判定' if unresolved else
+              '本批失败达到阈值，核对结果并明确确认后才能继续' if state == 'tripped' and tripped else
+              '本批曾出现待核实结果，请核对后明确确认继续' if state == 'tripped' else
+              '本批已结束，请核对结果后继续下一批' if state == 'paused' else '')
+    deployable = []
+    if not active and not task.cancel_requested and not policy.get('deployment'):
+        deployable = [{'target_id': t.pk, 'child_key': child['snapshot']['key'],
+                       'panel_name': t.panel_snapshot.get('name', ''), 'label': child['snapshot'].get('label', '')}
+                      for t in current for child in t.children if verified_deployment(task, t, child)]
+    return {'enabled': True, 'index': index, 'total': (len(ids) + size - 1) // size,
+            'state': state, 'pending': pending, 'remaining_in_batch': sum(t.state == 'queued' for t in current),
+            'batch_size': size, 'failure_threshold': policy['failure_threshold'], 'failure_count': len(failed),
+            'active': active, 'unresolved': unresolved, 'finished': finished,
+            'requires_acknowledgement': state == 'tripped', 'pause_reason': reason, 'deployable': deployable,
+            'deployment_pending': bool(policy.get('deployment'))}
+
+
+def batch_allows(task, target, targets=None):
+    if not task.execution_policy:
+        return True
+    policy = task.execution_policy
+    status = batch_status(task, targets)
+    start = (policy['index'] - 1) * policy['batch_size']
+    return status['state'] == 'running' and target.pk in policy['target_ids'][start:start + policy['batch_size']]
+
+
 def refresh_task(task):
     """Caller holds the task row lock; every writer uses task -> target lock order."""
-    states = list(task.targets.values_list('state', flat=True))
+    targets = list(task.targets.all())
+    invalidate_deployment(task, targets)
+    states = [t.state for t in targets]
     if any(s == 'uncertain' for s in states):
         task.state = 'uncertain'
     elif any(s in ('remote', 'reconciling') for s in states):
@@ -224,7 +369,12 @@ def refresh_task(task):
         task.state = 'cancelled'
     else:
         task.state = 'completed'
-    task.save(update_fields=['state', 'updated_at'])
+    if task.execution_policy:
+        batch = batch_status(task, targets)
+        task.execution_policy = {**task.execution_policy, 'state': batch['state']}
+        if not task.cancel_requested and batch['state'] in ('paused', 'tripped'):
+            task.state = 'paused'
+    task.save(update_fields=['state', 'execution_policy', 'updated_at'])
 
 
 def settle_target(target):
@@ -250,7 +400,8 @@ def audit(task, user, action, **values):
 
 
 def start(user, task_id, data):
-    strict(data, ('acknowledgements',), ('acknowledgements',))
+    strict(data, ('acknowledgements', 'execution_policy'), ('acknowledgements',))
+    policy = validate_execution_policy(data['execution_policy']) if 'execution_policy' in data else {}
     codes = data['acknowledgements']
     if not isinstance(codes, list) or len(codes) > len(ACK_CODES) or any(not isinstance(c, str) for c in codes):
         raise ValueError('确认项格式无效')
@@ -268,12 +419,75 @@ def start(user, task_id, data):
             if target.state == 'prepared':
                 configured(target.panel, target.panel_snapshot['api_config_revision'])
         task.acknowledgements = sorted(codes)
-        task.save(update_fields=['acknowledgements', 'updated_at'])
-        audit(task, user, 'start', acknowledgements=sorted(codes))
+        if policy:
+            runnable = [t.pk for t in targets if t.state == 'prepared' and any(c['state'] == 'ready' for c in t.children)]
+            if not runnable:
+                raise ValueError('没有待执行项目，请重新预检')
+            task.execution_policy = {**policy, 'target_ids': runnable, 'index': 1, 'state': 'running',
+                'acknowledged_failure_ids': [], 'failure_baseline': {
+                    str(t.pk): t.summary.get('upload', {}).get('failed', 0) for t in targets if t.pk in runnable}}
+        task.save(update_fields=['acknowledgements', 'execution_policy', 'updated_at'])
+        audit(task, user, 'start', acknowledgements=sorted(codes), execution_policy=policy)
         for target in targets:
             if target.state == 'prepared':
+                if policy and target.pk not in runnable:
+                    settle_target(target)
+                    continue
                 target.state = 'queued'
                 target.save(update_fields=['state', 'updated_at'])
+        refresh_task(task)
+    return task
+
+
+def continue_batch(user, task_id, data):
+    strict(data, ('acknowledge', 'deploy'))
+    if 'acknowledge' in data and type(data['acknowledge']) is not bool:
+        raise ValueError('继续确认须为布尔值')
+    with transaction.atomic():
+        task = owned(user, task_id, 'execute', lock=True)
+        # Match every worker/writer: task first, then targets. Never lock a target
+        # through a joined task query (MariaDB can otherwise reverse lock order).
+        targets = list(task.targets.select_for_update().order_by('id'))
+        if not task.execution_policy or task.cancel_requested:
+            raise ValueError('任务未启用分批或已取消')
+        status = batch_status(task, targets)
+        if 'deploy' in data:
+            strict(data['deploy'], ('target_id', 'child_key'), ('target_id', 'child_key'))
+            if data.get('acknowledge') is not True or status['active'] or task.execution_policy.get('deployment'):
+                raise ValueError('请在调用结束后明确确认当前证书部署阶段')
+            requested = data['deploy']
+            current = current_batch_targets(task, targets)
+            target = next((value for value in current if value.pk == positive_id(requested['target_id'])), None)
+            child = next((value for value in target.children if value['snapshot']['key'] == requested['child_key']), None) if target else None
+            if not child or not verified_deployment(task, target, child):
+                raise ValueError('当前子项尚未只读核实可部署，或已下发过部署阶段')
+            task.execution_policy = {**task.execution_policy, 'deployment': {
+                'target_id': target.pk, 'child_key': child['snapshot']['key'],
+                'verification': child['deploy_verification']['token'], 'observation': deployment_observation(current)}}
+            task.save(update_fields=['execution_policy', 'updated_at'])
+            audit(task, user, 'continue_deploy', target_id=target.pk, child_key=child['snapshot']['key'], acknowledge=True)
+            refresh_task(task)
+            return task
+        if status['active'] or status['unresolved']:
+            raise ValueError('本批仍在调用、远端处理中或待核实，请先核验结果')
+        if status['state'] not in ('paused', 'tripped'):
+            raise ValueError('任务当前没有可继续的批次')
+        if status['requires_acknowledgement'] and data.get('acknowledge') is not True:
+            raise ValueError('本批已熔断，请明确确认核对结果后继续')
+        policy = dict(task.execution_policy)
+        start_index = (policy['index'] - 1) * policy['batch_size']
+        ids = policy['target_ids'][start_index:start_index + policy['batch_size']]
+        if status['finished']:
+            if not status['pending']:
+                raise ValueError('没有尚未执行的批次')
+            policy['index'] += 1
+            policy['acknowledged_failure_ids'] = []
+        else:
+            policy['acknowledged_failure_ids'] = [t.pk for t in targets if t.pk in ids and batch_failed_target(task, t)]
+        policy['state'] = 'running'
+        task.execution_policy = policy
+        task.save(update_fields=['execution_policy', 'updated_at'])
+        audit(task, user, 'continue', batch_index=policy['index'], acknowledge=data.get('acknowledge', False))
         refresh_task(task)
     return task
 
@@ -387,7 +601,9 @@ def task_view(task, detail=True):
     data = {'id': task.pk, 'operation': task.operation, 'owner_id': task.owner_id, 'state': task.state,
             'retry_parent_id': task.retry_parent_id, 'cancel_requested': task.cancel_requested,
             'acknowledgements': task.acknowledgements, 'created_at': task.created_at.isoformat(),
-            'updated_at': task.updated_at.isoformat()}
+            'updated_at': task.updated_at.isoformat(), 'batch': batch_status(task),
+            'execution_policy': {key: task.execution_policy[key] for key in ('batch_size', 'failure_threshold')
+                                 if key in task.execution_policy}}
     if detail:
         targets = list(task.targets.all())
         data.update(required_acknowledgements=required_acks(targets), audit=task.audit,

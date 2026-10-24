@@ -5,7 +5,7 @@ import { hasPermission, http } from 'libs';
 import styles from './index.module.css';
 
 const endpoint = '/api/setting/health/';
-const recoverableServices = ['nginx', 'spug-api', 'spug-monitor', 'spug-panel-worker', 'spug-scheduler', 'spug-worker', 'spug-ws'];
+const recoverableServices = ['nginx', 'spug-api', 'spug-monitor', 'spug-panel-worker', 'spug-scheduler', 'spug-worker', 'spug-ws', 'spug-ops-worker'];
 const stoppedStates = ['STOPPED', 'EXITED', 'FATAL'];
 const statuses = {
   ok: {label: '正常', color: 'green'},

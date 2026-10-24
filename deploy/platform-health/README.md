@@ -25,7 +25,7 @@ ssh your-spug-host 'sudo python3 /opt/spug/platform-health/spug-health.py'
 | 检查项 | 范围 |
 | --- | --- |
 | 容器 | 仅 `spug`、`spug-db` 的 State.Status、State.Health.Status、State.OOMKilled、RestartCount |
-| Supervisor | 仅 `nginx`、`redis`、`spug-api`、`spug-monitor`、`spug-panel-worker`、`spug-scheduler`、`spug-worker`、`spug-ws` |
+| Supervisor | 仅 `nginx`、`redis`、`spug-api`、`spug-monitor`、`spug-ops-worker`、`spug-panel-worker`、`spug-scheduler`、`spug-worker`、`spug-ws` |
 | HTTP | `http://127.0.0.1:8080/api/account/login/`；仅检查状态码，忽略代理设置、不跟随重定向、不读取正文 |
 | 磁盘 | `/opt/spug` 所在文件系统的可用空间和 Inode；容器持久数据卷由 Web 侧探针另行检查 |
 | 内存 | `/proc/meminfo` 的 MemTotal、MemAvailable |
@@ -61,7 +61,7 @@ sudo python3 /opt/spug/platform-health/spug-health.py --start spug-db
 sudo python3 /opt/spug/platform-health/spug-health.py --start spug-panel-worker
 ```
 
-每次仅接受两个固定容器名或八个固定 Supervisor 服务名之一。宿主机 CLI 可显式启动 Redis；Web 恢复操作的允许范围由 Web 后端另行限制，不包含 Redis。
+每次仅接受两个固定容器名或九个固定 Supervisor 服务名之一，包含独立运维作业进程 `spug-ops-worker`。宿主机 CLI 可显式启动 Redis；Web 恢复操作的允许范围由 Web 后端另行限制，不包含 Redis。
 
 脚本通过 `/opt/spug/.platform-health.lock` 独占锁防止自身并发启动，并在锁内读取新状态：
 

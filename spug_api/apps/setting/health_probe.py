@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 SERVICES = ('nginx', 'redis', 'spug-api', 'spug-monitor', 'spug-panel-worker',
-            'spug-scheduler', 'spug-worker', 'spug-ws')
+            'spug-scheduler', 'spug-worker', 'spug-ws', 'spug-ops-worker')
 STARTABLE = tuple(name for name in SERVICES if name != 'redis')
 STOPPED = ('STOPPED', 'EXITED', 'FATAL')
 STATES = ('RUNNING', 'STARTING', 'BACKOFF', 'STOPPING', 'UNKNOWN') + STOPPED

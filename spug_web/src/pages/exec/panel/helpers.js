@@ -12,6 +12,7 @@ export const STATE_LABELS = {
   already: '已满足', skipped: '已跳过', queued: '等待执行', running: '执行中', dispatching: '正在下发',
   reconciling: '只读核验中', remote: '远端处理中', uncertain: '结果不确定', failed: '失败',
   cancelled: '已取消未下发项', completed: '已结束（请查看结果）', success: '成功',
+  paused: '分批暂停，等待核对',
 };
 export const SSL_ACK = '初次申请或续签可能自动同步同一组域名证书，影响本面板内未选网站、孤立证书副本及面板自身 TLS，并重载 Web 服务；续签可能暂时关闭强制 HTTPS。所列同步清单不完整，所选网站配置核验不代表所有受影响的线上 TLS 已生效。';
 
@@ -153,11 +154,20 @@ export function stateColor(state) {
   return 'default';
 }
 
-export function startPayload(task, acknowledged) {
+export function startPayload(task, acknowledged, executionPolicy) {
   const required = task.required_acknowledgements || [];
   if (task.state !== 'prepared' || !summarizeTask(task).ready) throw new Error('仅可开始有待执行项目的已完成预检');
   if (required.length !== acknowledged.length || required.some(code => !acknowledged.includes(code))) throw new Error('请逐项确认预检影响范围');
-  return {acknowledgements: [...required]};
+  const payload = {acknowledgements: [...required]};
+  if (executionPolicy !== undefined) {
+    const {batch_size, failure_threshold} = executionPolicy;
+    if (!Number.isInteger(batch_size) || batch_size < 1 || batch_size > 10 ||
+        !Number.isInteger(failure_threshold) || failure_threshold < 1 || failure_threshold > batch_size) {
+      throw new Error('每批须为 1 至 10 个面板，失败阈值须为 1 至每批面板数');
+    }
+    payload.execution_policy = {batch_size, failure_threshold};
+  }
+  return payload;
 }
 
 export function phpLabel(version) {

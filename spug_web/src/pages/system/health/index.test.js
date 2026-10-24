@@ -163,13 +163,21 @@ test('report download exports the observed snapshot and marks it stale after a f
   let exported;
   const createURL = jest.fn(blob => {exported = blob; return 'blob:health-report';});
   const revokeURL = jest.fn();
+  const createDescriptor = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+  const revokeDescriptor = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
   Object.defineProperty(URL, 'createObjectURL', {configurable: true, value: createURL});
   Object.defineProperty(URL, 'revokeObjectURL', {configurable: true, value: revokeURL});
   const download = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  try {
   await click(button('下载报告'));
   expect(download).toHaveBeenCalledTimes(1);
   expect(exported.type).toBe('application/json;charset=utf-8');
   const body = await new Promise(resolve => {const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.readAsText(exported);});
   expect(JSON.parse(body)).toMatchObject({...snapshot(), snapshot_stale: true});
   expect(revokeURL).toHaveBeenCalledWith('blob:health-report');
+  } finally {
+    download.mockRestore();
+    if (createDescriptor) Object.defineProperty(URL, 'createObjectURL', createDescriptor); else delete URL.createObjectURL;
+    if (revokeDescriptor) Object.defineProperty(URL, 'revokeObjectURL', revokeDescriptor); else delete URL.revokeObjectURL;
+  }
 });

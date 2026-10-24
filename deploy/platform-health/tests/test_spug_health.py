@@ -25,7 +25,7 @@ class FakeRunner:
         self.containers = {'spug': 'running|healthy|false|0', 'spug-db': 'running|healthy|false|0'}
         self.services = {name: 'RUNNING' for name in (
             'nginx', 'redis', 'spug-api', 'spug-monitor', 'spug-panel-worker',
-            'spug-scheduler', 'spug-worker', 'spug-ws')}
+            'spug-scheduler', 'spug-worker', 'spug-ws', 'spug-ops-worker')}
         self.fail = None
         self.after_start = 'RUNNING'
 
@@ -82,7 +82,7 @@ class DiagnosticTests(unittest.TestCase):
         report = self.diagnostic.report()
         self.assertEqual(report['status'], 'ok')
         self.assertRegex(report['checked_at'], r'^\d{4}-\d\d-\d\dT.*Z$')
-        self.assertEqual(len(report['checks']), 14)
+        self.assertEqual(len(report['checks']), 15)
         for item in report['checks']:
             self.assertEqual(set(item), {'id', 'name', 'status', 'summary', 'advice'})
         for call in self.runner.calls:

@@ -28,7 +28,7 @@ class ImageTests(unittest.TestCase):
 
 class WorkerImageTests(ImageTests):
     def test_worker_is_loaded_from_the_real_supervisor_config(self):
-        self.assertEqual(self.programs(), ORIGINAL_PROGRAMS | {'spug-panel-worker'})
+        self.assertEqual(self.programs(), ORIGINAL_PROGRAMS | {'spug-panel-worker', 'spug-ops-worker'})
         worker = self.config['program:spug-panel-worker']
         self.assertEqual(worker['directory'], '/data/spug/spug_api')
         self.assertEqual(worker['command'], 'python3 manage.py runpanelworker --parallel 2')
@@ -39,6 +39,15 @@ class WorkerImageTests(ImageTests):
         self.assertEqual(worker['stdout_logfile'], '/data/spug/spug_api/logs/panel-worker.log')
         self.assertNotIn('environment', worker)
         self.assertTrue(Path('/opt/spug/spug_api/apps/baota/management/commands/runpanelworker.py').is_file())
+
+    def test_ops_worker_is_separate_and_bounded(self):
+        worker = self.config['program:spug-ops-worker']
+        self.assertEqual(worker['directory'], '/data/spug/spug_api')
+        self.assertEqual(worker['command'], 'python3 manage.py runopsworker')
+        self.assertGreaterEqual(int(worker['stopwaitsecs']), 75)
+        self.assertTrue(Path('/opt/spug/spug_api/apps/ops/management/commands/runopsworker.py').is_file())
+        self.assertNotIn('environment', worker)
+        self.assertTrue(worker.getboolean('stopasgroup'))
 
     def test_upstream_sync_and_migration_still_precede_supervisor(self):
         self.assertEqual(self.entrypoint.splitlines().count('python3 manage.py updatedb'), 1)
@@ -66,9 +75,11 @@ class RollbackImageTests(ImageTests):
 
 class UploadRollbackImageTests(ImageTests):
     def test_no_reverse_schema_generation_with_existing_worker_wiring(self):
-        self.assertEqual(self.programs(), ORIGINAL_PROGRAMS | {'spug-panel-worker'})
+        self.assertEqual(self.programs(), ORIGINAL_PROGRAMS | {'spug-panel-worker', 'spug-ops-worker'})
         self.assertFalse(self.config['program:spug-panel-worker'].getboolean('autostart'))
         self.assertFalse(self.config['program:spug-panel-worker'].getboolean('autorestart'))
+        self.assertFalse(self.config['program:spug-ops-worker'].getboolean('autostart'))
+        self.assertFalse(self.config['program:spug-ops-worker'].getboolean('autorestart'))
         self.assertNotIn('updatedb', self.entrypoint)
         self.assertNotIn('makemigrations', self.entrypoint)
         self.assertEqual(self.entrypoint.splitlines().count('python3 manage.py migrate --noinput'), 1)

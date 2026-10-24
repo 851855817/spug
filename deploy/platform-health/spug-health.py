@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path('/opt/spug')
 CONTAINERS = ('spug', 'spug-db')
 SERVICES = ('nginx', 'redis', 'spug-api', 'spug-monitor', 'spug-panel-worker',
-            'spug-scheduler', 'spug-worker', 'spug-ws')
+            'spug-scheduler', 'spug-worker', 'spug-ws', 'spug-ops-worker')
 TARGETS = CONTAINERS + SERVICES
 STARTABLE_PROCESSES = ('STOPPED', 'EXITED', 'FATAL')
 PROCESS_STATES = ('STOPPED', 'STARTING', 'RUNNING', 'BACKOFF', 'STOPPING',

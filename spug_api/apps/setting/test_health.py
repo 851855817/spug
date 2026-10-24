@@ -148,10 +148,11 @@ class PlatformHealthTests(SimpleTestCase):
         from apps.setting.health_probe import parse_services
         result = parse_services('spug-worker RUNNING pid 1, uptime 1:00\nredis STOPPED Not started\nextra RUNNING password=secret')
         by_name = {item['service']: item for item in result['checks']}
-        self.assertEqual(len(by_name), 8)
+        self.assertEqual(len(by_name), 9)
         self.assertEqual(by_name['spug-api']['status'], 'unknown')
         self.assertFalse(by_name['spug-api']['recoverable'])
         self.assertFalse(by_name['redis']['recoverable'])
+        self.assertEqual(by_name['spug-ops-worker']['process_state'], 'UNKNOWN')
         self.assertNotIn('secret', json.dumps(result))
 
     def test_stale_or_untrusted_host_report_does_not_become_green(self):

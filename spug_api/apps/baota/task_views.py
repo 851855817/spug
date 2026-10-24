@@ -70,6 +70,8 @@ class TaskActionView(TaskBaseView):
         data = self.body(request)
         if action == 'start':
             task = s.start(request.user, task_id, data)
+        elif action == 'continue':
+            task = s.continue_batch(request.user, task_id, data)
         elif action == 'resolve':
             task = s.resolve(request.user, task_id, data)
         else:
