@@ -10,14 +10,14 @@
 
 ## 任务与文件
 
-- [ ] 1. 基线：现有 PanelForm 前端用例和 test_site_ssl_summary 后端用例，确认独立测试配置；缺少本地运行依赖时仅修复测试环境。
-- [ ] 2. 后端测试先行：spug_api/apps/setting/test_health.py；以 SimpleTestCase/RequestFactory 验证 AdminView、service 输入、状态恢复、超时和脱敏，纯函数验证磁盘/密钥。
-- [ ] 3. 后端：health.py 负责快照和受限操作；health_probe.py 负责独立数据库/Redis/Supervisor探针；health_views.py 负责管理员请求。setting/urls.py 与 spug/test_urls.py 增加健康入口。
-- [ ] 4. 页面：spug_web/src/pages/system/health/index.js 及样式和测试；routes.js 加 /system/health，使用 admin 权限；checks 表格和时间，明确报告失败，不沿用旧绿色状态。
-- [ ] 5. 宿主机诊断：deploy/platform-health/spug-health.py、tests/test_host_health.py、README.md；独立诊断、固定对象启动和机器可读输出，不解析客户数据。
-- [ ] 6. 验证：先运行新增失败用例再实现；本地后端 manage.py test apps.setting.test_health --settings=spug.test_settings；前端 node node_modules/react-app-rewired/bin/index.js test --watchAll=false --runInBand；宿主机 python -m unittest discover -s deploy/platform-health/tests。
-- [ ] 7. 独立审查，补有意义的边界用例，执行所有 Baota 回归、前端测试与生产构建。CI 增加健康模块与宿主机工具路径和测试。
-- [ ] 8. 创建独立功能提交和 draft PR；打包镜像与运行代码，保存可回退版本并核对保全摘要，部署平台自身，验证新接口和页面、八服务与既有业务数据一致，补部署记录和使用说明。
+- [x] 1. 基线：现有 PanelForm 前端用例和 test_site_ssl_summary 后端用例，确认独立测试配置；缺少本地运行依赖时仅修复测试环境。
+- [x] 2. 后端测试先行：spug_api/apps/setting/test_health.py；以 SimpleTestCase/RequestFactory 验证 AdminView、service 输入、状态恢复、超时和脱敏，纯函数验证磁盘/密钥。
+- [x] 3. 后端：health.py 负责快照和受限操作；health_probe.py 负责独立数据库/Redis/Supervisor探针；health_views.py 负责管理员请求。setting/urls.py 与 spug/test_urls.py 增加健康入口。
+- [x] 4. 页面：spug_web/src/pages/system/health/index.js 及样式和测试；routes.js 加 /system/health，使用 admin 权限；checks 表格和时间，明确报告失败，不沿用旧绿色状态。
+- [x] 5. 宿主机诊断：deploy/platform-health/spug-health.py、tests/test_host_health.py、README.md；独立诊断、固定对象启动和机器可读输出，不解析客户数据。
+- [x] 6. 验证：先运行新增失败用例再实现；本地后端 manage.py test apps.setting.test_health --settings=spug.test_settings；前端 node node_modules/react-app-rewired/bin/index.js test --watchAll=false --runInBand；宿主机 python -m unittest discover -s deploy/platform-health/tests。
+- [x] 7. 独立审查，补有意义的边界用例，执行所有 Baota 回归、前端测试与生产构建。CI 增加健康模块与宿主机工具路径和测试。
+- [x] 8. 创建独立功能提交和 draft PR；打包镜像与运行代码，保存可回退版本并核对保全摘要，部署平台自身，验证新接口和页面、八服务与既有业务数据一致，补部署记录和使用说明。
 
 ## 关键断言
 
