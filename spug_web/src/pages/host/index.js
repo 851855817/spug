@@ -5,7 +5,7 @@
  */
 import React, { useEffect } from 'react';
 import { observer } from 'mobx-react';
-import { Row, Col } from 'antd';
+import { Row, Col, Space } from 'antd';
 import { CodeOutlined } from '@ant-design/icons';
 import { AuthDiv, Breadcrumb, AuthButton } from 'components';
 import { t } from 'libs';
@@ -30,8 +30,9 @@ export default observer(function () {
 
   return (
     <AuthDiv auth="host.host.view">
-      <Breadcrumb extra={<AuthButton auth="host.console.view|host.console.list" type="primary" icon={<CodeOutlined/>}
-                                     onClick={openTerminal}>{t('Web 终端')}</AuthButton>}>
+      <Breadcrumb extra={<Space><AuthButton auth="admin" href="/host/expiry">到期管理</AuthButton>
+        <AuthButton auth="host.console.view|host.console.list" type="primary" icon={<CodeOutlined/>}
+                    onClick={openTerminal}>{t('Web 终端')}</AuthButton></Space>}>
         <Breadcrumb.Item>{t('首页')}</Breadcrumb.Item>
         <Breadcrumb.Item>{t('主机管理')}</Breadcrumb.Item>
       </Breadcrumb>

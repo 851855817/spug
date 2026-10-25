@@ -83,6 +83,17 @@ class RollbackImageTests(ImageTests):
                         self.entrypoint.index('exec supervisord -c /etc/supervisord.conf'))
 
 
+class ExpiryImageTests(WorkerImageTests):
+    def test_expiry_models_and_daily_scheduler_are_in_the_startup_source(self):
+        root = Path('/opt/spug/spug_api/apps')
+        self.assertIn('expiry.models import', (root / 'ops/models.py').read_text())
+        for name in ('__init__.py', 'models.py', 'dates.py', 'assets.py', 'service.py', 'reminders.py', 'urls.py'):
+            self.assertTrue((root / 'ops/expiry' / name).is_file(), 'Missing expiry module: ' + name)
+        scheduler = (root / 'schedule/scheduler.py').read_text()
+        self.assertIn('server-expiry-daily', scheduler)
+        self.assertIn('scheduled_check_expiry', scheduler)
+
+
 class UploadRollbackImageTests(ImageTests):
     def test_no_reverse_schema_generation_with_existing_worker_wiring(self):
         self.assertEqual(self.programs(), ORIGINAL_PROGRAMS | {'spug-panel-worker', 'spug-ops-worker'})
@@ -99,6 +110,6 @@ class UploadRollbackImageTests(ImageTests):
 
 
 if __name__ == '__main__':
-    cases = {'worker': WorkerImageTests, 'rollback': RollbackImageTests, 'upload-rollback': UploadRollbackImageTests}
+    cases = {'worker': WorkerImageTests, 'expiry': ExpiryImageTests, 'rollback': RollbackImageTests, 'upload-rollback': UploadRollbackImageTests}
     case = cases[sys.argv.pop(1)]
     unittest.main(defaultTest=case.__name__)

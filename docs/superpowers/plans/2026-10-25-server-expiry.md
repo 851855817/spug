@@ -25,10 +25,10 @@
 
 文件：新增 `spug_api/apps/ops/expiry/{__init__,models,dates,assets,service,reminders,views,urls,tests}.py`，修改 `apps/ops/models.py` 注册模型、`apps/ops/urls.py` 和 `apps/schedule/scheduler.py`。
 
-- [ ] 先编写行为测试：资产关闭监控仍合并、原值不明来源、人工覆盖、权限重新查询、日期格式和边界、来源及分组筛选、owner 停用、并发版本、历史保留。
-- [ ] 运行 `work/spug-testenv/Scripts/python.exe manage.py test apps.ops.expiry.tests --settings=spug.test_settings --noinput`，确认因功能缺失失败。
-- [ ] 实现规范资产与白名单日期解析；附加元数据、审计表，乐观版本并在事务内重查／锁定关联、主机、用户和元数据。不暴露凭据字段。
-- [ ] 先写提醒行为测试，再实现阶段去重、个人已读、漏跑仅当前阶段、续费新周期、关联变化暂停旧元数据和新提醒、默认关闭、无外呼及定时接线。记录检查开始／结束／失败，数据库并发生成须唯一约束。
+- [x] 先编写行为测试：资产关闭监控仍合并、原值不明来源、人工覆盖、权限重新查询、日期格式和边界、来源及分组筛选、owner 停用、并发版本、历史保留。
+- [x] 运行 `work/spug-testenv/Scripts/python.exe manage.py test apps.ops.expiry.tests --settings=spug.test_settings --noinput`，确认因功能缺失失败。
+- [x] 实现规范资产与白名单日期解析；附加元数据、审计表，乐观版本并在事务内重查／锁定关联、主机、用户和元数据。不暴露凭据字段。
+- [x] 先写提醒行为测试，再实现阶段去重、个人已读、漏跑仅当前阶段、续费新周期、关联变化暂停旧元数据和新提醒、默认关闭、无外呼及定时接线。记录检查开始／结束／失败，数据库并发生成须唯一约束。
 - [ ] 运行目标测试，补 MariaDB 条件并发测试，审查规格再审查质量。
 
 日期计算接口例子：
@@ -44,17 +44,17 @@ assert reminder_stage(31) is None
 
 文件：新增 `spug_web/src/pages/server-expiry/{index,Editor,History,Reminders,index.test}.js`；修改 `spug_web/src/routes.js` 及 `pages/host/index.js`。保留 `/host` 原入口，主机页顶部加“到期管理”，新页 `/host/expiry` 挂隐藏路由，避免把主机管理强改子菜单。
 
-- [ ] 编写失败测试并运行 `node node_modules/react-app-rewired/bin/index.js test --watch=false --runInBand src/pages/server-expiry/index.test.js`。
-- [ ] 实现本地只读加载、摘要、分页筛选、旧响应隔离和无权限状态。表格使用 `ResizableTable resizeKey="server-expiry"`。
-- [ ] 实现编辑日期／恢复原记录、负责人、备注、跟进和开关；开启提醒时确认“每日09:00、仅管理员站内”；续费须未来且晚于原日期。
-- [ ] 实现历史详情、个人未读列表与标记已读；只允许明确点击写入，失败保留上下文，重复提交禁用；标题和空态说明站内提醒触达范围。
-- [ ] 目标前端测试通过后运行全前端测试与生产构建，沿用 `NODE_OPTIONS=--openssl-legacy-provider`。
+- [x] 编写失败测试并运行 `node node_modules/react-app-rewired/bin/index.js test --watch=false --runInBand src/pages/server-expiry/index.test.js`。
+- [x] 实现本地只读加载、摘要、分页筛选、旧响应隔离和无权限状态。表格使用 `ResizableTable resizeKey="server-expiry"`。
+- [x] 实现编辑日期／恢复原记录、负责人、备注、跟进和开关；开启提醒时确认“每日09:00、仅管理员站内”；续费须未来且晚于原日期。
+- [x] 实现历史详情、个人未读列表与标记已读；只允许明确点击写入，失败保留上下文，重复提交禁用；标题和空态说明站内提醒触达范围。
+- [x] 目标前端测试通过后运行全前端测试与生产构建，沿用 `NODE_OPTIONS=--openssl-legacy-provider`。
 
 ## 任务 3：集成、说明和部署工具
 
 文件：修改 `.github/workflows/baota-checks.yml`；新增 `deploy/expiry/{prepare-expiry,publish-expiry}.py`、相应验证与说明；新增使用指南和发布记录。
 
-- [ ] CI 纳入 expiry 测试及 schedule 镜像覆盖，镜像／回退模型注册需验证。新增发布以线上8a64ca1为基础，保留库存、租约、作业、基线、用户与提醒；不得沿用空库存假设。
+- [x] CI 纳入 expiry 测试及 schedule 镜像覆盖，镜像／回退模型注册需验证。新增发布以线上8a64ca1为基础，保留库存、租约、作业、基线、用户与提醒；不得沿用空库存假设。
 - [ ] 先检查资源与服务，用受限隔离运行时和 MariaDB 演练现网迁移历史到附加表，种旧库存与既有作业行并核对前后不变。
 - [ ] 规格审查通过后完成独立质量审查，修复并再次验证；更新文档、提交及推送草稿 PR #4，等待检查结果。
 - [ ] 生产配对备份、空闲检查、停止必要写入入口，增量发布与迁移，保留原数据与兼容回退，恢复九服务并验证 HTTP／UI revision／平台健康。

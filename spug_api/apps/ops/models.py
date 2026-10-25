@@ -84,3 +84,8 @@ class OpsBaseline(models.Model):
     class Meta:
         db_table = 'ops_baselines'
         ordering = ('-id',)
+
+
+# Additive expiry tables remain discoverable by the standard updatedb command.
+from .expiry.models import (ExpiryMetadata, ExpiryAudit, ExpiryReminder, ExpiryReminderRead,
+                            ExpiryCheck, ExpiryLock)  # noqa: E402,F401

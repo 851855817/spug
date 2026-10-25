@@ -38,6 +38,7 @@ import ConfigApp from './pages/config/app';
 import ConfigSetting from './pages/config/setting';
 import MonitorIndex from './pages/monitor';
 import ServerMonitor from './pages/server-monitor';
+import ServerExpiry from './pages/server-expiry';
 import AlarmIndex from './pages/alarm/alarm';
 import AlarmGroup from './pages/alarm/group';
 import AlarmContact from './pages/alarm/contact';
@@ -62,6 +63,7 @@ export default [
     component: DashboardIndex
   },
   {icon: <CloudServerOutlined/>, title: t('主机管理'), auth: 'host.host.view', path: '/host', component: HostIndex},
+  {path: '/host/expiry', auth: 'admin', component: ServerExpiry},
   {icon: <CloudServerOutlined/>, title: t('宝塔面板管理'), auth: 'baota.panel.view', path: '/baota', component: BaotaIndex},
   {
     icon: <CodeOutlined/>, title: t('批量执行'), auth: 'exec.task.do|exec.template.view|exec.panel.view|admin', child: [

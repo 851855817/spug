@@ -27,7 +27,8 @@ export default function LinkSettings({card, onCancel, onSaved, hideIP}) {
     const host = hosts.find(item => String(item.id) === selected);
     Modal.confirm({
       title: selected ? '确认关联同一台服务器？' : '确认取消关联？',
-      content: selected ? `将“${card.name}”关联到“${host?.name}”。请确认它们属于同一台服务器。` : '取消后，已开启的来源会分别展示为卡片。',
+      content: selected ? `将“${card.name}”关联到“${host?.name}”。请确认它们属于同一台服务器。到期管理将使用该主机的日期、负责人和提醒设置；此宝塔单独登记的信息暂停生效，取消关联后恢复。` :
+        '取消后，已开启的来源会分别展示为卡片。到期管理也将拆开，并恢复此宝塔原来单独登记的日期、负责人和提醒设置。',
       okText: '确认保存', cancelText: '返回',
       onOk: async () => {
         if (!alive.current) return;

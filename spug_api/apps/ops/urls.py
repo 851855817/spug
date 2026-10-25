@@ -1,8 +1,9 @@
-from django.urls import path
+from django.urls import include, path
 from .views import BaselinesView, CancelView, CatalogView, ContinueView, DiffView, RunsView, RunView
 
 
 urlpatterns = [
+    path('expiry/', include('apps.ops.expiry.urls')),
     path('catalog/', CatalogView.as_view()),
     path('runs/', RunsView.as_view()),
     path('runs/<int:run_id>/', RunView.as_view()),

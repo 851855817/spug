@@ -6,6 +6,7 @@ LABEL org.opencontainers.image.source="https://github.com/851855817/spug" \
 COPY spug_api/apps/baota /opt/spug/spug_api/apps/baota
 COPY spug_api/apps/setting /opt/spug/spug_api/apps/setting
 COPY spug_api/apps/ops /opt/spug/spug_api/apps/ops
+COPY spug_api/apps/schedule/scheduler.py /opt/spug/spug_api/apps/schedule/scheduler.py
 COPY spug_api/spug/settings.py spug_api/spug/urls.py /opt/spug/spug_api/spug/
 COPY spug_web/build/ /opt/spug/spug_web/build/
 COPY deploy/baota/entrypoint.sh /baota-entrypoint.sh
