@@ -54,11 +54,17 @@ export default function RunDetail({runId}) {
   const actionPending = useRef(false);
   const baselinePending = useRef(false);
   const baselineReadRevision = useRef(0);
+  const comparisonRevision = useRef(0);
   const comparePending = useRef(false);
   const dialog = useRef();
   const pollCount = useRef(0);
   const latest = useRef();
   latest.current = {run, error, allowed};
+
+  const invalidateComparison = useCallback(() => {
+    comparisonRevision.current += 1;
+    setComparison(null);
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!allowed || !mounted.current || readPending.current) return null;
@@ -82,7 +88,7 @@ export default function RunDetail({runId}) {
   const readBaselines = useCallback(async () => {
     if (!allowed || !baselineJob) return;
     const request = ++baselineReadRevision.current;
-    setBaselineLoading(true); setBaselineId(undefined); setComparison(null);
+    setBaselineLoading(true); setBaselineId(undefined); invalidateComparison();
     try {
       const result = await http.get('/api/ops/baselines/', {params: {
         page: baselinePage, page_size: 100, job: baselineJob, version: baselineVersion,
@@ -93,12 +99,12 @@ export default function RunDetail({runId}) {
       }
     } catch (_) {if (mounted.current && request === baselineReadRevision.current) setBaselineError(true);}
     finally {if (mounted.current && request === baselineReadRevision.current) setBaselineLoading(false);}
-  }, [allowed, baselineJob, baselineVersion, baselinePhpVersion, baselinePage, baselineQuery]);
+  }, [allowed, baselineJob, baselineVersion, baselinePhpVersion, baselinePage, baselineQuery, invalidateComparison]);
 
   useEffect(() => {
     mounted.current = true;
     if (allowed) refresh();
-    return () => {mounted.current = false; revision.current += 1; baselineReadRevision.current += 1; readPending.current = false; if (dialog.current) dialog.current.destroy();};
+    return () => {mounted.current = false; revision.current += 1; baselineReadRevision.current += 1; comparisonRevision.current += 1; readPending.current = false; if (dialog.current) dialog.current.destroy();};
   }, [allowed, refresh]);
 
   useEffect(() => {readBaselines();}, [readBaselines]);
@@ -125,7 +131,7 @@ export default function RunDetail({runId}) {
     if (!mounted.current || !hasPermission('admin') || actionPending.current || !current.allowed) return;
     if (current.error || current.run?.state !== expectedState) {setNotice('作业状态已变化，请刷新后重新确认。'); return;}
     actionPending.current = true; revision.current += 1; readPending.current = false;
-    setLoading(false); setAction(kind); setNotice(''); setComparison(null);
+    setLoading(false); setAction(kind); setNotice(''); invalidateComparison();
     try {
       const payload = kind === 'continue' && expectedState === 'tripped' ? {acknowledge: true} : {};
       const result = await http.post(`/api/ops/runs/${runId}/${kind}/`, payload);
@@ -170,11 +176,12 @@ export default function RunDetail({runId}) {
     const selected = baselines.find(item => item.id === baselineId && compatibleBaseline(item, run));
     if (!selected || baselineLoading || baselineError || comparePending.current || !hasPermission('admin') || error) return;
     const snapshot = run;
+    const request = ++comparisonRevision.current;
     comparePending.current = true; setComparing(true); setNotice(''); setComparison(null);
     try {
       const result = await http.get(`/api/ops/runs/${runId}/diff/`, {params: {baseline_id: baselineId}});
-      if (mounted.current) setComparison({...result, compared_at: new Date().toISOString(), run_snapshot: snapshot});
-    } catch (_) {if (mounted.current) setNotice('差异读取失败，当前无法确认差异。');}
+      if (mounted.current && request === comparisonRevision.current) setComparison({...result, compared_at: new Date().toISOString(), run_snapshot: snapshot});
+    } catch (_) {if (mounted.current && request === comparisonRevision.current) setNotice('差异读取失败，当前无法确认差异。');}
     finally {comparePending.current = false; if (mounted.current) setComparing(false);}
   }
 
@@ -233,7 +240,7 @@ export default function RunDetail({runId}) {
       <div><Space wrap>
         <Input placeholder="搜索基线名称" maxLength={100} style={{width: 200}} value={baselineSearch} onChange={event => setBaselineSearch(event.target.value)}/>
         <Button disabled={baselineLoading} onClick={() => {setBaselinePage(1); setBaselineQuery(baselineSearch.trim()); if (baselinePage === 1 && baselineQuery === baselineSearch.trim()) readBaselines();}}>搜索基线</Button>
-        <Select placeholder="选择同版本基线" style={{width: 280}} value={baselineId} disabled={comparing || busy || baselineError || baselineLoading} onChange={value => {setBaselineId(value); setComparison(null);}}
+        <Select placeholder="选择同版本基线" style={{width: 280}} value={baselineId} disabled={comparing || busy || baselineError || baselineLoading} onChange={value => {setBaselineId(value); invalidateComparison();}}
           options={compatibleBaselines.map(item => ({value: item.id, label: `${item.name} · ${item.created_at || `#${item.id}`}`}))}/>
         <Button disabled={!compatibleBaselines.some(item => item.id === baselineId) || error || busy || baselineError || baselineLoading} loading={comparing} onClick={compare}>比较差异</Button>
         <Button loading={baselineLoading} onClick={readBaselines}>刷新基线</Button>

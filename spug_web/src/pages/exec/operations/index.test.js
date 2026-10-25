@@ -164,6 +164,104 @@ test('PHP baselines also require the same branch and audit uses server event and
   expect(container.textContent).toContain('用户 #2');
 });
 
+describe.each(['刷新基线', '搜索基线', '下一页基线', '继续下一批', '取消未执行项'])('pending comparison invalidated by %s', invalidation => {
+  test.each(['success', 'failure'])('ignores the late %s and allows a fresh comparison', async outcome => {
+    let resolveDiff; let rejectDiff;
+    const delayed = new Promise((resolve, reject) => {resolveDiff = resolve; rejectDiff = reject;});
+    const baseline = {id: 1, name: '有效基线', job: 'linux_inspection', version: '1'};
+    const fresh = {baseline: {name: '有效基线'}, items: []};
+    let diffCalls = 0;
+    http.get.mockImplementation(url => url.includes('/baselines/') ? Promise.resolve({items: [baseline], total: 201}) :
+      url.includes('/diff/') ? ++diffCalls === 1 ? delayed : Promise.resolve(fresh) : Promise.resolve(run));
+    http.post.mockResolvedValue(run);
+    await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
+    choose('选择同版本基线', [1]);
+    act(() => {button('比较差异').click();});
+    expect(http.get).toHaveBeenCalledWith('/api/ops/runs/7/diff/', {params: {baseline_id: 1}});
+    if (invalidation === '搜索基线') {
+      act(() => {Simulate.change(container.querySelector('input[aria-label="搜索基线名称"]'), {target: {value: '有效'}});});
+    }
+    await act(async () => {button(invalidation).click();});
+    if (['继续下一批', '取消未执行项'].includes(invalidation)) {
+      expect(http.post).not.toHaveBeenCalled();
+      await act(async () => {await Modal.confirm.mock.calls[0][0].onOk();});
+      expect(http.post).toHaveBeenCalledTimes(1);
+    }
+    await act(async () => {
+      if (outcome === 'success') resolveDiff({baseline: {name: '已经失效的旧比较'}, items: []});
+      else rejectDiff(new Error('late failure'));
+    });
+    expect(container.textContent).not.toContain('已经失效的旧比较');
+    expect(container.textContent).not.toContain('差异读取失败');
+    choose('选择同版本基线', [1]);
+    expect(button('比较差异').disabled).toBe(false);
+    await act(async () => {button('比较差异').click();});
+    expect(container.textContent).toContain('基线：有效基线');
+    expect(diffCalls).toBe(2);
+  });
+});
+
+test.each(['success', 'failure'])('ordinary detail refresh preserves a still-valid pending comparison %s', async outcome => {
+  let resolveDiff; let rejectDiff;
+  const delayed = new Promise((resolve, reject) => {resolveDiff = resolve; rejectDiff = reject;});
+  http.get.mockImplementation(url => url.includes('/baselines/') ? Promise.resolve({items: [
+    {id: 1, name: '标准', job: 'linux_inspection', version: '1'}]}) : url.includes('/diff/') ? delayed : Promise.resolve(run));
+  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
+  choose('选择同版本基线', [1]);
+  act(() => {button('比较差异').click();});
+  await act(async () => {button('刷新详情').click();});
+  await act(async () => {
+    if (outcome === 'success') resolveDiff({baseline: {name: '仍然有效的比较'}, items: []});
+    else rejectDiff(new Error('current failure'));
+  });
+  expect(container.textContent).toContain(outcome === 'success' ? '基线：仍然有效的比较' : '差异读取失败');
+  expect(button('比较差异').disabled).toBe(false);
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('reports preserve independent comparison snapshots but exclude invalidated late results', async () => {
+  const originalCreate = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+  const originalRevoke = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+  const createUrl = jest.fn().mockReturnValue('blob:comparison');
+  Object.defineProperty(URL, 'createObjectURL', {configurable: true, value: createUrl});
+  Object.defineProperty(URL, 'revokeObjectURL', {configurable: true, value: jest.fn()});
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  const download = async () => {
+    const requests = http.get.mock.calls.length;
+    act(() => {button('下载 JSON 报告').click();});
+    const blob = createUrl.mock.calls[createUrl.mock.calls.length - 1][0];
+    const result = await new Promise(resolve => {const reader = new FileReader(); reader.onload = () => resolve(JSON.parse(reader.result)); reader.readAsText(blob);});
+    expect(http.get).toHaveBeenCalledTimes(requests);
+    expect(http.post).not.toHaveBeenCalled();
+    return result;
+  };
+  try {
+    let current = run; let delayed; let resolveDiff;
+    http.get.mockImplementation(url => url.includes('/baselines/') ? Promise.resolve({items: [
+      {id: 1, name: '标准', job: 'linux_inspection', version: '1'}]}) : url.includes('/diff/') ?
+      delayed || Promise.resolve({baseline: {name: '已完成比较'}, items: []}) : Promise.resolve(current));
+    await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
+    choose('选择同版本基线', [1]);
+    await act(async () => {button('比较差异').click();});
+    current = {...run, state: 'cancelled'};
+    await act(async () => {button('刷新详情').click();});
+    const report = await download();
+    expect(report.run.state).toBe('cancelled');
+    expect(report.comparison.run_snapshot.state).toBe('paused');
+    expect(report.comparison.baseline.name).toBe('已完成比较');
+    expect(report.comparison.compared_at).toEqual(expect.any(String));
+    delayed = new Promise(resolve => {resolveDiff = resolve;});
+    act(() => {button('比较差异').click();});
+    await act(async () => {button('刷新基线').click();});
+    await act(async () => {resolveDiff({baseline: {name: '失效比较'}, items: []});});
+    expect((await download()).comparison).toBeNull();
+  } finally {
+    click.mockRestore();
+    if (originalCreate) Object.defineProperty(URL, 'createObjectURL', originalCreate); else delete URL.createObjectURL;
+    if (originalRevoke) Object.defineProperty(URL, 'revokeObjectURL', originalRevoke); else delete URL.revokeObjectURL;
+  }
+});
+
 test('old baselines remain reachable through server pagination and compatible name search', async () => {
   http.get.mockImplementation((url, options) => Promise.resolve(url.includes('/baselines/') ? {items: [
     {id: options?.params?.page === 2 ? 1 : 201, name: options?.params?.page === 2 ? '旧标准' : '新标准', job: 'php_environment', version: '1', params: {php_version: '74'}}
