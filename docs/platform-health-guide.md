@@ -58,6 +58,6 @@ python3 /opt/spug/platform-health/spug-health.py --start spug-db
 
 无需数据库迁移。宿主机独立采集定时器只生成、发布脱敏报告，不执行恢复。安装或移除方式见独立工具说明。停用报告采集后，Web 页面会保留报告并按时间提示过期。
 
-宿主机报告内部一致性校验属于本次待发布修复；当前演示版本 `9648bef` 尚未包含它。部署状态以[夜间进度](superpowers/plans/2026-10-25-overnight-progress.md)为准。
+宿主机报告内部一致性校验已于 2026-10-26 01:13—01:16（UTC+8）发布并独立验收，应用版本 `11d0683`。测试、备份和保全证据见[发布记录](releases/2026-10-26-host-report-validation.md)；后续部署状态以[夜间进度](superpowers/plans/2026-10-25-overnight-progress.md)为准。
 
 平台健康是运维增强的第一阶段，其余功能说明见 [运维作业与分批执行](operations-center-guide.md)。

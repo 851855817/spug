@@ -97,7 +97,7 @@ sudo docker cp /opt/spug/platform-health.json spug:/data/platform-health.json
 
 复制只发布脱敏诊断数据，不授予 Web 额外权限。Web 后端读取固定 `/data/platform-health.json`，只信任约定字段；报告超过 10 分钟会标记过期。部署时可由宿主机管理员每 5 分钟运行 `--write-report --publish-report`，定时执行只允许采集与发布报告，不能包含 `--start`。复制时间不等于检查时间，必须以 `checked_at` 为准。脚本本身不安装定时任务、不自动恢复。
 
-Web 侧报告校验增量要求 `checks` 为 1—32 项，每项具有唯一且受限的 id 与合法状态；内部状态按宿主机生产器的 `error > warning > unknown > ok` 聚合，并与报告总状态一致。矛盾或畸形报告返回 unknown，不输出原字段或异常文本。该校验保留最小报告兼容，不证明检查项完整或报告来源可信。具体修复版本及是否上线以[夜间进度](../../docs/superpowers/plans/2026-10-25-overnight-progress.md)为准，不能把仓库新增规则当作现网已经具备。
+Web 侧报告校验增量要求 `checks` 为 1—32 项，每项具有唯一且受限的 id 与合法状态；内部状态按宿主机生产器的 `error > warning > unknown > ok` 聚合，并与报告总状态一致。矛盾或畸形报告返回 unknown，不输出原字段或异常文本。该校验保留最小报告兼容，不证明检查项完整或报告来源可信。已在 `11d0683` 发布并独立验收，证据见[发布记录](../../docs/releases/2026-10-26-host-report-validation.md)；后续状态以[夜间进度](../../docs/superpowers/plans/2026-10-25-overnight-progress.md)为准。
 
 ## 安装只读采集定时器
 
