@@ -158,8 +158,21 @@ test('a new snapshot invalidates an old confirmation even if the service still a
   expect(container.textContent).toContain('请重新检查后再操作');
 });
 
-test('report download exports the observed snapshot and marks it stale after a failed query', async () => {
-  await render(); http.get.mockRejectedValue('unavailable'); await click(button('立即检查'));
+test.each(['fresh', 'failed', 'recovered'])('report download exports the %s snapshot without querying or exposing a query error', async state => {
+  let expected = snapshot();
+  await render();
+  if (state !== 'fresh') {
+    http.get.mockRejectedValue(new Error('private internal response'));
+    await click(button('立即检查'));
+  }
+  if (state === 'recovered') {
+    expected = snapshot({checked_at: '2026-10-24T08:20:00Z', status: 'ok', checks: []});
+    http.get.mockResolvedValue(expected);
+    await click(button('立即检查'));
+    expect(overview().getAttribute('data-status')).toBe('ok');
+    expect(container.textContent).not.toContain('健康检查失败');
+  }
+  const readsBefore = http.get.mock.calls.length;
   let exported;
   const createURL = jest.fn(blob => {exported = blob; return 'blob:health-report';});
   const revokeURL = jest.fn();
@@ -173,7 +186,13 @@ test('report download exports the observed snapshot and marks it stale after a f
   expect(download).toHaveBeenCalledTimes(1);
   expect(exported.type).toBe('application/json;charset=utf-8');
   const body = await new Promise(resolve => {const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.readAsText(exported);});
-  expect(JSON.parse(body)).toMatchObject({...snapshot(), snapshot_stale: true});
+  const report = JSON.parse(body);
+  expect(report).toMatchObject({...expected, snapshot_stale: state === 'failed',
+    query_error: state === 'failed' ? '最近一次健康检查失败，当前内容为上次快照。' : null});
+  expect(Number.isNaN(Date.parse(report.report_exported_at))).toBe(false);
+  expect(body).not.toContain('private internal response');
+  expect(http.get).toHaveBeenCalledTimes(readsBefore);
+  expect(http.post).not.toHaveBeenCalled();
   expect(revokeURL).toHaveBeenCalledWith('blob:health-report');
   } finally {
     download.mockRestore();

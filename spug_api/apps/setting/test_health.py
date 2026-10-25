@@ -182,6 +182,23 @@ class PlatformHealthTests(SimpleTestCase):
             self.assertNotEqual(first['checked_at'], third['checked_at'])
             self.assertEqual(len(calls), 6)
 
+    def test_snapshot_cache_exact_expiry_and_clock_rollback_require_new_evidence(self):
+        health = self.health()
+        checked_at = datetime(2026, 10, 25, 17, 0, tzinfo=timezone.utc)
+        for elapsed, cached in [(0, True), (14.999999, True), (15, False), (-0.000001, False)]:
+            with self.subTest(elapsed=elapsed):
+                (self.root/'state'/'snapshot.json').unlink(missing_ok=True)
+                def probe(kind):
+                    return {'id': kind, 'name': kind, 'status': 'ok', 'summary': 'ok', 'advice': ''}
+                with patch.object(health, 'run_probe', side_effect=probe) as probes:
+                    with patch.object(health, 'now', return_value=checked_at):
+                        first = health.snapshot()
+                    next_time = checked_at + timedelta(seconds=elapsed)
+                    with patch.object(health, 'now', return_value=next_time):
+                        second = health.snapshot()
+                self.assertEqual(probes.call_count, 3 if cached else 6)
+                self.assertEqual(second['checked_at'], first['checked_at'] if cached else next_time.isoformat())
+
     def test_no_start_if_preoperation_audit_fails(self):
         health = self.health()
         with patch.object(health, 'service_states', return_value={'spug-worker': 'STOPPED'}), patch.object(

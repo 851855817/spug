@@ -6,12 +6,12 @@ import os
 import subprocess
 import sys
 import threading
-from datetime import timedelta
+from datetime import datetime, timedelta
 from unittest import TestCase
 from unittest.mock import patch
 
 from django.db import close_old_connections, connection
-from django.test import TransactionTestCase
+from django.test import TransactionTestCase, override_settings
 from django.urls import resolve
 from django.utils import timezone
 
@@ -307,6 +307,85 @@ class InventoryAPITests(TransactionTestCase):
         result = self.request('get', '/baota/inventory/backups/')
         self.assertIsNone(result['items'][1]['overdue'])
         self.assertIsNone(result['items'][2]['overdue'])
+
+    @override_settings(USE_TZ=False, TIME_ZONE='Asia/Shanghai')
+    def test_ssl_calendar_boundaries_and_filters_use_the_platform_date(self):
+        service, panel = self.service(), self.configured()
+        now = datetime(2026, 10, 26, 0, 0, 1)
+        cases = [
+            ('2026-10-25', 'configured', 'expired', -1),
+            ('2026-10-26', 'configured', 'expiring', 0),
+            ('2026-11-25', 'configured', 'expiring', 30),
+            ('2026-11-26', 'configured', 'valid', 31),
+            ('2026-02-30', 'configured', 'unknown', None),
+            ('', 'unconfigured', 'unconfigured', None),
+        ]
+        original = self.fake_collect()[0]
+        rows = [{**copy.deepcopy(original), 'site_id': index, 'name': f'site-{index}.example',
+                 'expires_at': expiry, 'ssl_state': configured}
+                for index, (expiry, configured, _, _) in enumerate(cases, 1)]
+        with patch.object(service.timezone, 'now', return_value=now), patch.object(
+                service, 'collect_panel', return_value=rows):
+            self.collect(panel)
+        with patch.object(service.timezone, 'now', return_value=now), patch.object(
+                service, 'collect_panel') as collector:
+            result = self.request('get', '/baota/inventory/sites/')
+            self.assertEqual([(row['ssl_state'], row['days_remaining']) for row in result['items']],
+                             [(state, days) for _, _, state, days in cases])
+            for state, ids in [('expired', [1]), ('expiring', [2, 3]), ('valid', [4]),
+                               ('unknown', [5]), ('unconfigured', [6])]:
+                with self.subTest(state=state):
+                    filtered = self.request('get', '/baota/inventory/sites/', {'state': state})
+                    self.assertEqual([row['site_id'] for row in filtered['items']], ids)
+                    self.assertEqual(filtered['summary'][state], len(ids))
+                    self.assertEqual(filtered['summary']['total'], len(cases))
+            collector.assert_not_called()
+
+    @override_settings(USE_TZ=False, TIME_ZONE='Asia/Shanghai')
+    def test_crossing_midnight_recomputes_ssl_without_collecting_or_rewriting_snapshot(self):
+        service, panel = self.service(), self.configured()
+        before_midnight = datetime(2026, 10, 25, 23, 59, 59)
+        rows = self.fake_collect()
+        rows[0]['expires_at'] = '2026-10-25'
+        with patch.object(service.timezone, 'now', return_value=before_midnight), patch.object(
+                service, 'collect_panel', return_value=rows):
+            self.collect(panel)
+        stored = list(models.PanelInventorySnapshot.objects.values())
+        with patch.object(service, 'collect_panel') as collector:
+            for now, state, days in [(before_midnight, 'expiring', 0),
+                                     (datetime(2026, 10, 26), 'expired', -1)]:
+                with self.subTest(now=now), patch.object(service.timezone, 'now', return_value=now):
+                    result = self.request('get', '/baota/inventory/sites/')
+                    self.assertEqual(result['items'][0]['ssl_state'], state)
+                    self.assertEqual(result['items'][0]['days_remaining'], days)
+                    self.assertFalse(result['items'][0]['stale'])
+            collector.assert_not_called()
+        self.assertEqual(list(models.PanelInventorySnapshot.objects.values()), stored)
+
+    @override_settings(USE_TZ=False, TIME_ZONE='Asia/Shanghai')
+    def test_both_inventory_kinds_expire_after_24_hours_without_recollecting_or_losing_rows(self):
+        service, panel = self.service(), self.configured()
+        collected_at = datetime(2026, 10, 25, 23, 59, 59)
+        for kind in ('sites', 'backups'):
+            rows = self.fake_collect(kind)
+            with patch.object(service.timezone, 'now', return_value=collected_at), patch.object(
+                    service, 'collect_panel', return_value=rows):
+                self.collect(panel, kind)
+        stored = list(models.PanelInventorySnapshot.objects.order_by('id').values())
+        with patch.object(service, 'collect_panel') as collector:
+            for age, stale in [(timedelta(hours=24), False),
+                               (timedelta(hours=24, microseconds=1), True)]:
+                for kind in ('sites', 'backups'):
+                    with self.subTest(kind=kind, age=age), patch.object(
+                            service.timezone, 'now', return_value=collected_at + age):
+                        result = self.request('get', f'/baota/inventory/{kind}/')
+                        self.assertEqual(len(result['items']), 1 if kind == 'sites' else 3)
+                        self.assertEqual(result['panels'][0]['status'], 'stale' if stale else 'ok')
+                        self.assertEqual(result['summary']['stale'], len(result['items']) if stale else 0)
+                        self.assertTrue(all(row['stale'] is stale for row in result['items']))
+                        self.assertEqual(result['panels'][0]['sampled_at'], collected_at.isoformat())
+            collector.assert_not_called()
+        self.assertEqual(list(models.PanelInventorySnapshot.objects.order_by('id').values()), stored)
 
     def test_strict_validation_nonatomic_and_crypto_errors_are_sanitized(self):
         service, panel = self.service(), self.configured()
