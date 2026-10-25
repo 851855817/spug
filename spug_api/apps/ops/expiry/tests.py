@@ -271,6 +271,84 @@ class ExpiryTests(TestCase):
         notify = apps.get_model('notify', 'Notify')
         self.assertEqual(notify.objects.count(), 0)
 
+    def test_reenabled_same_cycle_preserves_reads_and_renewal_creates_a_new_unread_cycle(self):
+        from . import dates
+        fixed = date(2030, 1, 1)
+        with patch.object(dates, 'platform_today', return_value=fixed):
+            row = self.save(manual_expiry='2030-01-06', reminder_enabled=True, followup='contacted')
+            self.assertTrue(self.checker().check_expiry())
+            reminder = self.request('get', 'reminders/')['items'][0]
+            self.request('post', 'reminders/read/', {'ids': [reminder['id']]})
+            row = self.save(row, reminder_enabled=False)
+            self.assertTrue(self.checker().check_expiry())
+            self.assertEqual(self.request('get', 'reminders/', {'current': '1'})['total'], 0)
+            historical = self.request('get', 'reminders/')
+            self.assertEqual(historical['total'], 1)
+            self.assertFalse(historical['items'][0]['current'])
+            self.assertEqual(historical['unread_count'], 0)
+
+            row = self.save(row, reminder_enabled=True)
+            for _ in range(2):
+                self.assertTrue(self.checker().check_expiry())
+            current = self.request('get', 'reminders/', {'current': '1'})
+            self.assertEqual(current['total'], 1)
+            self.assertEqual(current['items'][0]['id'], reminder['id'])
+            self.assertFalse(current['items'][0]['unread'])
+            self.assertEqual(self.request('get', 'reminders/')['total'], 1)
+            self.assertEqual(row['followup'], 'contacted')
+            self.assertEqual(row['expires_on'], '2030-01-06')
+
+            row = self.request('post', 'assets/%s/renew/' % row['key'],
+                               {'version': row['version'], 'expires_on': '2030-01-07', 'note': '已核对'})
+            self.assertEqual(row['followup'], 'pending')
+            self.assertTrue(row['reminder_enabled'])
+            self.assertTrue(self.checker().check_expiry())
+            all_reminders = self.request('get', 'reminders/')
+            self.assertEqual(all_reminders['total'], 2)
+            old = next(item for item in all_reminders['items'] if item['id'] == reminder['id'])
+            self.assertFalse(old['current'])
+            self.assertFalse(old['unread'])
+            current = self.request('get', 'reminders/', {'current': '1', 'unread': '1'})
+            self.assertEqual(current['total'], 1)
+            self.assertNotEqual(current['items'][0]['id'], reminder['id'])
+            self.assertEqual(current['items'][0]['expires_on'], '2030-01-07')
+            self.assertEqual(current['unread_count'], 1)
+
+    def test_revocation_after_dispatch_cannot_renew_or_mark_reminders_read(self):
+        from . import dates, service
+        clock = patch.object(dates, 'platform_today', return_value=date(2030, 1, 1))
+        clock.start()
+        self.addCleanup(clock.stop)
+        row = self.save(manual_expiry='2030-01-06', reminder_enabled=True)
+        self.assertTrue(self.checker().check_expiry())
+        reminder = self.request('get', 'reminders/')['items'][0]
+        require_admin = service.require_admin
+        metadata_model = apps.get_model('ops', 'ExpiryMetadata')
+        audit_model = apps.get_model('ops', 'ExpiryAudit')
+        read_model = apps.get_model('ops', 'ExpiryReminderRead')
+        original_metadata = list(metadata_model.objects.values())
+        original_audit = list(audit_model.objects.values())
+        for field in ('is_active', 'is_supper', 'is_deleted'):
+            for suffix, payload in [
+                ('assets/%s/renew/' % row['key'],
+                 {'version': row['version'], 'expires_on': '2030-01-07', 'note': 'must not save'}),
+                ('reminders/read/', {'ids': [reminder['id']]}),
+            ]:
+                with self.subTest(field=field, endpoint=suffix):
+                    User.objects.filter(pk=self.admin.pk).update(is_active=True, is_supper=True, is_deleted=False)
+                    def revoke_after_dispatch(user, lock=False):
+                        actor = require_admin(user, lock=lock)
+                        if not lock:
+                            User.objects.filter(pk=actor.pk).update(**{field: field == 'is_deleted'})
+                        return actor
+                    with patch.object(service, 'require_admin', side_effect=revoke_after_dispatch) as permissions:
+                        self.request('post', suffix, payload, error=True)
+                    self.assertEqual(permissions.call_count, 2)
+                    self.assertTrue(permissions.call_args.kwargs['lock'])
+                    self.assertEqual(list(metadata_model.objects.values()), original_metadata)
+                    self.assertEqual(list(audit_model.objects.values()), original_audit)
+                    self.assertFalse(read_model.objects.exists())
+
     def test_checker_skips_default_disabled_exempt_invalid_and_paused_panels(self):
         self.rows()
         checker = self.checker()

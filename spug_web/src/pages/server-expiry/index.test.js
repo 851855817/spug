@@ -104,11 +104,28 @@ test('saving a manual source without an optional raw override preserves its effe
   await render(); await click('编辑'); await click('保存');
   expect(http.post.mock.calls[0][1].manual_expiry).toBe('2030-12-01');
 });
-test('enabling reminder waits for explicit confirmation, cancellation sends nothing', async () => {
+test('enabling reminder waits for explicit confirmation before saving', async () => {
   await render(); await click('编辑'); await change('开启站内提醒', true); await click('保存');
   expect(Modal.confirm).toHaveBeenCalledTimes(1); expect(http.post).not.toHaveBeenCalled();
   expect(Modal.confirm.mock.calls[0][0].content).toContain('09:00');
   await act(async () => {await Modal.confirm.mock.calls[0][0].onOk(); await flush();});
+  expect(http.post.mock.calls[0][1].reminder_enabled).toBe(true);
+});
+
+test('cancelling reminder confirmation preserves the editor and permits one later confirmation', async () => {
+  Modal.confirm.mockReturnValueOnce({destroy: jest.fn()}).mockReturnValueOnce({destroy: jest.fn()});
+  await render(); await click('编辑'); await change('开启站内提醒', true); await click('保存');
+  await click('保存');
+  expect(Modal.confirm).toHaveBeenCalledTimes(1);
+  expect(http.post).not.toHaveBeenCalled();
+  act(() => {Modal.confirm.mock.calls[0][0].onCancel();});
+  expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  expect(container.querySelector('[aria-label="开启站内提醒"]').checked).toBe(true);
+  expect(http.post).not.toHaveBeenCalled();
+  await click('保存');
+  expect(Modal.confirm).toHaveBeenCalledTimes(2);
+  await act(async () => {await Modal.confirm.mock.calls[1][0].onOk(); await flush();});
+  expect(http.post).toHaveBeenCalledTimes(1);
   expect(http.post.mock.calls[0][1].reminder_enabled).toBe(true);
 });
 test('invalid manual dates and nonadvancing renewal dates never submit', async () => {
