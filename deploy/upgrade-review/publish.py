@@ -500,6 +500,11 @@ def scan(root, kind):
             path = base / name
             if name.endswith(('.pyc', '.pyo')):
                 continue
+            # The default Supervisor daemon log lives at the API working
+            # directory and changes when maintenance stops/starts programs.
+            # Keep the exception exact; nested/UI/near-match files are hashed.
+            if kind == 'api' and base == root and name == 'supervisord.log':
+                continue
             assert path.is_file()
             result[path.relative_to(root).as_posix()] = sha(path)
     return result

@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import socket
 import sys
+import time
 from datetime import datetime, timedelta
 
 sys.path.insert(0, '/data/spug/spug_api')
@@ -43,6 +44,19 @@ def read_schema(database):
     return schema
 
 
+def normalized_rows(model, rows, now):
+    # Auth middleware renews this TTL on every authenticated GET. Preserve
+    # identity/token/permissions and revocation; only an active TTL's exact
+    # future second is volatile. No database value is modified.
+    if (model._meta.app_label, model.__name__) != ('account', 'User'):
+        return rows
+    return [dict(row, token_expired='active-session-expiry')
+            if (row.get('is_active') is True and isinstance(row.get('access_token'), str)
+                and len(row['access_token']) == 32 and type(row.get('token_expired')) is int
+                and row['token_expired'] >= now) else dict(row)
+            for row in rows]
+
+
 models = [model for model in apps.get_models(include_auto_created=True)
           if (model._meta.app_label, model.__name__) not in (
               ('baota', 'ResourceMonitorSnapshot'), ('baota', 'ResourceMonitorLease'))]
@@ -51,7 +65,7 @@ result = {}
 for model in sorted(models, key=lambda value: value._meta.db_table):
     table = model._meta.db_table
     assert table in tables, 'Missing business schema; refuse release'
-    rows = list(model.objects.order_by('pk').values())
+    rows = normalized_rows(model, list(model.objects.order_by('pk').values()), time.time())
     result[table] = {'count': len(rows), 'digest': digest(rows)}
 with connection.cursor() as cursor:
     cursor.execute('SELECT app, name, applied FROM django_migrations ORDER BY app, name')

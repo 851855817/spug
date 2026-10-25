@@ -165,6 +165,27 @@ class PackagingTests(unittest.TestCase):
         descriptions['new_table'] = ['new-column']
         self.assertNotEqual(scope['read_schema'](connection), original)
 
+    def test_user_session_ttl_refresh_does_not_hide_identity_or_revocation_changes(self):
+        from types import SimpleNamespace
+        tree = ast.parse((ROOT / 'fingerprint.py').read_text())
+        methods = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == 'normalized_rows']
+        scope = {}
+        exec(compile(ast.Module(body=methods, type_ignores=[]), '<session-normalization>', 'exec'), scope)
+        self.assertIn('normalized_rows', scope)
+        user = type('User', (), {'_meta': SimpleNamespace(app_label='account')})
+        before = [{'id': 1, 'token_expired': 200, 'access_token': 'a' * 32, 'is_supper': False, 'is_active': True}]
+        normalize = scope['normalized_rows']
+        original = normalize(user, before, 100)
+        self.assertEqual(normalize(user, [dict(before[0], token_expired=300)], 100), original)
+        for change in ({'token_expired': 0}, {'token_expired': 99}, {'access_token': 'new'}, {'is_supper': True}):
+            self.assertNotEqual(normalize(user, [dict(before[0], **change)], 100), original)
+        self.assertEqual(before[0]['token_expired'], 200)
+        other = type('Other', (), {'_meta': SimpleNamespace(app_label='account')})
+        self.assertEqual(normalize(other, before, 100), before)
+        for change in ({'is_active': False}, {'access_token': ''}, {'access_token': 'bad'}):
+            row = dict(before[0], **change)
+            self.assertNotEqual(normalize(user, [row], 100), normalize(user, [dict(row, token_expired=300)], 100))
+
 
 if __name__ == '__main__':
     unittest.main()

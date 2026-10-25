@@ -595,6 +595,39 @@ class FileContractTests(unittest.TestCase):
                 self.assertNotEqual(before, json.loads(self.probe(request).stdout))
                 path.write_bytes(b'old')
 
+    def test_exact_root_api_supervisor_log_is_volatile_but_nearby_names_are_frozen(self):
+        roots = {}
+        for kind in ('api', 'ui'):
+            roots[kind] = []
+            for index in range(2):
+                root = self.root / (kind + str(index))
+                root.mkdir()
+                for name in ('runtime.py', 'supervisord.log', 'supervisord.log.py',
+                             'supervisord.log.1', 'apps/ops/supervisord.log'):
+                    path = root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(b'old')
+                if kind == 'ui':
+                    (root / 'ui-release.json').write_text(json.dumps({'revision': PREVIOUS}))
+                roots[kind].append(str(root))
+        request = {'mode': 'snapshot', 'roots': roots}
+        before = json.loads(self.probe(request).stdout)
+        log = Path(roots['api'][1]) / 'supervisord.log'
+        log.write_bytes(b'supervisor stop/start appended')
+        self.assertEqual(before, json.loads(self.probe(request).stdout))
+        log.unlink()
+        self.assertEqual(before, json.loads(self.probe(request).stdout))
+        log.write_bytes(b'new supervisor log')
+        self.assertEqual(before, json.loads(self.probe(request).stdout))
+        for kind, name in (('api', 'runtime.py'), ('api', 'supervisord.log.py'),
+                           ('api', 'supervisord.log.1'), ('api', 'apps/ops/supervisord.log'),
+                           ('ui', 'supervisord.log')):
+            with self.subTest(kind=kind, name=name):
+                path = Path(roots[kind][0]) / name
+                path.write_bytes(b'changed protected file')
+                self.assertNotEqual(before, json.loads(self.probe(request).stdout))
+                path.write_bytes(b'old')
+
     def test_main_refuses_lock_contention_before_constructing_a_host_or_publishing(self):
         with mock.patch.object(publisher, 'publication_lock', create=True,
                                side_effect=publisher.ReleaseFailure('publisher-already-running')), \
