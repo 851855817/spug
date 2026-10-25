@@ -25,7 +25,7 @@ MAINTENANCE = ('nginx', 'spug-api', 'spug-ws', 'spug-panel-worker',
                'spug-ops-worker', 'spug-scheduler')
 PRESERVED = ('redis', 'spug-worker', 'spug-monitor')
 BACKEND = tuple(name for name in MAINTENANCE if name != 'nginx')
-ENTRIES = ('index.html', 'asset-manifest.json', 'ui-release.json')
+ENTRIES = ('index.html', 'asset-manifest.json', 'ui-release.json', 'service-worker.js')
 PAIRED_ARCHIVES = ('database.sql.gz', 'spug-data.tar.gz')
 HELPERS = ('apply-expiry.py', 'deploy-compact-ui.py', 'fingerprint.py', 'release_safety.py')
 RUNTIME_ROOTS = {'api': ['/opt/spug/spug_api', '/data/spug/spug_api'],

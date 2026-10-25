@@ -354,12 +354,151 @@ class ControllerTests(unittest.TestCase):
         result = self.run_release()
         self.assertTrue(result['published'])
 
+    def test_changed_service_worker_is_allowed_only_as_a_backed_up_entrypoint(self):
+        for root in self.host.file_state['ui']:
+            root['service-worker.js'] = OLD
+        self.host.original_files = copy.deepcopy(self.host.file_state)
+        self.host.release['ui_sha256']['service-worker.js'] = NEW
+        result = self.run_release('http')
+        self.assertTrue(result['rolled_back'])
+        self.assertEqual(self.host.file_state, self.host.original_files)
+
     def test_failure_to_stop_a_maintenance_worker_never_publishes_or_restores(self):
         result = self.run_release('close')
         self.assertFalse(result['published'])
         self.assertNotIn('api-publish', self.host.events)
         self.assertNotIn('start-backend', self.host.events)
         self.assertFalse(self.host.health)
+
+
+class RealUiHelperTests(unittest.TestCase):
+    def setUp(self):
+        path = HERE / 'publish-ui.py'
+        self.assertTrue(path.is_file(), 'four-entrypoint reversible UI helper is missing')
+        spec = importlib.util.spec_from_file_location('four_entrypoint_ui', path)
+        self.helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.helper)
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.stage = self.root / 'stage/build'
+        self.stage.mkdir(parents=True)
+        self.roots = [self.root / 'startup/build', self.root / 'live/build']
+        self.backup = self.root / 'backups' / REVISION
+        self.originals = {}
+        for index, root in enumerate(self.roots):
+            root.mkdir(parents=True)
+            for name in ('index.html', 'asset-manifest.json', 'ui-release.json', 'service-worker.js'):
+                content = (str(index) + ':old:' + name).encode()
+                (root / name).write_bytes(content)
+                self.originals[str(index) + '/' + name] = content
+        for name in ('index.html', 'asset-manifest.json', 'service-worker.js', 'static/new.js'):
+            path = self.stage / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(('new:' + name).encode())
+        hashes = {path.relative_to(self.stage).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                  for path in self.stage.rglob('*') if path.is_file()}
+        (self.stage / 'ui-release.json').write_text(json.dumps({'revision': REVISION, 'sha256': hashes}))
+
+    def call(self, mode):
+        return self.helper.publish_ui(REVISION, mode, stage=self.stage,
+                                      roots=self.roots, backup=self.backup)
+
+    def assert_originals(self):
+        for key, expected in self.originals.items():
+            index, name = key.split('/', 1)
+            destination = self.roots[int(index)] / name
+            if expected is None:
+                self.assertFalse(destination.exists(), key)
+            else:
+                self.assertEqual(destination.read_bytes(), expected, key)
+
+    def test_success_and_explicit_restore_preserve_old_service_worker_in_both_roots(self):
+        result = self.call('publish')
+        self.assertEqual(result['revision'], REVISION)
+        self.assertEqual(result['verified_files'], 5)
+        receipt = json.loads((self.backup / 'complete.json').read_text())
+        self.assertEqual(set(receipt['originals']), set(self.originals))
+        for index, root in enumerate(self.roots):
+            self.assertEqual((root / 'service-worker.js').read_bytes(), b'new:service-worker.js')
+            self.assertEqual((self.backup / str(index) / 'service-worker.js').read_bytes(),
+                             self.originals[str(index) + '/service-worker.js'])
+        self.call('restore')
+        self.assert_originals()
+
+    def test_failure_after_service_worker_write_restores_original_bytes(self):
+        original_replace = self.helper.os.replace
+        failed = [False]
+        def replace(source, destination):
+            if Path(destination) == self.roots[1] / 'service-worker.js' and not failed[0]:
+                receipt = json.loads((self.backup / 'complete.json').read_text())
+                self.assertEqual(set(receipt['originals']), set(self.originals))
+                original_replace(source, destination)
+                failed[0] = True
+                raise OSError('injected failure after service worker write')
+            return original_replace(source, destination)
+        with mock.patch.object(self.helper.os, 'replace', side_effect=replace):
+            with self.assertRaises(Exception):
+                self.call('publish')
+        self.assertTrue(failed[0])
+        self.assert_originals()
+
+    def test_initially_absent_service_worker_is_removed_on_explicit_restore(self):
+        for index, root in enumerate(self.roots):
+            (root / 'service-worker.js').unlink()
+            self.originals[str(index) + '/service-worker.js'] = None
+        self.call('publish')
+        receipt = json.loads((self.backup / 'complete.json').read_text())
+        self.assertIsNone(receipt['originals']['0/service-worker.js'])
+        self.assertIsNone(receipt['originals']['1/service-worker.js'])
+        self.call('restore')
+        self.assert_originals()
+
+    def test_initially_absent_service_worker_is_removed_after_partial_publication(self):
+        for index, root in enumerate(self.roots):
+            (root / 'service-worker.js').unlink()
+            self.originals[str(index) + '/service-worker.js'] = None
+        original_replace = self.helper.os.replace
+        failed = [False]
+        def replace(source, destination):
+            if Path(destination) == self.roots[1] / 'service-worker.js' and not failed[0]:
+                original_replace(source, destination)
+                failed[0] = True
+                raise OSError('failure after creating previously absent service worker')
+            return original_replace(source, destination)
+        with mock.patch.object(self.helper.os, 'replace', side_effect=replace):
+            with self.assertRaises(Exception):
+                self.call('publish')
+        self.assertTrue(failed[0])
+        self.assert_originals()
+
+    def test_missing_or_corrupt_fourth_receipt_refuses_before_restoring_any_entry(self):
+        self.call('publish')
+        complete = self.backup / 'complete.json'
+        original_receipt = complete.read_bytes()
+        saved = self.backup / '1/service-worker.js'
+        original_saved = saved.read_bytes()
+        for mode in ('missing-entry', 'corrupt-saved', 'missing-saved'):
+            with self.subTest(mode=mode):
+                complete.write_bytes(original_receipt)
+                saved.write_bytes(original_saved)
+                if mode == 'missing-entry':
+                    receipt = json.loads(complete.read_text())
+                    receipt['originals'].pop('1/service-worker.js')
+                    complete.write_text(json.dumps(receipt))
+                elif mode == 'corrupt-saved':
+                    saved.write_bytes(b'bad backup')
+                else:
+                    saved.unlink()
+                before = {str(index) + '/' + name: (root / name).read_bytes()
+                          for index, root in enumerate(self.roots)
+                          for name in ('index.html', 'asset-manifest.json', 'ui-release.json', 'service-worker.js')}
+                with self.assertRaises(Exception):
+                    self.call('restore')
+                after = {str(index) + '/' + name: (root / name).read_bytes()
+                         for index, root in enumerate(self.roots)
+                         for name in ('index.html', 'asset-manifest.json', 'ui-release.json', 'service-worker.js')}
+                self.assertEqual(after, before)
 
 
 class FileContractTests(unittest.TestCase):

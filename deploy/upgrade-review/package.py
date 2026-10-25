@@ -82,7 +82,7 @@ def main():
         target.write_bytes(content)
     for name, source in {
         'apply-expiry.py': repo / 'deploy/expiry/apply-expiry.py',
-        'deploy-compact-ui.py': repo / 'deploy/expiry/publish-ui.py',
+        'deploy-compact-ui.py': repo / 'deploy/upgrade-review/publish-ui.py',
         'fingerprint.py': repo / 'deploy/upgrade-review/fingerprint.py',
         'release_safety.py': repo / 'deploy/inventory/release_safety.py',
     }.items():
