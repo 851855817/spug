@@ -4,6 +4,7 @@ import hmac
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -107,7 +108,22 @@ def check_host_report():
         if age < -60 or age > 600:
             return row(*item, 'warning', '宿主机报告已过期或时间异常', '通过 SSH 运行独立诊断，检查采集定时器。')
         status = report['status']
-        if status not in ('ok', 'warning', 'error', 'unknown') or not isinstance(report['checks'], list) or not report['checks']:
+        checks = report['checks']
+        # Match the independent host producer's aggregate precedence.
+        statuses = ('error', 'warning', 'unknown', 'ok')
+        if status not in statuses or not isinstance(checks, list) or not 1 <= len(checks) <= 32:
+            raise ValueError('invalid report')
+        check_ids, check_statuses = set(), set()
+        for check in checks:
+            if not isinstance(check, dict):
+                raise ValueError('invalid report')
+            check_id, check_status = check.get('id'), check.get('status')
+            if (not isinstance(check_id, str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', check_id)
+                    or check_id in check_ids or check_status not in statuses):
+                raise ValueError('invalid report')
+            check_ids.add(check_id)
+            check_statuses.add(check_status)
+        if status != next(value for value in statuses if value in check_statuses):
             raise ValueError('invalid report')
         # Never echo arbitrary strings from a filesystem report.
         return row(*item, status, '独立报告：%s（%d 秒前）' % (
