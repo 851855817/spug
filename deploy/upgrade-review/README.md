@@ -1,0 +1,46 @@
+# 固定单模块增量发布
+
+这是已审查发布的专用工具，不是通用部署面板。全程由管理员在部署主机运行，不能作为客户批量任务模板导入。应用运行时只允许两种配置：
+
+| 配置 | 允许覆盖 | 额外要求 |
+| --- | --- | --- |
+| `php-update`（默认） | `apps/baota/operations/php_update.py` | 保持原 PHP 发布合同；历史清单缺少配置时按此解释 |
+| `host-report` | `apps/setting/health.py` | 基准 Git、暂存源码、准备镜像和实际两份 API 根目录的 PHP 模块摘要一致 |
+
+配置不能接收任意文件列表。未知配置、混合模块、模型／调度／设置变化会拒绝；若本次修复超出该范围，应另行设计发布方案。
+
+## 三个阶段
+
+1. **本机打包。** 确认实际线上 revision，再从清洁的已审查分支运行。工具检查相对基准的运行时差异、重新构建 UI、规范化文本换行并产生 API／UI／辅助脚本清单和归档。不要手工修改暂存目录。
+
+   ```sh
+   python deploy/upgrade-review/package.py ACTUAL_PREVIOUS_40HEX --node /absolute/path/to/node --profile host-report
+   ```
+
+   归档位于仓库外层 `upgrade-NEW7.tar.gz`，摘要记录在同层 `upgrade-release.json`。健康配置只覆盖健康模块，PHP 摘要用于保全而不进入覆盖收据。
+
+2. **服务器隔离准备。** 将归档复制到 `/opt/spug/`，使用同一提交的 `prepare.py` 执行。必须填写实际新提交和本机归档摘要。准备脚本不修改生产业务数据。
+
+   ```sh
+   python3 /opt/spug/prepare.py NEW_40HEX ARCHIVE_SHA256
+   ```
+
+   工具核对归档路径／内容边界和基准镜像标签，无网络构建新镜像，核对实际镜像 API／UI 摘要，在只读、受限、无网络且不挂载生产数据的环境运行回归。回执绑定完整 revision、归档摘要及不可变镜像 ID。准备失败时保留现有服务，修正、提交后重新制作归档，不修改已校验产物来绕过检查。
+
+3. **受控发布。** 完整 CI 和独立审查通过后，重新核对实际版本、资源和业务空闲。运行同一归档内的发布器：
+
+   ```sh
+   PYTHONDONTWRITEBYTECODE=1 python3 /opt/spug/upgrade-NEW7/source/deploy/upgrade-review/publish.py NEW_40HEX ACTUAL_PREVIOUS_40HEX
+   ```
+
+   发布器获取独占锁，重新检查归档、镜像、九服务、完整业务／模式／密钥和源码摘要。只停止六项必要入口，保留原容器及 Redis／旧 worker／monitor；完成新的数据库和完整数据卷配对备份后才覆盖。后续核对 API／UI、Compose、业务摘要和 HTTP，恢复原健康 timer 状态。旧备份或旧空闲检查不能代替本次检查。
+
+## 恢复和证据
+
+备份保存于 `/opt/spug/backups/` 的本次专属目录，包含原 Compose／supervisor／健康配置、保全前态、数据库和数据卷。`SHA256SUMS` 只列固定的两个压缩备份，其他配置另有收据。发布结果及部分覆盖恢复按完整原始收据逐项校验，不能只看进程启动成功。
+
+若新入口可能已经接收业务，回退前须重新关闭入口并证明原空闲窗口；任何新任务、业务／模式／密钥漂移或恢复证据缺口都会阻止自动降级和重新开放。不要盲目切换旧镜像或直接恢复旧数据库。生产整库恢复不在此工具的自动流程内，备份摘要通过也不代表整库恢复已演练。
+
+导入暂存发布器做只读核查时也应设置 `PYTHONDONTWRITEBYTECODE=1`，避免生成未归档的 `__pycache__`，导致后续每字节绑定正确拒绝。发布日志和保全原始数据保留在受限部署目录，不上传公共仓库。
+
+离线保护测试：`python -m unittest discover -s deploy/upgrade-review -p 'test_*.py'`。Linux 独占锁实进程测试在 Windows 条件跳过，最终须在 Linux 准备／CI 通过。

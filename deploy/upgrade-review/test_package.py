@@ -1,15 +1,21 @@
 """Check release scope, receipts and archive boundaries without production access."""
 import importlib.util
 import ast
+import hashlib
 import io
 import json
 from pathlib import Path
+import shutil
+import sys
 import tarfile
 from tempfile import TemporaryDirectory
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).parent
+PHP = 'apps/baota/operations/php_update.py'
+HEALTH = 'apps/setting/health.py'
 
 
 class PackagingTests(unittest.TestCase):
@@ -20,6 +26,150 @@ class PackagingTests(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
+
+    def profile_stage(self, root):
+        stage = root / 'stage'
+        for name, content in ((PHP, b'preserved PHP'), (HEALTH, b'new health')):
+            path = stage / 'source/spug_api' / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(content)
+        (stage / 'build').mkdir()
+        (stage / 'build/index.html').write_bytes(b'index')
+        (stage / 'build/asset-manifest.json').write_bytes(b'{}')
+        for name in ('apply-expiry.py', 'deploy-compact-ui.py', 'fingerprint.py', 'release_safety.py'):
+            (stage / name).write_bytes(b'# helper')
+        return stage
+
+    def test_host_profile_accepts_only_the_health_runtime_change(self):
+        package = self.helper('package.py')
+        package.validate_runtime_changes(['spug_api/' + HEALTH, 'spug_api/apps/setting/test_health.py'],
+                                         profile='host-report')
+        for names in (['spug_api/' + PHP], ['spug_api/' + PHP, 'spug_api/' + HEALTH],
+                      ['spug_api/' + HEALTH, 'spug_api/apps/ops/models.py'], []):
+            with self.subTest(names=names), self.assertRaises(ValueError):
+                package.validate_runtime_changes(names, profile='host-report')
+        for profile in ('unknown', '', None, [], '../apps/setting/health.py'):
+            with self.subTest(profile=profile), self.assertRaises(ValueError):
+                package.validate_runtime_changes(['spug_api/' + HEALTH], profile=profile)
+
+    def test_host_manifest_preserves_baseline_php_separately_from_health_overlay(self):
+        package = self.helper('package.py')
+        with TemporaryDirectory() as folder:
+            stage = self.profile_stage(Path(folder))
+            manifest = package.write_manifests(stage, 'a' * 40, 'b' * 40, b'old health',
+                                               profile='host-report', preserved_content=b'preserved PHP')
+            self.assertEqual(manifest['profile'], 'host-report')
+            self.assertEqual(manifest['api_sha256'], {HEALTH: hashlib.sha256(b'new health').hexdigest()})
+            self.assertEqual(manifest['previous_api_sha256'], {HEALTH: hashlib.sha256(b'old health').hexdigest()})
+            self.assertEqual(manifest['preserved_api_sha256'], {PHP: hashlib.sha256(b'preserved PHP').hexdigest()})
+            self.assertEqual(json.loads((stage / 'api-release.json').read_text())['sha256'],
+                             manifest['api_sha256'])
+
+    def test_host_package_refuses_missing_or_drifted_baseline_php(self):
+        package = self.helper('package.py')
+        with TemporaryDirectory() as folder:
+            stage = self.profile_stage(Path(folder))
+            for baseline in (None, b'different PHP'):
+                with self.subTest(baseline=baseline), self.assertRaises(ValueError):
+                    package.write_manifests(stage, 'a' * 40, 'b' * 40, b'old health',
+                                            profile='host-report', preserved_content=baseline)
+            (stage / 'source/spug_api' / PHP).unlink()
+            with self.assertRaises(ValueError):
+                package.write_manifests(stage, 'a' * 40, 'b' * 40, b'old health',
+                                        profile='host-report', preserved_content=b'preserved PHP')
+
+    def test_host_image_requires_preserved_php_and_only_the_fixed_health_overlay(self):
+        checker = self.helper('check_image.py')
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            stage = self.profile_stage(root)
+            runtime = root / 'runtime'
+            shutil.copytree(stage / 'source/spug_api', runtime / 'spug_api')
+            release = {'revision': 'a' * 40, 'schema_changes': False, 'profile': 'host-report',
+                       'api_sha256': {HEALTH: hashlib.sha256(b'new health').hexdigest()},
+                       'previous_api_sha256': {HEALTH: hashlib.sha256(b'old health').hexdigest()},
+                       'preserved_api_sha256': {PHP: hashlib.sha256(b'preserved PHP').hexdigest()}}
+            ui = {'revision': 'a' * 40, 'sha256': {name: hashlib.sha256((stage / 'build' / name).read_bytes()).hexdigest()
+                  for name in ('index.html', 'asset-manifest.json')}}
+            (stage / 'release.json').write_text(json.dumps(release))
+            (stage / 'build/ui-release.json').write_text(json.dumps(ui))
+            shutil.copytree(stage / 'build', runtime / 'spug_web/build')
+            try:
+                checker.verify(runtime, stage, 'a' * 40)
+            except ValueError as error:
+                self.fail('The verified host-report image must be accepted: ' + str(error))
+            for name in (PHP, HEALTH):
+                with self.subTest(name=name):
+                    path = runtime / 'spug_api' / name
+                    content = path.read_bytes(); path.write_bytes(b'regressed image module')
+                    with self.assertRaises(ValueError):
+                        checker.verify(runtime, stage, 'a' * 40)
+                    path.write_bytes(content)
+            for change in ({'profile': 'unknown'}, {'profile': ''}, {'profile': None},
+                           {'api_sha256': {HEALTH: release['api_sha256'][HEALTH], PHP: release['preserved_api_sha256'][PHP]}},
+                           {'previous_api_sha256': {PHP: release['preserved_api_sha256'][PHP]}},
+                           {'preserved_api_sha256': {}}, {'preserved_api_sha256': None},
+                           {'preserved_api_sha256': {PHP: 'invalid'}},
+                           {'preserved_api_sha256': {PHP: release['preserved_api_sha256'][PHP], HEALTH: 'c' * 64}}):
+                with self.subTest(change=change), self.assertRaises(ValueError):
+                    (stage / 'release.json').write_text(json.dumps(dict(release, **change)))
+                    checker.verify(runtime, stage, 'a' * 40)
+            missing = dict(release); missing.pop('preserved_api_sha256')
+            (stage / 'release.json').write_text(json.dumps(missing))
+            with self.assertRaises(ValueError):
+                checker.verify(runtime, stage, 'a' * 40)
+
+    def test_package_cli_builds_the_selected_fixed_overlay_and_reads_the_php_baseline(self):
+        package = self.helper('package.py')
+        for profile, api_name in (('host-report', HEALTH), ('php-update', PHP)):
+            with self.subTest(profile=profile), TemporaryDirectory() as folder:
+                root = Path(folder)
+                stage = self.profile_stage(root)
+                repo = root / 'repo'
+                shutil.copytree(stage / 'source/spug_api', repo / 'spug_api')
+                shutil.copytree(stage / 'build', repo / 'spug_web/build')
+                for name in ('expiry/apply-expiry.py', 'upgrade-review/publish-ui.py',
+                             'upgrade-review/fingerprint.py', 'inventory/release_safety.py'):
+                    path = repo / 'deploy' / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(b'# helper')
+                calls = []
+                def git(command, **kwargs):
+                    calls.append(command)
+                    values = command[1:]
+                    if values == ['rev-parse', 'HEAD']:
+                        return ('a' * 40).encode()
+                    if values[:2] == ['rev-parse', '--verify']:
+                        return ('b' * 40).encode()
+                    if values[0] == 'status':
+                        return b''
+                    if values[0] == 'diff':
+                        return ('spug_api/' + api_name).encode()
+                    if values[0] == 'ls-files':
+                        return ('spug_api/' + PHP + '\nspug_api/' + HEALTH).encode()
+                    if values[0] == 'show':
+                        return b'preserved PHP' if values[1].endswith(PHP) else b'old health'
+                    self.fail('Unexpected packaging command')
+                arguments = ['package.py', 'b' * 40, '--node', 'node']
+                if profile == 'host-report':
+                    arguments += ['--profile', profile]
+                with mock.patch.object(package, '__file__', str(repo / 'deploy/upgrade-review/package.py')), \
+                        mock.patch.object(sys, 'argv', arguments), \
+                        mock.patch.object(package.subprocess, 'check_output', side_effect=git), \
+                        mock.patch.object(package.subprocess, 'run'), mock.patch('builtins.print'):
+                    package.main()
+                packaged = root / ('upgrade-' + 'a' * 7)
+                manifest = json.loads((packaged / 'release.json').read_text())
+                self.assertEqual(manifest['profile'], profile)
+                self.assertEqual(set(manifest['api_sha256']), {api_name})
+                self.assertEqual(manifest['preserved_api_sha256'],
+                                 {PHP: hashlib.sha256(b'preserved PHP').hexdigest()} if profile == 'host-report' else {})
+                copies = [line for line in (packaged / 'Dockerfile').read_text().splitlines()
+                          if line.startswith('COPY source/')]
+                self.assertEqual(copies, ['COPY source/spug_api/' + api_name + ' /opt/spug/spug_api/' + api_name])
+                self.assertIn(['git', 'show', 'b' * 40 + ':spug_api/' + api_name], calls)
+                if profile == 'host-report':
+                    self.assertIn(['git', 'show', 'b' * 40 + ':spug_api/' + PHP], calls)
 
     def test_scope_refuses_model_settings_or_other_runtime_changes(self):
         package = self.helper('package.py')

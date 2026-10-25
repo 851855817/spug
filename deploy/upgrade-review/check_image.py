@@ -2,7 +2,12 @@
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
+import re
 import sys
+
+
+PHP_MODULE = 'apps/baota/operations/php_update.py'
+PROFILES = {'php-update': PHP_MODULE, 'host-report': 'apps/setting/health.py'}
 
 
 def sha(path):
@@ -26,12 +31,27 @@ def verify(root, stage, revision):
     release = json.loads((stage / 'release.json').read_text())
     if release['revision'] != revision or release['schema_changes'] is not False:
         raise ValueError('Image revision or scope differs')
-    if set(release['api_sha256']) != {'apps/baota/operations/php_update.py'}:
-        raise ValueError('Image API overlay differs')
+    profile = release.get('profile', 'php-update')
+    if not isinstance(profile, str) or profile not in PROFILES:
+        raise ValueError('Unknown image release profile')
+    for key in ('api_sha256', 'previous_api_sha256'):
+        hashes = release.get(key)
+        if (not isinstance(hashes, dict) or set(hashes) != {PROFILES[profile]} or
+                not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)
+                        for value in hashes.values())):
+            raise ValueError('Image API overlay differs')
+    preserved = release.get('preserved_api_sha256', {})
+    expected_preserved = {PHP_MODULE} if profile == 'host-report' else set()
+    if (not isinstance(preserved, dict) or set(preserved) != expected_preserved or
+            not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)
+                    for value in preserved.values())):
+        raise ValueError('Image preserved API manifest differs')
     ui = json.loads((stage / 'build/ui-release.json').read_text())
     if ui['revision'] != revision or not {'index.html', 'asset-manifest.json'} <= set(ui['sha256']):
         raise ValueError('Image UI manifest differs')
     expectations = [(root / 'spug_api', release['api_sha256']),
+                    (root / 'spug_api', preserved),
+                    (stage / 'source/spug_api', preserved),
                     (root / 'spug_web/build', dict(ui['sha256'], **{
                         'ui-release.json': sha(stage / 'build/ui-release.json')}))]
     for directory, hashes in expectations:

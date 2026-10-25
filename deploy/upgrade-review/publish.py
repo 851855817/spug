@@ -21,6 +21,7 @@ import uuid
 
 
 MODULE = 'apps/baota/operations/php_update.py'
+PROFILES = {'php-update': MODULE, 'host-report': 'apps/setting/health.py'}
 MAINTENANCE = ('nginx', 'spug-api', 'spug-ws', 'spug-panel-worker',
                'spug-ops-worker', 'spug-scheduler')
 PRESERVED = ('redis', 'spug-worker', 'spug-monitor')
@@ -231,14 +232,25 @@ def load_stage(stage, revision, previous):
     require(valid_sha(checks['archive_sha256']) and archive.is_file() and not archive.is_symlink() and
             digest(archive) == checks['archive_sha256'], 'prepared-archive-mismatch')
     bind_stage_to_archive(stage, archive)
+    profile = release.get('profile', 'php-update')
+    require(isinstance(profile, str) and profile in PROFILES, 'release-profile-invalid')
+    module = PROFILES[profile]
     for key in ('api_sha256', 'previous_api_sha256'):
-        require(set(release[key]) == {MODULE} and all(valid_sha(v) for v in release[key].values()),
-                'api-overlay-must-be-single-php-module')
+        hashes = release.get(key)
+        require(isinstance(hashes, dict) and set(hashes) == {module} and
+                all(valid_sha(v) for v in hashes.values()), 'api-overlay-must-match-profile')
+    preserved = release.get('preserved_api_sha256', {})
+    expected_preserved = {MODULE} if profile == 'host-report' else set()
+    require(isinstance(preserved, dict) and set(preserved) == expected_preserved and
+            all(valid_sha(value) for value in preserved.values()), 'preserved-api-manifest-invalid')
     api = json.loads(relative_file(stage, 'api-release.json').read_text())
     require(api['revision'] == revision and api['sha256'] == release['api_sha256'],
             'api-manifest-mismatch')
-    require(digest(relative_file(stage / 'source/spug_api', MODULE)) == release['api_sha256'][MODULE],
+    require(digest(relative_file(stage / 'source/spug_api', module)) == release['api_sha256'][module],
             'stage-api-hash-mismatch')
+    for name, expected in preserved.items():
+        require(digest(relative_file(stage / 'source/spug_api', name)) == expected,
+                'stage-preserved-api-hash-mismatch')
     require(set(release['helper_sha256']) == set(HELPERS), 'helper-manifest-incomplete')
     for name, expected in release['helper_sha256'].items():
         require(valid_sha(expected) and digest(relative_file(stage, name)) == expected,
@@ -282,6 +294,8 @@ def verify_previous_files(current, release):
     for root in current['api']:
         require(all(root.get(name) == expected for name, expected in
                     release['previous_api_sha256'].items()), 'previous-runtime-api-mismatch')
+        require(all(root.get(name) == expected for name, expected in
+                    release.get('preserved_api_sha256', {}).items()), 'preserved-runtime-api-mismatch')
     for root in current['ui']:
         # The existing static helper backs up entrypoints only. Shared assets
         # may be reused unchanged, but cannot be overwritten reversibly.

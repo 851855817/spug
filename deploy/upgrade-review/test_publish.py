@@ -20,6 +20,7 @@ HERE = Path(__file__).resolve().parent
 REVISION = 'a' * 40
 PREVIOUS = 'b' * 40
 MODULE = 'apps/baota/operations/php_update.py'
+HEALTH_MODULE = 'apps/setting/health.py'
 OLD = hashlib.sha256(b'old').hexdigest()
 NEW = hashlib.sha256(b'new').hexdigest()
 SPEC = importlib.util.spec_from_file_location('upgrade_publisher', HERE / 'publish.py')
@@ -113,10 +114,10 @@ class FakeHost:
         if mode == 'publish':
             self.receipts[kind] = copy.deepcopy(self.original_files)
             if kind == 'api':
-                self.file_state['api'][0][MODULE] = NEW
+                self.file_state['api'][0].update(self.release['api_sha256'])
                 if self.fail == 'api-partial':
                     raise RuntimeError('partial API overlay')
-                self.file_state['api'][1][MODULE] = NEW
+                self.file_state['api'][1].update(self.release['api_sha256'])
             else:
                 for index, root in enumerate(self.file_state['ui']):
                     root.update(self.release['ui_sha256'])
@@ -208,6 +209,39 @@ class ControllerTests(unittest.TestCase):
         self.assertFalse(self.host.ingress)
         self.assertFalse(self.host.running)
         self.assertFalse(self.host.health)
+
+    def host_profile(self):
+        self.host.release.update(profile='host-report', api_sha256={HEALTH_MODULE: NEW},
+                                 previous_api_sha256={HEALTH_MODULE: OLD}, preserved_api_sha256={MODULE: OLD})
+        for root in self.host.file_state['api']:
+            root[HEALTH_MODULE] = OLD
+        self.host.original_files = copy.deepcopy(self.host.file_state)
+
+    def test_host_profile_changes_health_only_and_preserves_php_during_success_and_rollback(self):
+        for failure in (None, 'http', 'api-partial'):
+            with self.subTest(failure=failure):
+                self.host = FakeHost()
+                self.host_profile()
+                result = self.run_release(failure)
+                self.assertEqual(result['published'], failure is None)
+                self.assertEqual(result['rolled_back'], failure is not None)
+                for root in self.host.file_state['api']:
+                    self.assertEqual(root[MODULE], OLD)
+                    self.assertEqual(root[HEALTH_MODULE], NEW if failure is None else OLD)
+
+    def test_preserved_php_drift_in_either_live_root_refuses_before_backup_or_maintenance(self):
+        for index in (0, 1):
+            with self.subTest(root=index):
+                self.host = FakeHost()
+                self.host_profile()
+                self.host.file_state['api'][index][MODULE] = NEW
+                before = copy.deepcopy(self.host.file_state)
+                result = self.run_release()
+                self.assertFalse(result['published'])
+                self.assertEqual(self.host.file_state, before)
+                for event in ('setup-backup', 'stop-health', 'close', 'paired-backup', 'api-publish'):
+                    self.assertNotIn(event, self.host.events)
+                self.assertTrue(self.host.ingress and self.host.running and self.host.health)
 
     def test_success_preserves_nonempty_business_schema_keys_and_original_processes(self):
         result = self.run_release()
@@ -686,10 +720,11 @@ class FileContractTests(unittest.TestCase):
             with self.subTest(text=text), self.assertRaises(publisher.ReleaseFailure):
                 publisher.next_compose(text, PREVIOUS, REVISION)
 
-    def stage(self):
+    def stage(self, profile=None):
         stage = self.root / ('upgrade-' + REVISION[:7])
         (stage / 'build').mkdir(parents=True)
-        api = stage / 'source/spug_api' / MODULE
+        api_name = HEALTH_MODULE if profile == 'host-report' else MODULE
+        api = stage / 'source/spug_api' / api_name
         api.parent.mkdir(parents=True)
         api.write_bytes(b'new')
         for name in ('index.html', 'asset-manifest.json'):
@@ -698,8 +733,15 @@ class FileContractTests(unittest.TestCase):
             (stage / name).write_bytes(b'# reviewed helper')
         release = {'revision': REVISION, 'previous_revision': PREVIOUS,
                    'image': 'spug-baota:' + REVISION[:7], 'schema_changes': False,
-                   'api_sha256': {MODULE: NEW}, 'previous_api_sha256': {MODULE: OLD},
+                   'api_sha256': {api_name: NEW}, 'previous_api_sha256': {api_name: OLD},
                    'helper_sha256': {name: publisher.digest(stage / name) for name in publisher.HELPERS}}
+        if profile is not None:
+            release['profile'] = profile
+        if profile == 'host-report':
+            preserved = stage / 'source/spug_api' / MODULE
+            preserved.parent.mkdir(parents=True)
+            preserved.write_bytes(b'old')
+            release['preserved_api_sha256'] = {MODULE: OLD}
         ui = {'revision': REVISION, 'sha256': {'index.html': NEW, 'asset-manifest.json': NEW}}
         (stage / 'release.json').write_text(json.dumps(release))
         (stage / 'api-release.json').write_text(json.dumps({'revision': REVISION, 'sha256': release['api_sha256']}))
@@ -714,6 +756,76 @@ class FileContractTests(unittest.TestCase):
                   'image_id': 'sha256:' + NEW}
         (stage / 'isolated-checks.json').write_text(json.dumps(checks))
         return stage
+
+    def rewrite_stage(self, stage, release):
+        (stage / 'release.json').write_text(json.dumps(release))
+        receipt = stage / 'isolated-checks.json'
+        checks = json.loads(receipt.read_text())
+        receipt.unlink()
+        archive = stage.with_suffix('.tar.gz')
+        with tarfile.open(archive, 'w:gz') as output:
+            output.add(stage, arcname=stage.name)
+        checks['archive_sha256'] = publisher.digest(archive)
+        receipt.write_text(json.dumps(checks))
+
+    def test_host_stage_accepts_exact_health_overlay_and_separate_preserved_php(self):
+        stage = self.stage('host-report')
+        try:
+            release = publisher.load_stage(stage, REVISION, PREVIOUS)
+        except publisher.ReleaseFailure as error:
+            self.fail('The fixed host-report profile must be accepted: ' + str(error))
+        self.assertEqual(release['api_sha256'], {HEALTH_MODULE: NEW})
+        self.assertEqual(release['preserved_api_sha256'], {MODULE: OLD})
+        host = publisher.DockerHost(REVISION, self.root)
+        host.release = release
+        requests = []
+        host.probe = lambda request: requests.append(request) or {'verified': True}
+        host.verify_receipt('api', {'files': {'api': [{HEALTH_MODULE: OLD, MODULE: OLD}] * 2}})
+        self.assertEqual(requests[0]['expected'], {'0/' + HEALTH_MODULE: OLD, '1/' + HEALTH_MODULE: OLD})
+
+    def test_profile_rejects_unknown_empty_and_nonempty_php_preservation_with_legacy_compatibility(self):
+        stage = self.stage()
+        original = json.loads((stage / 'release.json').read_text())
+        for change in ({}, {'profile': 'php-update'}, {'profile': 'php-update', 'preserved_api_sha256': {}}):
+            self.rewrite_stage(stage, dict(original, **change))
+            publisher.load_stage(stage, REVISION, PREVIOUS)
+        for change in ({'profile': 'unknown'}, {'profile': ''}, {'profile': None}, {'profile': []},
+                       {'preserved_api_sha256': {MODULE: OLD}}, {'preserved_api_sha256': None}):
+            with self.subTest(change=change):
+                self.rewrite_stage(stage, dict(original, **change))
+                with self.assertRaises(publisher.ReleaseFailure):
+                    publisher.load_stage(stage, REVISION, PREVIOUS)
+
+    def test_host_stage_refuses_missing_extra_wrong_or_staged_drifted_preserved_php(self):
+        stage = self.stage('host-report')
+        original = json.loads((stage / 'release.json').read_text())
+        for preserved in (None, {}, {MODULE: NEW}, {MODULE: 'invalid'},
+                          {MODULE: OLD, HEALTH_MODULE: NEW}, {'apps/ops/models.py': OLD}):
+            with self.subTest(preserved=preserved):
+                release = dict(original)
+                if preserved is None:
+                    release.pop('preserved_api_sha256')
+                else:
+                    release['preserved_api_sha256'] = preserved
+                self.rewrite_stage(stage, release)
+                with self.assertRaises(publisher.ReleaseFailure):
+                    publisher.load_stage(stage, REVISION, PREVIOUS)
+        self.rewrite_stage(stage, original)
+        (stage / 'source/spug_api' / MODULE).write_bytes(b'drifted PHP')
+        self.rewrite_stage(stage, original)
+        with self.assertRaises(publisher.ReleaseFailure):
+            publisher.load_stage(stage, REVISION, PREVIOUS)
+
+    def test_host_stage_refuses_mixed_or_wrong_previous_api_scope_even_with_fresh_archive(self):
+        stage = self.stage('host-report')
+        original = json.loads((stage / 'release.json').read_text())
+        for change in ({'api_sha256': {HEALTH_MODULE: NEW, MODULE: OLD}},
+                       {'api_sha256': {MODULE: OLD}}, {'previous_api_sha256': {MODULE: OLD}},
+                       {'previous_api_sha256': {HEALTH_MODULE: OLD, MODULE: OLD}}):
+            with self.subTest(change=change):
+                self.rewrite_stage(stage, dict(original, **change))
+                with self.assertRaises(publisher.ReleaseFailure):
+                    publisher.load_stage(stage, REVISION, PREVIOUS)
 
     def test_stage_requires_all_prepare_receipts_and_unchanged_archive(self):
         stage = self.stage()
