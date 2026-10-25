@@ -13,6 +13,45 @@ from .base import Operation, child, identity, preview, result, strict
 from .software import requirements, software_snapshot, queue_snapshot, tasks, matching
 
 
+HEALTH_POLICY = 'php_cli_modules_v1'
+
+
+def cli_modules(value):
+    """Bounded names only; never retain phpinfo/ini or equate CLI with FPM.
+
+    Official php_info.php joins get_loaded_extensions() with spaces. Preserve
+    known multiword names before splitting that representation. Lists are also
+    accepted for adapters returning separate names; unknown/empty is not [].
+    """
+    if isinstance(value, str):
+        if not 1 <= len(value) <= 50000 or re.search(r'[^\x20-\x7e]', value):
+            return None
+        for name in ('Zend OPcache', 'ionCube Loader', 'Zend Guard Loader'):
+            value = re.sub(r'(?<!\S)' + re.escape(name) + r'(?!\S)', name.replace(' ', '_'), value, flags=re.I)
+        value = value.split()
+    if not isinstance(value, list) or not 1 <= len(value) <= 500:
+        return None
+    if any(not isinstance(name, str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_.+ -]{0,99}', name)
+           or name != name.strip() for name in value):
+        return None
+    names = [name.lower().replace(' ', '_') for name in value]
+    # Both built-ins exist throughout the supported PHP branches. A partial
+    # payload containing only an optional extension cannot be a complete list.
+    return sorted(names) if len(set(names)) == len(names) and {'core', 'standard'} <= set(names) else None
+
+
+def module_check(before, after):
+    baseline = before.get('cli_modules')
+    observed = after.get('cli_modules')
+    baseline_ok = isinstance(baseline, list) and cli_modules(baseline) == baseline
+    observed_ok = isinstance(observed, list) and cli_modules(observed) == observed
+    if not baseline_ok or not observed_ok:
+        return {'state': 'unavailable', 'reason': 'baseline_unavailable' if not baseline_ok else 'readback_unavailable'}
+    added, removed = sorted(set(observed) - set(baseline)), sorted(set(baseline) - set(observed))
+    return {'state': 'changed' if added or removed else 'unchanged',
+            'before_count': len(baseline), 'after_count': len(observed), 'added': added, 'removed': removed}
+
+
 def numeric_version(value):
     if not isinstance(value, str) or not re.fullmatch(r'[5-9]\.[0-9]\.(?:0|[1-9][0-9]{0,2})', value):
         raise ValueError('PHP 实际版本格式无法核实')
@@ -73,7 +112,7 @@ def runtime_snapshot(client, branch):
     if not version.startswith(major + '.'):
         raise PanelAPIError('PHP 运行时版本与所选分支不一致')
     return {'version': version, 'php_path': root, 'php_bin': info['php_bin'], 'php_ini': info['php_ini'],
-            'path_identities': identities}
+            'path_identities': identities, 'cli_modules': cli_modules(info.get('modules'))}
 
 
 def update_impact(client, branch):
@@ -179,7 +218,7 @@ class UpdatePHP(Operation):
         branch = params['php_version']
         item = child('php-update:' + branch, 'PHP ' + params['m_version'] + ' 同分支更新',
                      {'php_version': branch}, info,
-                     plan={**params, 'required_acknowledgements': ['php_update_restart']})
+                     plan={**params, 'required_acknowledgements': ['php_update_restart'], 'health_policy': HEALTH_POLICY})
         try:
             data, catalog, runtime = self.check(client, params)
             reqs, blockers = requirements(client, data, params)
@@ -189,6 +228,8 @@ class UpdatePHP(Operation):
                                 requirements=reqs, blockers=blockers, impact=update_impact(client, branch))
             if runtime['version'] == item['plan']['target_version']:
                 item.update(state='already', message='实际 PHP 版本已符合目标，无需更新')
+            elif runtime['cli_modules'] is None:
+                item.update(state='failed', message='无法核实更新前的 PHP CLI 模块清单，请重新预检')
             elif blockers:
                 item.update(state='failed', message='资源、依赖、互斥或授权要求不满足，请查看预检明细')
             else:
@@ -204,6 +245,8 @@ class UpdatePHP(Operation):
             raise PanelAPIError('缺少冻结的 PHP 重启影响确认项，请重新预检')
         if remote.get('ambiguous'):
             return self.reconcile(client, item, remote)
+        if plan.get('health_policy') != HEALTH_POLICY:
+            raise PanelAPIError('缺少冻结的 PHP CLI 模块核验策略，请重新预检')
         self.guard(client, item)
         data, catalog, runtime = self.check(client, plan)
         if catalog != item['before']['software'] or runtime != item['before']['runtime']:
@@ -222,7 +265,9 @@ class UpdatePHP(Operation):
         runtime = runtime_snapshot(client, plan['php_version'])
         version = runtime['version']
         evidence = {'php_version': plan['php_version'], 'version': version,
-                    'target_version': plan['target_version'], 'runtime_scope': 'branch_cli_binary'}
+                    'target_version': plan['target_version'], 'runtime_scope': 'branch_cli_binary',
+                    'cli_module_check': module_check(item['before']['runtime'], runtime),
+                    'fpm_runtime_verified': False}
         # make install can replace bin/php, but must not replace the frozen
         # branch directory or its ancestors with a different installation tree.
         if runtime['path_identities'][:-1] != item['before']['runtime']['path_identities'][:-1]:
@@ -236,6 +281,12 @@ class UpdatePHP(Operation):
             return result('uncertain', 'PHP 更新请求曾发生传输歧义，请人工核对；不会重复更新', evidence, remote)
         if state == 'terminal':
             if version == plan['target_version']:
+                check = evidence['cli_module_check']
+                if plan.get('health_policy') == HEALTH_POLICY:
+                    if check['state'] == 'unavailable':
+                        return result('uncertain', '实际补丁已读回，但 CLI 模块对照缺少依据，请人工核对；不会重复更新', evidence, remote)
+                    if check['removed']:
+                        return result('uncertain', '实际补丁已读回，但部分 PHP CLI 模块不再加载，请人工核对；不会重复更新', evidence, remote)
                 return result('success', '唯一关联的 PHP 更新队列已结束，实际补丁已读回核实', evidence)
             return result('failed', 'PHP 更新队列已结束，但实际版本仍未达到预期', evidence, remote)
         return result('remote', '等待唯一关联的 PHP 更新队列结束并读回实际版本', evidence, remote)

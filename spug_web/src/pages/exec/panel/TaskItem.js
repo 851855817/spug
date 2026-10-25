@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Descriptions, Space, Typography } from 'antd';
 import Evidence, { Status } from './TaskEvidence';
+import UpgradeReview from './UpgradeReview';
 import { phpLabel } from './helpers';
 import styles from './TaskDetail.module.css';
 
@@ -27,13 +28,6 @@ export default function TaskItem({operation, child}) {
     fields.push(['预计新增', `${Number(before.new_files) || 0} 个`]);
     fields.push(['预计覆盖', `${Number(before.overwrite_files) || 0} 个`]);
   } else {
-    if (operation === 'php_update') {
-      const destination = observed.version || plan.target_version;
-      if (before.runtime?.version && destination) fields.push([
-        observed.version ? '版本读回' : '预计更新', `${before.runtime.version} → ${destination}`,
-      ]);
-      if (Array.isArray(plan.impact?.website_refs)) fields.push(['影响网站', `${plan.impact.website_refs.length} 个`]);
-    }
     if (plan.path) fields.push(['目录', plan.path]);
     if (Array.isArray(plan.domains) && plan.domains.length) fields.push(['域名',
       plan.domains.length <= 3 ? plan.domains.join('、') : `${plan.domains.slice(0, 2).join('、')} 等 ${plan.domains.length} 个`]);
@@ -60,6 +54,7 @@ export default function TaskItem({operation, child}) {
     </span>)}</div>}
     {message && (important ? <Alert showIcon type={child.state === 'failed' ? 'error' : 'warning'} message={message}/> :
       <Typography.Paragraph className={styles.message} type="secondary">{message}</Typography.Paragraph>)}
+    <UpgradeReview operation={operation} snapshot={snapshot} evidence={observed}/>
     <details className={styles.details} onToggle={event => setExpanded(event.currentTarget.open)}>
       <summary>详细记录</summary>
       {expanded && <Descriptions bordered size="small" column={1}>
