@@ -34,6 +34,7 @@ on:
       - 'deploy/operations/**'
       - 'deploy/inventory/**'
       - 'deploy/expiry/**'
+      - 'deploy/upgrade-review/**'
       - '.github/workflows/baota-checks.yml'
   workflow_dispatch:
 
@@ -75,6 +76,8 @@ jobs:
         run: python3 -m unittest discover -s deploy/inventory -p 'test_*.py'
       - name: Test expiry release failure handling
         run: python3 -m unittest discover -s deploy/expiry -p 'test_*.py'
+      - name: Test upgrade review release failure handling
+        run: python3 -m unittest discover -s deploy/upgrade-review -p 'test_*.py'
       - name: Check whitespace
         run: git diff --check HEAD^ HEAD
       - name: Build worker image with disposable static assets
