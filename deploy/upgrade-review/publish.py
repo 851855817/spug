@@ -21,7 +21,8 @@ import uuid
 
 
 MODULE = 'apps/baota/operations/php_update.py'
-PROFILES = {'php-update': MODULE, 'host-report': 'apps/setting/health.py'}
+HEALTH_MODULE = 'apps/setting/health.py'
+PROFILES = {'php-update': MODULE, 'host-report': HEALTH_MODULE, 'operations-ui': None}
 MAINTENANCE = ('nginx', 'spug-api', 'spug-ws', 'spug-panel-worker',
                'spug-ops-worker', 'spug-scheduler')
 PRESERVED = ('redis', 'spug-worker', 'spug-monitor')
@@ -234,20 +235,27 @@ def load_stage(stage, revision, previous):
     bind_stage_to_archive(stage, archive)
     profile = release.get('profile', 'php-update')
     require(isinstance(profile, str) and profile in PROFILES, 'release-profile-invalid')
+    if profile == 'operations-ui':
+        baseline_id = checks.get('baseline_image_id')
+        require(isinstance(baseline_id, str) and re.fullmatch('sha256:[0-9a-f]{64}', baseline_id) and
+                baseline_id != checks['image_id'] and valid_sha(checks.get('unchanged_api_tree_sha256')),
+                'ui-image-api-preservation-incomplete')
     module = PROFILES[profile]
     for key in ('api_sha256', 'previous_api_sha256'):
         hashes = release.get(key)
-        require(isinstance(hashes, dict) and set(hashes) == {module} and
+        require(isinstance(hashes, dict) and set(hashes) == ({module} if module else set()) and
                 all(valid_sha(v) for v in hashes.values()), 'api-overlay-must-match-profile')
     preserved = release.get('preserved_api_sha256', {})
-    expected_preserved = {MODULE} if profile == 'host-report' else set()
+    expected_preserved = ({MODULE, HEALTH_MODULE} if profile == 'operations-ui' else
+                          {MODULE} if profile == 'host-report' else set())
     require(isinstance(preserved, dict) and set(preserved) == expected_preserved and
             all(valid_sha(value) for value in preserved.values()), 'preserved-api-manifest-invalid')
     api = json.loads(relative_file(stage, 'api-release.json').read_text())
     require(api['revision'] == revision and api['sha256'] == release['api_sha256'],
             'api-manifest-mismatch')
-    require(digest(relative_file(stage / 'source/spug_api', module)) == release['api_sha256'][module],
-            'stage-api-hash-mismatch')
+    for name, expected in release['api_sha256'].items():
+        require(digest(relative_file(stage / 'source/spug_api', name)) == expected,
+                'stage-api-hash-mismatch')
     for name, expected in preserved.items():
         require(digest(relative_file(stage / 'source/spug_api', name)) == expected,
                 'stage-preserved-api-hash-mismatch')
@@ -267,7 +275,7 @@ def load_stage(stage, revision, previous):
                    for path in (stage / 'build').rglob('*') if path.is_file()}
     require(build_files == set(ui['sha256']) | {'ui-release.json'}, 'unlisted-ui-stage-file')
     return dict(release, ui_sha256=ui['sha256'], ui_release_sha256=digest(ui_path),
-                prepared_image_id=checks['image_id'])
+                prepared_image_id=checks['image_id'], prepared_baseline_image_id=checks.get('baseline_image_id'))
 
 
 def check_fingerprint(value):
@@ -374,7 +382,7 @@ def publish_release(host, revision, previous):
         step = 'paired-backup'
         host.backup()
         # A complete paired backup is the final gate before runtime file writes.
-        for kind in ('api', 'ui'):
+        for kind in (('ui',) if release.get('profile') == 'operations-ui' else ('api', 'ui')):
             step = kind + '-publication'
             attempted.append(kind)  # Also restore helpers which raised midway.
             result = host.helper(kind, 'publish')
@@ -393,6 +401,7 @@ def publish_release(host, revision, previous):
         # Do not open ingress if starting a scheduler or worker exposed drift.
         require(host.fingerprint() == before, 'backend-start-business-drift')
         require(host.identity() == baseline['identity'], 'backend-start-process-drift')
+        verify_target_files(host.runtime_files(), baseline['files'], release)
         ingress_attempted = True
         host.open_ingress()
         step = 'verify-open-release'
@@ -469,6 +478,7 @@ def publish_release(host, revision, previous):
         host.start_backend()
         require(host.fingerprint() == baseline['fingerprint'], 'restored-backend-business-drift')
         require(host.identity() == baseline['identity'], 'restored-backend-process-drift')
+        verify_restoration()
         host.open_ingress()
         host.assert_running()
         host.verify_http(previous)
@@ -531,6 +541,8 @@ try:
         result = {kind: [scan(Path(root), kind) for root in paths] for kind, paths in roots.items()}
         result['ui_revisions'] = [json.loads((Path(root) / 'ui-release.json').read_text())['revision']
                                   for root in roots['ui']]
+    elif request['mode'] == 'image-api':
+        result = scan(Path(request['root']), 'api')
     elif request['mode'] == 'receipt':
         backup = Path(request['backup'])
         assert backup.is_dir() and not backup.is_symlink()
@@ -615,6 +627,10 @@ class DockerHost:
         require(label == revision, 'prepared-image-revision-mismatch')
         image_id = self.run(['docker', 'image', 'inspect', '--format', '{{.Id}}', self.release['image']])
         require(image_id == self.release['prepared_image_id'], 'prepared-image-id-mismatch')
+        if self.release.get('profile') == 'operations-ui':
+            baseline_id = self.run(['docker', 'image', 'inspect', '--format', '{{.Id}}',
+                                    'spug-baota:' + previous[:7]])
+            require(baseline_id == self.release['prepared_baseline_image_id'], 'prepared-baseline-image-id-mismatch')
         return self.release
 
     def live_revision(self):
@@ -771,11 +787,13 @@ class DockerHost:
                             'expected': expected}) == {'verified': True}, 'staged-transfer-invalid')
 
     def helper(self, kind, mode):
+        require(kind != 'api' or self.release.get('profile') != 'operations-ui', 'ui-release-cannot-write-api')
         name = 'apply-expiry.py' if kind == 'api' else 'deploy-compact-ui.py'
         return json.loads(self.run(['docker', 'exec', 'spug', 'python3',
                                     self.destination + '/' + name, self.revision, mode]))
 
     def verify_receipt(self, kind, baseline):
+        require(kind != 'api' or self.release.get('profile') != 'operations-ui', 'ui-release-has-no-api-receipt')
         names = self.release['api_sha256'] if kind == 'api' else ENTRIES
         expected = {str(index) + '/' + name: root.get(name)
                     for index, root in enumerate(baseline['files'][kind]) for name in names}

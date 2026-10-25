@@ -1,4 +1,4 @@
-"""Build a fixed, reviewed single-module runtime patch on the live baseline."""
+"""Build a fixed, reviewed runtime or UI patch on the live baseline."""
 import argparse
 import hashlib
 import json
@@ -11,7 +11,9 @@ import tarfile
 
 
 API_FILE = 'apps/baota/operations/php_update.py'
-PROFILES = {'php-update': API_FILE, 'host-report': 'apps/setting/health.py'}
+HEALTH_FILE = 'apps/setting/health.py'
+UI_FILE = 'spug_web/src/pages/exec/operations/RunDetail.js'
+PROFILES = {'php-update': API_FILE, 'host-report': HEALTH_FILE, 'operations-ui': None}
 HELPERS = ('apply-expiry.py', 'deploy-compact-ui.py', 'fingerprint.py', 'release_safety.py')
 
 
@@ -31,7 +33,11 @@ def validate_runtime_changes(names, profile='php-update'):
     module = profile_module(profile)
     runtime = {name for name in names if name.startswith('spug_api/')
                and not Path(name).name.startswith('test')}
-    if runtime != {'spug_api/' + module}:
+    if profile == 'operations-ui':
+        ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
+        if runtime or ui != {UI_FILE}:
+            raise ValueError('UI release only accepts the fixed operations page change')
+    elif runtime != {'spug_api/' + module}:
         raise ValueError('This release only accepts the selected reviewed runtime change')
 
 
@@ -40,10 +46,18 @@ def write_manifests(stage, revision, previous_revision, previous_content,
     module = profile_module(profile)
     if not all(re.fullmatch(r'[0-9a-f]{40}', value) for value in (revision, previous_revision)):
         raise ValueError('Invalid release revision')
-    api_hashes = {module: sha256(stage / 'source/spug_api' / module)}
-    previous_hashes = {module: hashlib.sha256(previous_content).hexdigest()}
+    api_hashes = {module: sha256(stage / 'source/spug_api' / module)} if module else {}
+    previous_hashes = {module: hashlib.sha256(previous_content).hexdigest()} if module else {}
     preserved_hashes = {}
-    if profile == 'host-report':
+    if profile == 'operations-ui':
+        if (previous_content is not None or not isinstance(preserved_content, dict) or
+                set(preserved_content) != {API_FILE, HEALTH_FILE} or
+                not all(isinstance(value, bytes) for value in preserved_content.values())):
+            raise ValueError('Missing fixed UI baseline module contents')
+        preserved_hashes = {name: hashlib.sha256(value).hexdigest() for name, value in preserved_content.items()}
+        if any(sha256(stage / 'source/spug_api' / name) != value for name, value in preserved_hashes.items()):
+            raise ValueError('UI preserved modules differ from the baseline')
+    elif profile == 'host-report':
         if not isinstance(preserved_content, bytes):
             raise ValueError('Missing baseline PHP content')
         preserved_hashes[API_FILE] = hashlib.sha256(preserved_content).hexdigest()
@@ -109,14 +123,18 @@ def main():
         'release_safety.py': repo / 'deploy/inventory/release_safety.py',
     }.items():
         (stage / name).write_bytes(source.read_bytes().replace(b'\r\n', b'\n'))
-    old_content = git('show', previous + ':spug_api/' + module).replace(b'\r\n', b'\n')
-    preserved_content = (git('show', previous + ':spug_api/' + API_FILE).replace(b'\r\n', b'\n')
-                         if args.profile == 'host-report' else None)
+    old_content = git('show', previous + ':spug_api/' + module).replace(b'\r\n', b'\n') if module else None
+    if args.profile == 'operations-ui':
+        preserved_content = {name: git('show', previous + ':spug_api/' + name).replace(b'\r\n', b'\n')
+                             for name in (API_FILE, HEALTH_FILE)}
+    else:
+        preserved_content = (git('show', previous + ':spug_api/' + API_FILE).replace(b'\r\n', b'\n')
+                             if args.profile == 'host-report' else None)
     write_manifests(stage, revision, previous, old_content, args.profile, preserved_content)
     (stage / 'Dockerfile').write_text(
         'FROM spug-baota:' + previous[:7] + '\nARG SOURCE_REVISION\n'
         'LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"\n'
-        'COPY source/spug_api/' + module + ' /opt/spug/spug_api/' + module + '\n'
+        + ('COPY source/spug_api/' + module + ' /opt/spug/spug_api/' + module + '\n' if module else '') +
         'COPY build/ /opt/spug/spug_web/build/\n')
     archive = stage.with_suffix('.tar.gz')
     with tarfile.open(archive, 'w:gz') as output:

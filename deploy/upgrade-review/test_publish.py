@@ -229,6 +229,67 @@ class ControllerTests(unittest.TestCase):
                     self.assertEqual(root[MODULE], OLD)
                     self.assertEqual(root[HEALTH_MODULE], NEW if failure is None else OLD)
 
+    def operations_ui_profile(self):
+        self.host.release.update(profile='operations-ui', api_sha256={}, previous_api_sha256={},
+                                 preserved_api_sha256={MODULE: OLD, HEALTH_MODULE: OLD})
+        for root in self.host.file_state['api']:
+            root[HEALTH_MODULE] = OLD
+        self.host.original_files = copy.deepcopy(self.host.file_state)
+
+    def test_operations_ui_success_and_rollback_never_call_api_helpers_or_change_api_bytes(self):
+        for failure in (None, 'ui-partial', 'http'):
+            with self.subTest(failure=failure):
+                self.host = FakeHost()
+                self.operations_ui_profile()
+                result = self.run_release(failure)
+                self.assertEqual(result['published'], failure is None, result)
+                self.assertEqual(result['rolled_back'], failure is not None, result)
+                self.assertEqual(self.host.file_state['api'], self.host.original_files['api'])
+                self.assertNotIn('api-publish', self.host.events)
+                self.assertNotIn('api-restore', self.host.events)
+                self.assertNotIn('api-verify-backup-receipt', self.host.events)
+                self.assertIn('paired-backup', self.host.events)
+
+    def test_operations_ui_api_drift_refuses_preflight_or_keeps_maintenance_closed(self):
+        for root_index in (0, 1):
+            for name in (MODULE, HEALTH_MODULE):
+                with self.subTest(root=root_index, name=name):
+                    self.host = FakeHost()
+                    self.operations_ui_profile()
+                    self.host.file_state['api'][root_index][name] = NEW
+                    result = self.run_release()
+                    self.assertFalse(result['published'])
+                    self.assertNotIn('setup-backup', self.host.events)
+        self.host = FakeHost()
+        self.operations_ui_profile()
+        original_helper = self.host.helper
+        def drift(kind, mode):
+            result = original_helper(kind, mode)
+            if mode == 'publish':
+                self.host.file_state['api'][1]['apps/ops/models.py'] = NEW
+            return result
+        self.host.helper = drift
+        result = self.run_release()
+        self.assertFalse(result['published'] or result['rolled_back'])
+        self.assertFalse(self.host.ingress)
+        self.assertNotIn('api-restore', self.host.events)
+        self.assertNotIn('start-backend', self.host.events)
+
+    def test_operations_ui_backend_start_drift_never_opens_new_or_restored_ingress(self):
+        for failure in (None, 'ui-partial'):
+            with self.subTest(failure=failure):
+                self.host = FakeHost()
+                self.operations_ui_profile()
+                original_start = self.host.start_backend
+                def start_with_drift():
+                    original_start()
+                    self.host.file_state['api'][1]['apps/ops/models.py'] = NEW
+                self.host.start_backend = start_with_drift
+                result = self.run_release(failure)
+                self.assertFalse(result['published'] or result['rolled_back'])
+                self.assertNotIn('open-ingress', self.host.events)
+                self.assertFalse(self.host.ingress)
+
     def test_preserved_php_drift_in_either_live_root_refuses_before_backup_or_maintenance(self):
         for index in (0, 1):
             with self.subTest(root=index):
@@ -714,6 +775,22 @@ class FileContractTests(unittest.TestCase):
             self.assertNotEqual(contender().returncode, 0)
         self.assertEqual(contender().returncode, 0)
 
+    def test_image_api_probe_hashes_full_tree_using_existing_log_exclusions(self):
+        root = self.root / 'api'
+        root.mkdir()
+        for name in ('runtime.py', 'data/config.ini', 'logs/worker.log', 'supervisord.log',
+                     'nested/supervisord.log', 'supervisord.log.1'):
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'old')
+        request = {'mode': 'image-api', 'root': str(root)}
+        result = self.probe(request)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {name: OLD for name in (
+            'runtime.py', 'data/config.ini', 'nested/supervisord.log', 'supervisord.log.1')})
+        (root / 'data/config.ini').write_bytes(b'changed')
+        self.assertNotEqual(json.loads(self.probe(request).stdout)['data/config.ini'], OLD)
+
     def test_compose_replacement_cannot_match_similar_or_commented_image(self):
         for text in ('# image: spug-baota:' + PREVIOUS[:7] + '\n',
                      'image: spug-baota:' + PREVIOUS[:7] + '-extra\n'):
@@ -767,6 +844,69 @@ class FileContractTests(unittest.TestCase):
             output.add(stage, arcname=stage.name)
         checks['archive_sha256'] = publisher.digest(archive)
         receipt.write_text(json.dumps(checks))
+
+    def operations_ui_stage(self):
+        stage = self.stage('host-report')
+        (stage / 'source/spug_api' / HEALTH_MODULE).write_bytes(b'old')
+        release = json.loads((stage / 'release.json').read_text())
+        release.update(profile='operations-ui', api_sha256={}, previous_api_sha256={},
+                       preserved_api_sha256={MODULE: OLD, HEALTH_MODULE: OLD})
+        (stage / 'api-release.json').write_text(json.dumps({'revision': REVISION, 'sha256': {}}))
+        self.rewrite_stage(stage, release)
+        receipt = stage / 'isolated-checks.json'
+        checks = json.loads(receipt.read_text())
+        checks.update(baseline_image_id='sha256:' + OLD, unchanged_api_tree_sha256=OLD)
+        receipt.write_text(json.dumps(checks))
+        return stage
+
+    def test_operations_ui_stage_requires_full_image_preservation_receipt_and_no_api_overlay(self):
+        stage = self.operations_ui_stage()
+        release = publisher.load_stage(stage, REVISION, PREVIOUS)
+        self.assertEqual(release['api_sha256'], {})
+        self.assertEqual(release['prepared_baseline_image_id'], 'sha256:' + OLD)
+        path = stage / 'isolated-checks.json'
+        original = json.loads(path.read_text())
+        for name in ('baseline_image_id', 'unchanged_api_tree_sha256'):
+            for value in (None, '', 'invalid'):
+                with self.subTest(name=name, value=value):
+                    changed = dict(original)
+                    if value is None:
+                        changed.pop(name)
+                    else:
+                        changed[name] = value
+                    path.write_text(json.dumps(changed))
+                    with self.assertRaises(publisher.ReleaseFailure):
+                        publisher.load_stage(stage, REVISION, PREVIOUS)
+        path.write_text(json.dumps(original))
+        for key in ('api_sha256', 'previous_api_sha256'):
+            changed = dict(release, **{key: {MODULE: OLD}})
+            self.rewrite_stage(stage, changed)
+            with self.assertRaises(publisher.ReleaseFailure):
+                publisher.load_stage(stage, REVISION, PREVIOUS)
+
+    def test_operations_ui_adapter_rechecks_baseline_image_and_refuses_api_helpers(self):
+        self.operations_ui_stage()
+        host = publisher.DockerHost(REVISION, self.root)
+        baseline_id = ['sha256:' + OLD]
+        commands = []
+        def run(command, **kwargs):
+            commands.append(command)
+            if command[-1] == 'spug-baota:' + PREVIOUS[:7]:
+                return baseline_id[0]
+            return 'sha256:' + NEW if '{{.Id}}' in command else REVISION
+        host.run = run
+        with mock.patch.object(publisher, 'available_memory', return_value=512 * 1024**2), \
+                mock.patch.object(publisher.shutil, 'disk_usage', return_value=types.SimpleNamespace(free=3 * 1024**3)):
+            host.load_release(REVISION, PREVIOUS)
+            self.assertTrue(any(command[-1] == 'spug-baota:' + PREVIOUS[:7] for command in commands))
+            baseline_id[0] = 'sha256:' + NEW
+            with self.assertRaises(publisher.ReleaseFailure):
+                host.load_release(REVISION, PREVIOUS)
+        for mode in ('publish', 'restore'):
+            with self.assertRaises(publisher.ReleaseFailure):
+                host.helper('api', mode)
+        with self.assertRaises(publisher.ReleaseFailure):
+            host.verify_receipt('api', {})
 
     def test_host_stage_accepts_exact_health_overlay_and_separate_preserved_php(self):
         stage = self.stage('host-report')

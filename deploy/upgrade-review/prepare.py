@@ -1,5 +1,6 @@
 """Verify an immutable patch bundle and run isolated checks; never change live data."""
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -8,6 +9,32 @@ import re
 import shutil
 import subprocess
 import tarfile
+
+
+def unchanged_api_digest(baseline, candidate):
+    if not isinstance(baseline, dict) or not 1 <= len(baseline) <= 20000 or candidate != baseline:
+        raise ValueError('UI image backend file set or content differs')
+    for name, value in baseline.items():
+        if not isinstance(name, str) or not name or '\\' in name or ':' in name:
+            raise ValueError('Invalid backend snapshot path')
+        path = PurePosixPath(name)
+        if (path.is_absolute() or '..' in path.parts or path.as_posix() != name or
+                not isinstance(value, str) or not re.fullmatch('[0-9a-f]{64}', value)):
+            raise ValueError('Invalid backend snapshot entry')
+    return hashlib.sha256(json.dumps(baseline, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def image_api_snapshot(image_id, probe):
+    if not isinstance(image_id, str) or not re.fullmatch('sha256:[0-9a-f]{64}', image_id):
+        raise ValueError('Backend snapshot requires an immutable image')
+    result = subprocess.run(['docker', 'run', '--rm', '-i', '--network', 'none', '--read-only',
+        '--memory', '128m', '--cpus', '1', '--pids-limit', '32', '-e', 'PYTHONDONTWRITEBYTECODE=1',
+        '--entrypoint', 'python3', image_id, '-',
+        json.dumps({'mode': 'image-api', 'root': '/opt/spug/spug_api'})],
+        input=probe, text=True, stdout=subprocess.PIPE, check=True, timeout=90)
+    snapshot = json.loads(result.stdout)
+    unchanged_api_digest(snapshot, snapshot)
+    return snapshot
 
 
 def image_identity(description, revision):
@@ -63,15 +90,30 @@ def main():
     image = 'spug-baota:' + revision[:7]
     if image != manifest['image']:
         raise ValueError('Release image differs')
-    inspect = subprocess.check_output(['docker', 'image', 'inspect', '--format',
-        '{{index .Config.Labels "org.opencontainers.image.revision"}}', 'spug-baota:' + previous[:7]], text=True).strip()
-    if inspect != previous:
-        raise ValueError('Baseline image revision differs')
+    baseline_id = image_identity(json.loads(subprocess.check_output(
+        ['docker', 'image', 'inspect', 'spug-baota:' + previous[:7]], text=True))[0], previous)
     subprocess.run(['docker', 'build', '--network', 'none', '--build-arg', 'SOURCE_REVISION=' + revision,
                     '-t', image, str(stage)], check=True, timeout=300)
     image_id = image_identity(json.loads(subprocess.check_output(
         ['docker', 'image', 'inspect', image], text=True))[0], revision)
     source = stage / 'source'
+    preservation = {}
+    if manifest.get('profile') == 'operations-ui':
+        # Read the fixed literal without importing staged Python: imports can
+        # write unarchived __pycache__ files and invalidate the bundle binding.
+        tree = ast.parse((source / 'deploy/upgrade-review/publish.py').read_text())
+        definitions = [node.value for node in tree.body if isinstance(node, ast.Assign)
+                       and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)
+                       and node.targets[0].id == 'FILE_PROBE']
+        if len(definitions) != 1:
+            raise ValueError('Missing fixed API file probe')
+        probe = ast.literal_eval(definitions[0])
+        if not isinstance(probe, str) or not probe:
+            raise ValueError('Invalid fixed API file probe')
+        baseline_api = image_api_snapshot(baseline_id, probe)
+        candidate_api = image_api_snapshot(image_id, probe)
+        preservation = {'baseline_image_id': baseline_id,
+                        'unchanged_api_tree_sha256': unchanged_api_digest(baseline_api, candidate_api)}
     subprocess.run(['docker', 'run', '--rm', '--network', 'none', '--read-only', '--memory', '128m',
         '--pids-limit', '32', '-e', 'PYTHONDONTWRITEBYTECODE=1', '-v', str(stage) + ':/release:ro',
         '--entrypoint', 'python3', image_id, '/release/source/deploy/upgrade-review/check_image.py',
@@ -95,9 +137,12 @@ def main():
         ['docker', 'image', 'inspect', image], text=True))[0], revision)
     if current_id != image_id:
         raise ValueError('Image tag changed during isolated verification')
+    if preservation and image_identity(json.loads(subprocess.check_output(
+            ['docker', 'image', 'inspect', 'spug-baota:' + previous[:7]], text=True))[0], previous) != baseline_id:
+        raise ValueError('Baseline image tag changed during isolated verification')
     (stage / 'isolated-checks.json').write_text(json.dumps({'revision': revision, 'previous_revision': previous,
         'image': image, 'image_id': image_id, 'archive_sha256': args.archive_sha256, 'linux_regression': True,
-        'release_failure_tests': True, 'image_wiring': True, 'schema_changes': False}))
+        'release_failure_tests': True, 'image_wiring': True, 'schema_changes': False, **preservation}))
     print(json.dumps({'revision': revision, 'isolated_checks': 'passed'}))
 
 
