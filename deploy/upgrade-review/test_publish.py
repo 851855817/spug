@@ -217,6 +217,62 @@ class ControllerTests(unittest.TestCase):
             root[HEALTH_MODULE] = OLD
         self.host.original_files = copy.deepcopy(self.host.file_state)
 
+    def test_preflight_exception_reports_only_fixed_check_without_touching_healthy_services(self):
+        checks = {'live_revision': 'revision', 'compose_text': 'compose',
+                  'validate_compose': 'compose', 'assert_running': 'services',
+                  'fingerprint': 'business-idle', 'identity': 'process-identity',
+                  'runtime_files': 'runtime-files'}
+        for method, check in checks.items():
+            with self.subTest(method=method):
+                self.host = FakeHost()
+                before = copy.deepcopy((self.host.file_state, self.host.business, self.host.compose))
+                output = io.StringIO()
+                with mock.patch.object(self.host, method, side_effect=RuntimeError(
+                        'password=PRETEND-SECRET /private/customer https://private.example.invalid')) as action:
+                    with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
+                        result = self.run_release()
+                action.assert_called_once()
+                self.assertEqual(result, {'revision': REVISION, 'published': False, 'rolled_back': False,
+                    'errors': [], 'failure': 'preflight', 'preflight_check': check, 'recovery': 'not-required'})
+                self.assertEqual(output.getvalue(), '')
+                self.assertEqual((self.host.file_state, self.host.business, self.host.compose), before)
+                self.assertTrue(self.host.ingress and self.host.running and self.host.health)
+                for event in ('setup-backup', 'stop-health', 'close', 'paired-backup', 'write-compose'):
+                    self.assertNotIn(event, self.host.events)
+
+    def test_preflight_invalid_evidence_is_classified_without_serializing_evidence(self):
+        for evidence, check in (('revision', 'revision'), ('compose', 'compose'),
+                                ('business', 'business-idle'), ('files', 'runtime-baseline')):
+            with self.subTest(evidence=evidence):
+                self.host = FakeHost()
+                if evidence == 'revision':
+                    self.host.file_state['ui_revisions'][0] = 'PRETEND-SECRET'
+                elif evidence == 'compose':
+                    self.host.compose = 'private-configuration=PRETEND-SECRET'
+                elif evidence == 'business':
+                    self.host.business['schema_sha256'] = 'PRETEND-SECRET'
+                else:
+                    self.host.file_state['api'][1][MODULE] = 'PRETEND-SECRET'
+                result = self.run_release()
+                self.assertEqual(result['failure'], 'preflight')
+                self.assertEqual(result.get('preflight_check'), check)
+                self.assertNotIn('PRETEND-SECRET', json.dumps(result))
+                self.assertNotIn('setup-backup', self.host.events)
+                self.assertTrue(self.host.ingress and self.host.running and self.host.health)
+
+    def test_preflight_check_is_absent_outside_preflight_failure(self):
+        for failure in (None, 'backup', 'http'):
+            with self.subTest(failure=failure):
+                self.host = FakeHost()
+                result = self.run_release(failure)
+                self.assertNotIn('preflight_check', result)
+        self.host = FakeHost()
+        with mock.patch.object(self.host, 'load_release', side_effect=RuntimeError('PRETEND-SECRET')):
+            result = self.run_release()
+        self.assertEqual(result['failure'], 'validate-stage')
+        self.assertNotIn('preflight_check', result)
+        self.assertNotIn('PRETEND-SECRET', json.dumps(result))
+
     def test_host_profile_changes_health_only_and_preserves_php_during_success_and_rollback(self):
         for failure in (None, 'http', 'api-partial'):
             with self.subTest(failure=failure):

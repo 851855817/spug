@@ -354,20 +354,29 @@ def publish_release(host, revision, previous):
     attempted = []
     maintenance_started = ingress_attempted = False
     step = 'validate-stage'
+    preflight_check = 'revision'
     try:
         release = host.load_release(revision, previous)
         step = 'preflight'
         require(host.live_revision() == previous, 'previous-live-ui-mismatch')
+        preflight_check = 'compose'
         old_compose = host.compose_text()
         new_compose = next_compose(old_compose, previous, revision)
         # Reject existing invalid configuration while the healthy deployment
         # is still untouched; rollback must be able to validate this baseline.
         host.validate_compose()
+        preflight_check = 'services'
         host.assert_running()
+        preflight_check = 'business-idle'
         before = host.fingerprint()  # Adapter always invokes --require-idle.
         check_fingerprint(before)
-        baseline = {'fingerprint': before, 'identity': host.identity(),
-                    'files': host.runtime_files(), 'compose': old_compose}
+        preflight_check = 'process-identity'
+        identity = host.identity()
+        preflight_check = 'runtime-files'
+        runtime = host.runtime_files()
+        baseline = {'fingerprint': before, 'identity': identity,
+                    'files': runtime, 'compose': old_compose}
+        preflight_check = 'runtime-baseline'
         verify_previous_files(baseline['files'], release)
         step = 'prepare-backup'
         report['backup'] = host.setup_backup(baseline)
@@ -421,6 +430,8 @@ def publish_release(host, revision, previous):
         # and decrypted application configuration may exist in local variables.
         report['published'] = False
         report['failure'] = step
+        if step == 'preflight':
+            report['preflight_check'] = preflight_check
         if not maintenance_started:
             report['recovery'] = 'not-required'
             return report
