@@ -57,6 +57,26 @@ def normalized_rows(model, rows, now):
             for row in rows]
 
 
+def failed_renewal_preflight(target):
+    """A complete failed preview has no dispatchable child; preserve it as-is.
+
+    Ready, missing, dispatched or reconciled history always blocks. All rows
+    remain in the preservation digest, so a concurrent start still stops release.
+    """
+    if (not isinstance(target, dict) or target.get('state') != 'prepared'
+            or target.get('reconcile_requested') is not False
+            or target.get('task__state') != 'prepared' or target.get('task__operation') != 'ssl_renew'
+            or target.get('task__audit') != []):
+        return False
+    children = target.get('children')
+    return isinstance(children, list) and bool(children) and all(
+        isinstance(child, dict) and child.get('state') == 'failed'
+        and isinstance(child.get('snapshot'), dict) and child['snapshot'].get('state') == 'failed'
+        and isinstance(child.get('result'), dict) and child['result'].get('state') == 'failed'
+        and 'remote' not in child['result'] and child.get('intents') == [] and child.get('resolutions') == []
+        for child in children)
+
+
 models = [model for model in apps.get_models(include_auto_created=True)
           if (model._meta.app_label, model.__name__) not in (
               ('baota', 'ResourceMonitorSnapshot'), ('baota', 'ResourceMonitorLease'))]
@@ -82,8 +102,10 @@ result['credentials_decrypt'] = True
 if '--require-idle' in sys.argv:
     assert not PanelLock.objects.exists(), 'Panel operation locked; defer release'
     # Includes all new health_policy tasks: never downgrade their in-flight verifier.
-    assert not PanelTaskTarget.objects.exclude(state__in=(
-        'success', 'failed', 'already', 'skipped', 'cancelled', 'completed')).exists(), 'Panel task pending; defer release'
+    pending = PanelTaskTarget.objects.exclude(state__in=(
+        'success', 'failed', 'already', 'skipped', 'cancelled', 'completed')).values(
+            'state', 'reconcile_requested', 'children', 'task__state', 'task__operation', 'task__audit')
+    assert all(failed_renewal_preflight(target) for target in pending), 'Panel task pending; defer release'
     assert not OpsRun.objects.filter(state__in=('queued', 'running')).exists(), 'Operations job active; defer release'
     assert not OpsTarget.objects.filter(state='running').exists(), 'Operations target active; defer release'
     assert not PanelInventoryLease.objects.filter(expires_at__gt=timezone.now()).exclude(token='').exists(), 'Inventory collection active'
