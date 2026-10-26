@@ -75,3 +75,7 @@
 导入暂存发布器做只读核查时也应设置 `PYTHONDONTWRITEBYTECODE=1`，避免生成未归档的 `__pycache__`，导致后续每字节绑定正确拒绝。发布日志和保全原始数据保留在受限部署目录，不上传公共仓库。
 
 离线保护测试：`python -m unittest discover -s deploy/upgrade-review -p 'test_*.py'`。Linux 独占锁实进程测试在 Windows 条件跳过，最终须在 Linux 准备／CI 通过。
+
+## SSL 续签诊断补丁
+
+`ssl-renew-diagnostics` 配置仅接受既有 `apps/baota/operations/certificates.py` 和 `spug_web/src/pages/exec/panel/TaskItem.js` 的运行变更。保留 PHP 更新及平台健康模块的基线摘要，验证证书模块的旧摘要及全部 API 文件树；不包含模型、迁移或权限修改。准备、配对备份、API/UI 原始收据、业务空闲门和兼容回退均沿用现有发布流程。测试：`python -m unittest discover -s deploy/upgrade-review -p 'test_*.py'`。

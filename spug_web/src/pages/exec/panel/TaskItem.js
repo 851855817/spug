@@ -52,6 +52,20 @@ export default function TaskItem({operation, child}) {
     if (operation === 'software_install' && plan.m_version && plan.min_version) fields.push(['版本', `${plan.m_version} / ${plan.min_version}`]);
   }
   let message = result.message || snapshot.message;
+  let suggestion;
+  const renewalPreflightFailure = operation === 'ssl_renew' && child.state === 'failed' &&
+    snapshot.state === 'failed' && result.state === 'failed' &&
+    Array.isArray(child.intents) && child.intents.length === 0 && !('remote' in result);
+  const dnsMessage = '原证书使用 DNS 验证，当前同订单续签仅支持 HTTP 验证';
+  // Diagnose saved preflight failures from frozen evidence only. Do not replace
+  // errors after dispatch, infer missing history, or rewrite task records.
+  if (renewalPreflightFailure && before.ssl?.auth_type === 'dns' &&
+    snapshot.message === '无法核对该网站的目标配置' && message === snapshot.message) message = dnsMessage;
+  if (renewalPreflightFailure) {
+    if (message === dnsMessage) suggestion = '请到原宝塔面板按 DNS 方式续签。若改用 HTTP 申请，请先确认域名解析与 80 端口可访问，再新建申请任务并预检。';
+    if (message === '未核实原证书使用 HTTP 验证，无法同订单续签') suggestion = '请在原宝塔面板核实证书验证方式，并按原方式续签。';
+    if (message === '未找到唯一匹配的 HTTP 免费证书订单，无法同订单续签') suggestion = '请在原宝塔面板核实证书及其申请订单；导入证书或订单不匹配时，请按原签发方式续签。';
+  }
   if (upgrade && child.state === 'ready') message = legacy ?
     '升级时面板会短暂断连，实际版本由官方稳定通道决定。' : '升级时面板会短暂断连。';
   if (upgrade && child.state === 'success' && observed.version) message = '升级完成，已核验实际版本。';
@@ -66,7 +80,7 @@ export default function TaskItem({operation, child}) {
     {fields.length > 0 && <div className={styles.fields}>{fields.map(([label, value]) => <span key={label}>
       <Typography.Text type="secondary">{label}：</Typography.Text>{value}
     </span>)}</div>}
-    {message && important && <Alert showIcon type={child.state === 'failed' ? 'error' : 'warning'} message={message}/>}
+    {message && important && <Alert showIcon type={child.state === 'failed' ? 'error' : 'warning'} message={message} description={suggestion}/>}
     {message && child.state === 'ready' && upgrade && <Typography.Paragraph className={styles.message} type="secondary">{message}</Typography.Paragraph>}
     <UpgradeReview operation={operation} snapshot={snapshot} evidence={observed}/>
     <details className={styles.details} onToggle={event => setExpanded(event.currentTarget.open)}>

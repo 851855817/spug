@@ -423,11 +423,25 @@ class CertificateOperation(Operation):
             plan = item['plan'] = {'domains': requested, 'auth_to': auth_to, 'renewal': self.renewal,
                                   'required_acknowledgements': ['ssl_panel_sync'], 'ssl_scope': ssl_scope(self.renewal)}
             if self.renewal:
-                index = order_index(snapshot['index'])
+                # Only expose diagnoses derived from parsed public state. Keep
+                # unexpected panel errors masked by site_preflight.
+                if snapshot['auth_type'] != 'http':
+                    item.update(state='failed', message=(
+                        '原证书使用 DNS 验证，当前同订单续签仅支持 HTTP 验证'
+                        if snapshot['auth_type'] == 'dns' else
+                        '未核实原证书使用 HTTP 验证，无法同订单续签'))
+                    return
+                unavailable = '未找到唯一匹配的 HTTP 免费证书订单，无法同订单续签'
+                try:
+                    index = order_index(snapshot['index'])
+                except PanelAPIError:
+                    item.update(state='failed', message=unavailable)
+                    return
                 linked = [v for v in all_orders if v['index'] == index and matches(v, plan)]
-                if (not snapshot['enabled'] or not snapshot['certificate'] or snapshot['auth_type'] != 'http'
+                if (not snapshot['enabled'] or not snapshot['certificate']
                         or snapshot['type'] != 1 or len(linked) != 1):
-                    raise PanelAPIError("没有唯一关联的 HTTP Let's Encrypt 订单")
+                    item.update(state='failed', message=unavailable)
+                    return
                 plan['index'] = index
             current = snapshot['certificate']
             if snapshot['enabled'] and current and set(requested).issubset(current['domains']):

@@ -18,6 +18,58 @@ const phpChild = (state = 'ready', extra = {}) => ({state, snapshot: {key: 'php-
   before: {runtime: {version: '7.4.32'}}, plan: {target_version: '7.4.33', impact: {website_refs: []}}}, ...extra});
 const renderPHP = child => act(() => {ReactDOM.render(<TaskItem operation="php_update" child={child}/>, container);});
 
+const dnsFailure = () => ({state: 'failed', intents: [], snapshot: {state: 'failed',
+  message: '无法核对该网站的目标配置', before: {ssl: {auth_type: 'dns'}}, plan: {renewal: true}},
+  result: {state: 'failed', message: '无法核对该网站的目标配置', evidence: {}}});
+const renderSSL = (child, operation = 'ssl_renew') => act(() => {
+  ReactDOM.render(<TaskItem operation={operation} child={child}/>, container);
+});
+
+test('saved DNS renewal preflight failure explains reason and remedy without changing history', () => {
+  const child = dnsFailure(); const original = JSON.stringify(child);
+  renderSSL(child);
+  expect(container.textContent).toContain('原证书使用 DNS 验证，当前同订单续签仅支持 HTTP 验证');
+  expect(container.textContent).toContain('请到原宝塔面板按 DNS 方式续签');
+  expect(container.textContent).not.toContain('无法核对该网站的目标配置');
+  expect(JSON.stringify(child)).toBe(original);
+});
+
+test('new DNS renewal diagnosis shows the same concise remedy', () => {
+  const child = dnsFailure();
+  child.result.message = child.snapshot.message = '原证书使用 DNS 验证，当前同订单续签仅支持 HTTP 验证';
+  renderSSL(child);
+  expect(container.textContent).toContain('请到原宝塔面板按 DNS 方式续签');
+  expect(container.textContent).not.toContain('续签成功');
+});
+
+test.each(['ssl_apply', 'site_rewrite'])('legacy DNS hints never apply to other operations (%s)', operation => {
+  renderSSL(dnsFailure(), operation);
+  expect(container.textContent).toContain('无法核对该网站的目标配置');
+  expect(container.textContent).not.toContain('请到原宝塔面板');
+});
+
+test.each(['http', 'tls', ''])('legacy non-DNS evidence is never guessed (%s)', auth => {
+  const child = dnsFailure(); child.snapshot.before.ssl.auth_type = auth;
+  renderSSL(child);
+  expect(container.textContent).toContain('无法核对该网站的目标配置');
+  expect(container.textContent).not.toContain('请到原宝塔面板');
+});
+
+test.each(['snapshot', 'intents', 'missingIntents', 'remote', 'differentError', 'resultState', 'childState'])(
+  'DNS preflight compatibility never replaces execution or unrelated failures (%s)', condition => {
+    const child = dnsFailure();
+    if (condition === 'snapshot') child.snapshot.state = 'ready';
+    if (condition === 'intents') child.intents = [{phase: 'apply'}];
+    if (condition === 'missingIntents') delete child.intents;
+    if (condition === 'remote') child.result.remote = {phase: 'apply'};
+    if (condition === 'differentError') child.result.message = '其他明确错误';
+    if (condition === 'resultState') child.result.state = 'uncertain';
+    if (condition === 'childState') child.state = 'uncertain';
+    renderSSL(child);
+    expect(container.textContent).toContain(child.result.message);
+    expect(container.textContent).not.toContain('请到原宝塔面板');
+  });
+
 test('PHP upgrade review separates expected version from actual evidence and states health coverage', () => {
   renderPHP(phpChild());
   expect(container.textContent).toContain('升级核对');
