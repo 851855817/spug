@@ -24,7 +24,7 @@ jest.mock('antd', () => {
       onClick={() => onChange(!checked)}/>,
     Card: Wrapper, Col: Wrapper, Row: Wrapper, Space: Wrapper, Tag: Wrapper, Tooltip: Wrapper,
     Typography: {Text: Wrapper, Paragraph: Wrapper}, Input: {Search: () => null},
-    Empty: () => null, Modal: {confirm: jest.fn()}, message: {success: jest.fn(), info: jest.fn()},
+    Empty: () => null, Modal: {confirm: jest.fn()}, message: {success: jest.fn(), info: jest.fn(), error: jest.fn()},
     Table: ({columns, dataSource}) => <div>{dataSource.map(panel => <div key={panel.id} data-panel-id={panel.id}>
       {columns.map(column => <div key={column.key || column.dataIndex}>{column.render
         ? column.render(panel[column.dataIndex], panel) : panel[column.dataIndex]}</div>)}
@@ -127,4 +127,93 @@ test('panel monitor icon remains clickable when disabled and reports the reason'
   await act(async () => {container.querySelector('[aria-label="查看One监控"]').click();});
   expect(message.info).toHaveBeenCalledWith('未开启监控');
   expect(http.post).not.toHaveBeenCalled();
+});
+
+function openButtons() {
+  return [...container.querySelectorAll('button')].filter(button => button.textContent.trim() === '打开');
+}
+
+function enableLogin() {
+  hasPermission.mockImplementation(permission => ['baota.panel.view', 'baota.panel.login'].includes(permission));
+}
+
+function mockWindow() {
+  const popup = {opener: window, closed: false, document: document.implementation.createHTMLDocument(''),
+    location: {replace: jest.fn()}, close: jest.fn()};
+  jest.spyOn(window, 'open').mockReturnValue(popup);
+  return popup;
+}
+
+afterEach(() => jest.restoreAllMocks());
+
+test('one click login opens tab synchronously, sends only id, prevents duplicate and navigates without opener/referrer', async () => {
+  enableLogin();
+  const popup = mockWindow();
+  let finish;
+  http.post.mockReturnValue(new Promise(resolve => {finish = resolve;}));
+  await renderPage();
+  act(() => {openButtons()[0].click(); openButtons()[0].click();});
+  expect(window.open).toHaveBeenCalledTimes(1);
+  expect(http.post).toHaveBeenCalledTimes(1);
+  expect(http.post).toHaveBeenCalledWith('/api/baota/login/', {id: 1});
+  expect(popup.opener).toBeNull();
+  expect(popup.document.querySelector('meta[name="referrer"]').content).toBe('no-referrer');
+  expect(openButtons()[0].getAttribute('aria-busy')).toBe('true');
+  expect(openButtons()[1].getAttribute('aria-busy')).toBe('false');
+  const url = 'https://one/login?tmp_token=' + 'a'.repeat(64);
+  await act(async () => finish({url}));
+  expect(popup.location.replace).toHaveBeenCalledWith(url);
+  expect(openButtons()[0].getAttribute('aria-busy')).toBe('false');
+});
+
+test('one click login requires dedicated permission while preserving explicit login page link', async () => {
+  await renderPage();
+  expect(openButtons()).toHaveLength(0);
+  const link = container.querySelector('[data-panel-id="1"] a');
+  expect(link.textContent).toBe('登录页');
+  expect(link.rel).toBe('noopener noreferrer');
+});
+
+test('missing API is explained without opening a tab or minting a ticket', async () => {
+  enableLogin();
+  panels[0].has_api_key = false;
+  mockWindow();
+  await renderPage();
+  await act(async () => openButtons()[0].click());
+  expect(window.open).not.toHaveBeenCalled();
+  expect(http.post).not.toHaveBeenCalled();
+  expect(message.info).toHaveBeenCalledWith(expect.stringContaining('API'));
+});
+
+test('blocked popup never mints a ticket', async () => {
+  enableLogin();
+  jest.spyOn(window, 'open').mockReturnValue(null);
+  await renderPage();
+  await act(async () => openButtons()[0].click());
+  expect(http.post).not.toHaveBeenCalled();
+  expect(message.info).toHaveBeenCalledWith(expect.stringContaining('弹出'));
+});
+
+test('failed request closes blank tab and clears row loading', async () => {
+  enableLogin();
+  const popup = mockWindow();
+  http.post.mockRejectedValue(new Error('already displayed by http'));
+  await renderPage();
+  await act(async () => openButtons()[0].click());
+  expect(popup.close).toHaveBeenCalledTimes(1);
+  expect(popup.location.replace).not.toHaveBeenCalled();
+  expect(openButtons()[0].getAttribute('aria-busy')).toBe('false');
+});
+
+test.each(['javascript:alert(1)', 'https://evil.test/login?tmp_token=' + 'a'.repeat(64),
+  'https://one/wrong?tmp_token=' + 'a'.repeat(64), 'https://one/login?tmp_token=short',
+  'https://user:password@one/login?tmp_token=' + 'a'.repeat(64)])('rejects unexpected login destination %s', async url => {
+  enableLogin();
+  const popup = mockWindow();
+  http.post.mockResolvedValue({url});
+  await renderPage();
+  await act(async () => openButtons()[0].click());
+  expect(popup.close).toHaveBeenCalledTimes(1);
+  expect(popup.location.replace).not.toHaveBeenCalled();
+  expect(message.error).toHaveBeenCalledWith('登录地址校验失败，请刷新列表后重试');
 });

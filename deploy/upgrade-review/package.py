@@ -13,7 +13,11 @@ import tarfile
 API_FILE = 'apps/baota/operations/php_update.py'
 HEALTH_FILE = 'apps/setting/health.py'
 UI_FILE = 'spug_web/src/pages/exec/operations/RunDetail.js'
-PROFILES = {'php-update': API_FILE, 'host-report': HEALTH_FILE, 'operations-ui': None}
+LOGIN_FILE = 'apps/baota/login_views.py'
+LOGIN_MODULES = (LOGIN_FILE, 'apps/baota/urls.py')
+LOGIN_UI = {'spug_web/src/pages/baota/index.js', 'spug_web/src/pages/system/role/codes.js'}
+PROFILES = {'php-update': API_FILE, 'host-report': HEALTH_FILE, 'operations-ui': None,
+            'panel-login': LOGIN_MODULES}
 HELPERS = ('apply-expiry.py', 'deploy-compact-ui.py', 'fingerprint.py', 'release_safety.py')
 
 
@@ -33,7 +37,11 @@ def validate_runtime_changes(names, profile='php-update'):
     module = profile_module(profile)
     runtime = {name for name in names if name.startswith('spug_api/')
                and not Path(name).name.startswith('test')}
-    if profile == 'operations-ui':
+    if profile == 'panel-login':
+        ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
+        if runtime != {'spug_api/' + name for name in LOGIN_MODULES} or ui != LOGIN_UI:
+            raise ValueError('Login release only accepts the fixed login API and UI changes')
+    elif profile == 'operations-ui':
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
         if runtime or ui != {UI_FILE}:
             raise ValueError('UI release only accepts the fixed operations page change')
@@ -46,11 +54,20 @@ def write_manifests(stage, revision, previous_revision, previous_content,
     module = profile_module(profile)
     if not all(re.fullmatch(r'[0-9a-f]{40}', value) for value in (revision, previous_revision)):
         raise ValueError('Invalid release revision')
-    api_hashes = {module: sha256(stage / 'source/spug_api' / module)} if module else {}
-    previous_hashes = {module: hashlib.sha256(previous_content).hexdigest()} if module else {}
+    if profile == 'panel-login':
+        if (not isinstance(previous_content, dict) or set(previous_content) != set(LOGIN_MODULES) or
+                previous_content[LOGIN_FILE] is not None or
+                not isinstance(previous_content['apps/baota/urls.py'], bytes)):
+            raise ValueError('Login baseline must have URLs and no existing login module')
+        api_hashes = {name: sha256(stage / 'source/spug_api' / name) for name in LOGIN_MODULES}
+        previous_hashes = {name: hashlib.sha256(content).hexdigest() if content is not None else None
+                           for name, content in previous_content.items()}
+    else:
+        api_hashes = {module: sha256(stage / 'source/spug_api' / module)} if module else {}
+        previous_hashes = {module: hashlib.sha256(previous_content).hexdigest()} if module else {}
     preserved_hashes = {}
-    if profile == 'operations-ui':
-        if (previous_content is not None or not isinstance(preserved_content, dict) or
+    if profile in ('operations-ui', 'panel-login'):
+        if ((profile == 'operations-ui' and previous_content is not None) or not isinstance(preserved_content, dict) or
                 set(preserved_content) != {API_FILE, HEALTH_FILE} or
                 not all(isinstance(value, bytes) for value in preserved_content.values())):
             raise ValueError('Missing fixed UI baseline module contents')
@@ -123,18 +140,25 @@ def main():
         'release_safety.py': repo / 'deploy/inventory/release_safety.py',
     }.items():
         (stage / name).write_bytes(source.read_bytes().replace(b'\r\n', b'\n'))
-    old_content = git('show', previous + ':spug_api/' + module).replace(b'\r\n', b'\n') if module else None
-    if args.profile == 'operations-ui':
+    if args.profile == 'panel-login':
+        if git('ls-tree', '--name-only', previous, '--', 'spug_api/' + LOGIN_FILE).strip():
+            raise ValueError('Login module already exists in baseline; design a new reviewed profile')
+        old_content = {LOGIN_FILE: None, 'apps/baota/urls.py':
+                       git('show', previous + ':spug_api/apps/baota/urls.py').replace(b'\r\n', b'\n')}
+    else:
+        old_content = git('show', previous + ':spug_api/' + module).replace(b'\r\n', b'\n') if module else None
+    if args.profile in ('operations-ui', 'panel-login'):
         preserved_content = {name: git('show', previous + ':spug_api/' + name).replace(b'\r\n', b'\n')
                              for name in (API_FILE, HEALTH_FILE)}
     else:
         preserved_content = (git('show', previous + ':spug_api/' + API_FILE).replace(b'\r\n', b'\n')
                              if args.profile == 'host-report' else None)
     write_manifests(stage, revision, previous, old_content, args.profile, preserved_content)
+    modules = LOGIN_MODULES if args.profile == 'panel-login' else (module,) if module else ()
     (stage / 'Dockerfile').write_text(
         'FROM spug-baota:' + previous[:7] + '\nARG SOURCE_REVISION\n'
         'LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"\n'
-        + ('COPY source/spug_api/' + module + ' /opt/spug/spug_api/' + module + '\n' if module else '') +
+        + ''.join('COPY source/spug_api/' + name + ' /opt/spug/spug_api/' + name + '\n' for name in modules) +
         'COPY build/ /opt/spug/spug_web/build/\n')
     archive = stage.with_suffix('.tar.gz')
     with tarfile.open(archive, 'w:gz') as output:

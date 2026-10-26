@@ -2,6 +2,7 @@ from django.urls import include, path
 from django.db import transaction
 from .views import GroupView, PanelView
 from .connection_views import CertificateView, ConnectionView
+from .login_views import LoginView
 from .upload_views import UploadBundlesView, UploadFileView, UploadSealView, UploadDiscardView
 from .task_views import (TasksView, TaskDetailView, TaskActionView, TaskOptionsView,
                          TaskResourcesView, TaskCatalogView)
@@ -20,6 +21,7 @@ urlpatterns = [
     path('', PanelView.as_view()),
     path('group/', GroupView.as_view()),
     path('connection/', ConnectionView.as_view()),
+    path('login/', transaction.non_atomic_requests(LoginView.as_view())),
     path('certificate/', CertificateView.as_view()),
     path('tasks/', TasksView.as_view()),
     path('tasks/<int:task_id>/', TaskDetailView.as_view()),

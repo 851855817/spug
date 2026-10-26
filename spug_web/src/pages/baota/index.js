@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Card, Col, Empty, Input, Modal, Row, Space, Tag, Typography, message } from 'antd';
 import Table from 'components/ResizableTable';
 import { ExportOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -20,6 +20,8 @@ export default function BaotaIndex() {
   const [ready, setReady] = useState(false);
   const [record, setRecord] = useState(null);
   const [checkingIds, setCheckingIds] = useState({});
+  const [openingIds, setOpeningIds] = useState({});
+  const opening = useRef(new Set());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [monitorRevision, setMonitorRevision] = useState(0);
@@ -70,6 +72,48 @@ export default function BaotaIndex() {
     } finally { setCheckingIds(value => ({...value, [panel.id]: false})); }
   }
 
+  async function openPanel(panel) {
+    if (opening.current.has(panel.id)) return;
+    if (!panel.api_base_url || !panel.has_api_key) {
+      message.info('请先编辑此面板并配置 API 密钥，才能一键登录');
+      return;
+    }
+    const popup = window.open('about:blank', '_blank');
+    if (!popup) {
+      message.info('请允许浏览器弹出窗口后重试');
+      return;
+    }
+    opening.current.add(panel.id);
+    setOpeningIds(value => ({...value, [panel.id]: true}));
+    try {
+      popup.opener = null;
+      const policy = popup.document.createElement('meta');
+      policy.name = 'referrer';
+      policy.content = 'no-referrer';
+      popup.document.head.appendChild(policy);
+      popup.document.title = '正在登录宝塔…';
+      const result = await http.post('/api/baota/login/', {id: panel.id});
+      // Bind navigation to the saved API origin/prefix, even if a response is malformed.
+      const expected = new URL(panel.api_base_url.replace(/\/$/, '') + '/login');
+      let target;
+      try {target = new URL(result.url);} catch (_) { /* handled below */ }
+      if (!target || !['http:', 'https:'].includes(target.protocol) || target.username || target.password ||
+          target.origin !== expected.origin || target.pathname !== expected.pathname || target.hash ||
+          !/^\?tmp_token=[A-Za-z0-9_]{64}$/.test(target.search)) {
+        message.error('登录地址校验失败，请刷新列表后重试');
+        popup.close();
+        return;
+      }
+      if (!popup.closed) popup.location.replace(target.href);
+    } catch (_) {
+      popup.close();
+      // The shared HTTP client displays server errors without reflecting ticket data.
+    } finally {
+      opening.current.delete(panel.id);
+      setOpeningIds(value => ({...value, [panel.id]: false}));
+    }
+  }
+
   const columns = [
     {title: '面板名称', dataIndex: 'name', width: 160, ellipsis: true},
     {title: 'IP 地址', dataIndex: 'url', width: 150, ellipsis: true,
@@ -89,9 +133,11 @@ export default function BaotaIndex() {
       render: id => groups.find(group => group.id === id)?.name || '—'},
     {title: '备注', dataIndex: 'desc', width: 150, ellipsis: true},
     {title: '创建时间', dataIndex: 'created_at', width: 170},
-    {title: '操作', key: 'actions', width: 220, fixed: 'right', render: (_, panel) => (
+    {title: '操作', key: 'actions', width: 280, fixed: 'right', render: (_, panel) => (
       <Space size={4} wrap>
-        <a href={panel.url} target="_blank" rel="noopener noreferrer"><ExportOutlined/> 打开</a>
+        {hasPermission('baota.panel.login') && <Button type="link" size="small" icon={<ExportOutlined/>}
+          loading={!!openingIds[panel.id]} onClick={() => openPanel(panel)}>打开</Button>}
+        <a href={panel.url} target="_blank" rel="noopener noreferrer">登录页</a>
         {hasPermission('baota.panel.edit') && <Button type="link" size="small" onClick={() => setRecord(panel)}>编辑</Button>}
         {hasPermission('baota.panel.edit') && <Button type="link" size="small" loading={!!checkingIds[panel.id]}
           disabled={!panel.api_base_url || !panel.has_api_key} onClick={() => checkPanel(panel)}>测试连接</Button>}
@@ -127,7 +173,7 @@ export default function BaotaIndex() {
                    pagination={{current: page, pageSize, showSizeChanger: true, total: rows.length,
                      showTotal: total => `共 ${total} 个面板`, onChange: (value, size) => { setPage(value); setPageSize(size); }}}/>
             </ResourceMonitorProvider>
-            <Typography.Text type="secondary">“打开”将进入宝塔登录页面。</Typography.Text>
+            <Typography.Text type="secondary">“打开”通过已保存的 API 一键登录宝塔主管理员；“登录页”用于手动登录。</Typography.Text>
           </Card>
         </Col>
       </Row>

@@ -8,7 +8,10 @@ import sys
 
 PHP_MODULE = 'apps/baota/operations/php_update.py'
 HEALTH_MODULE = 'apps/setting/health.py'
-PROFILES = {'php-update': PHP_MODULE, 'host-report': HEALTH_MODULE, 'operations-ui': None}
+LOGIN_MODULE = 'apps/baota/login_views.py'
+LOGIN_MODULES = (LOGIN_MODULE, 'apps/baota/urls.py')
+PROFILES = {'php-update': PHP_MODULE, 'host-report': HEALTH_MODULE, 'operations-ui': None,
+            'panel-login': LOGIN_MODULES}
 
 
 def sha(path):
@@ -37,12 +40,18 @@ def verify(root, stage, revision):
         raise ValueError('Unknown image release profile')
     for key in ('api_sha256', 'previous_api_sha256'):
         hashes = release.get(key)
-        if (not isinstance(hashes, dict) or set(hashes) != ({PROFILES[profile]} if PROFILES[profile] else set()) or
+        if profile == 'panel-login':
+            if (not isinstance(hashes, dict) or set(hashes) != set(LOGIN_MODULES) or
+                    not all((value is None if key == 'previous_api_sha256' and name == LOGIN_MODULE else
+                             isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value))
+                            for name, value in hashes.items())):
+                raise ValueError('Image login overlay differs')
+        elif (not isinstance(hashes, dict) or set(hashes) != ({PROFILES[profile]} if PROFILES[profile] else set()) or
                 not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)
                         for value in hashes.values())):
             raise ValueError('Image API overlay differs')
     preserved = release.get('preserved_api_sha256', {})
-    expected_preserved = ({PHP_MODULE, HEALTH_MODULE} if profile == 'operations-ui' else
+    expected_preserved = ({PHP_MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'panel-login') else
                           {PHP_MODULE} if profile == 'host-report' else set())
     if (not isinstance(preserved, dict) or set(preserved) != expected_preserved or
             not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)

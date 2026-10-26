@@ -22,7 +22,10 @@ import uuid
 
 MODULE = 'apps/baota/operations/php_update.py'
 HEALTH_MODULE = 'apps/setting/health.py'
-PROFILES = {'php-update': MODULE, 'host-report': HEALTH_MODULE, 'operations-ui': None}
+LOGIN_MODULE = 'apps/baota/login_views.py'
+LOGIN_MODULES = (LOGIN_MODULE, 'apps/baota/urls.py')
+PROFILES = {'php-update': MODULE, 'host-report': HEALTH_MODULE, 'operations-ui': None,
+            'panel-login': LOGIN_MODULES}
 MAINTENANCE = ('nginx', 'spug-api', 'spug-ws', 'spug-panel-worker',
                'spug-ops-worker', 'spug-scheduler')
 PRESERVED = ('redis', 'spug-worker', 'spug-monitor')
@@ -243,10 +246,15 @@ def load_stage(stage, revision, previous):
     module = PROFILES[profile]
     for key in ('api_sha256', 'previous_api_sha256'):
         hashes = release.get(key)
-        require(isinstance(hashes, dict) and set(hashes) == ({module} if module else set()) and
-                all(valid_sha(v) for v in hashes.values()), 'api-overlay-must-match-profile')
+        if profile == 'panel-login':
+            require(isinstance(hashes, dict) and set(hashes) == set(LOGIN_MODULES) and
+                    all((value is None if key == 'previous_api_sha256' and name == LOGIN_MODULE else valid_sha(value))
+                        for name, value in hashes.items()), 'api-overlay-must-match-profile')
+        else:
+            require(isinstance(hashes, dict) and set(hashes) == ({module} if module else set()) and
+                    all(valid_sha(v) for v in hashes.values()), 'api-overlay-must-match-profile')
     preserved = release.get('preserved_api_sha256', {})
-    expected_preserved = ({MODULE, HEALTH_MODULE} if profile == 'operations-ui' else
+    expected_preserved = ({MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'panel-login') else
                           {MODULE} if profile == 'host-report' else set())
     require(isinstance(preserved, dict) and set(preserved) == expected_preserved and
             all(valid_sha(value) for value in preserved.values()), 'preserved-api-manifest-invalid')
@@ -340,7 +348,8 @@ def check_helper_result(result, kind, mode, release):
     require(isinstance(result, dict) and result.get('revision') == release['revision'] and
             result.get('mode') == mode, 'helper-result-invalid')
     if kind == 'api':
-        require(result.get('modules') == 1, 'helper-api-module-count-invalid')
+        require(type(result.get('modules')) is int and result['modules'] == len(release['api_sha256']),
+                'helper-api-module-count-invalid')
     else:
         require(result.get('verified_files') == len(release['ui_sha256']) + 1,
                 'helper-ui-file-count-invalid')

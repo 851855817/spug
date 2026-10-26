@@ -45,6 +45,7 @@ export default [{
     label: t('面板记录'),
     perms: [
       {key: 'view', label: t('查看面板')},
+      {key: 'login', label: t('一键登录宝塔主管理员')},
       {key: 'add', label: t('添加面板')},
       {key: 'edit', label: t('编辑面板')},
       {key: 'del', label: t('删除面板')},
