@@ -125,7 +125,7 @@ def main():
         raise ValueError('Package only a clean reviewed checkout')
     module = profile_module(args.profile)
     validate_runtime_changes(git('diff', '--name-only', previous, revision).decode().splitlines(), args.profile)
-    environment = dict(os.environ, NODE_OPTIONS='--openssl-legacy-provider --max-old-space-size=384 --max-semi-space-size=8',
+    environment = dict(os.environ, NODE_OPTIONS='--openssl-legacy-provider --max-old-space-size=512 --max-semi-space-size=8',
                        GENERATE_SOURCEMAP='false', CI='false')
     subprocess.run([args.node, '--require', str(repo / 'deploy/upgrade-review/build-limit.cjs'),
                     'node_modules/react-app-rewired/bin/index.js', 'build'],
