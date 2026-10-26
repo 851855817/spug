@@ -151,4 +151,3 @@ class PanelLoginTests(TestCase):
             response = self.login({'id': value})
             self.assertEqual(response.status_code, 200)
             self.assertTrue(response.json()['error'])
-
