@@ -139,7 +139,11 @@ function enableLogin() {
 
 function mockWindow() {
   const popup = {opener: window, closed: false, document: document.implementation.createHTMLDocument(''),
-    location: {replace: jest.fn()}, close: jest.fn()};
+    location: {replace: jest.fn()}, close: jest.fn(), navigate: jest.fn()};
+  popup.document.addEventListener('click', event => {
+    event.preventDefault();
+    popup.navigate(event.target.href);
+  });
   jest.spyOn(window, 'open').mockReturnValue(popup);
   return popup;
 }
@@ -162,7 +166,10 @@ test('one click login opens tab synchronously, sends only id, prevents duplicate
   expect(openButtons()[1].getAttribute('aria-busy')).toBe('false');
   const url = 'https://one/login?tmp_token=' + 'a'.repeat(64);
   await act(async () => finish({url}));
-  expect(popup.location.replace).toHaveBeenCalledWith(url);
+  expect(popup.navigate).toHaveBeenCalledWith(url);
+  const anchor = popup.document.querySelector('a');
+  expect(anchor.rel).toBe('noreferrer noopener');
+  expect(anchor.referrerPolicy).toBe('no-referrer');
   expect(openButtons()[0].getAttribute('aria-busy')).toBe('false');
 });
 
@@ -202,6 +209,7 @@ test('failed request closes blank tab and clears row loading', async () => {
   await act(async () => openButtons()[0].click());
   expect(popup.close).toHaveBeenCalledTimes(1);
   expect(popup.location.replace).not.toHaveBeenCalled();
+  expect(popup.navigate).not.toHaveBeenCalled();
   expect(openButtons()[0].getAttribute('aria-busy')).toBe('false');
 });
 
@@ -215,5 +223,6 @@ test.each(['javascript:alert(1)', 'https://evil.test/login?tmp_token=' + 'a'.rep
   await act(async () => openButtons()[0].click());
   expect(popup.close).toHaveBeenCalledTimes(1);
   expect(popup.location.replace).not.toHaveBeenCalled();
+  expect(popup.navigate).not.toHaveBeenCalled();
   expect(message.error).toHaveBeenCalledWith('登录地址校验失败，请刷新列表后重试');
 });

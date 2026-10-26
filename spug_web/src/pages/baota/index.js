@@ -104,7 +104,15 @@ export default function BaotaIndex() {
         popup.close();
         return;
       }
-      if (!popup.closed) popup.location.replace(target.href);
+      if (!popup.closed) {
+        const link = popup.document.createElement('a');
+        link.href = target.href;
+        link.target = '_self';
+        link.rel = 'noreferrer noopener';
+        link.referrerPolicy = 'no-referrer';
+        popup.document.body.appendChild(link);
+        link.click();
+      }
     } catch (_) {
       popup.close();
       // The shared HTTP client displays server errors without reflecting ticket data.
