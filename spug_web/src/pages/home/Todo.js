@@ -20,7 +20,7 @@ function link(category, item) {
   const query = new URLSearchParams({state: category.state});
   if (item) {
     if (category.certificate) query.set('panel_id', item.panel_id);
-    query.set('q', category.certificate ? item.name : item.address || item.name);
+    query.set('q', (category.certificate ? item.name : item.address || item.name).slice(0, category.certificate ? 200 : 100));
   }
   return `${category.path}?${query}`;
 }
@@ -52,8 +52,8 @@ function TodoIndex() {
     });
     return () => {valid = false; window.clearTimeout(timer);};
   }, [allowed, visible, revision]);
-  const certificates = results.find(category => category.certificate && category.data)?.data;
-  const incomplete = certificates && (!certificates.panels?.length || certificates.panels.some(panel => panel.status !== 'ok' || panel.stale));
+  const incomplete = results.some(category => category.certificate && category.data &&
+    (!Array.isArray(category.data.panels) || category.data.panels.some(panel => panel.status !== 'ok' || panel.stale)));
   const empty = results.length === categories.length && results.every(category => category.data?.total === 0) && !incomplete;
   return (
     <Card title="待办事项" className={styles.todo} loading={loading && !results.length}

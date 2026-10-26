@@ -93,3 +93,28 @@ test('missing certificate snapshots are visibly incomplete even when todo counts
   expect(container.textContent).not.toContain('暂无到期待办');
   expect(http.post).not.toHaveBeenCalled();
 });
+
+test('no registered panels is a valid empty todo list, not a collection failure', async () => {
+  http.get.mockResolvedValue({items: [], total: 0, panels: []});
+  await render(); expect(container.textContent).toContain('暂无到期待办');
+  expect(container.textContent).not.toContain('证书数据不完整');
+});
+
+test('incomplete certificate data in either category remains visible', async () => {
+  http.get.mockImplementation((path, config) => Promise.resolve({...result(path, config),
+    panels: [{status: config.params.state === 'expiring' ? 'error' : 'ok', stale: false}]}));
+  await render(); expect(container.textContent).toContain('证书数据不完整');
+});
+
+test('long resource names retain a bounded search prefix accepted by target pages', async () => {
+  const name = 'a'.repeat(63) + '.' + 'b'.repeat(63) + '.' + 'c'.repeat(63) + '.' + 'd'.repeat(57) + '.test';
+  http.get.mockImplementation((path, config) => Promise.resolve({...result(path, config), items: path.includes('inventory')
+    ? [{id: '1:long', panel_id: 1, name}] : [{key: 'panel:1', name: '长地址服务器', address: name}]}));
+  await render();
+  const links = [...container.querySelectorAll('a')].map(node => new URL(node.href));
+  const site = links.find(url => url.searchParams.has('panel_id'));
+  const server = links.find(url => url.pathname === '/host/expiry' && url.searchParams.has('q'));
+  expect(site.searchParams.get('q')).toBe(name.slice(0, 200));
+  expect(server.searchParams.get('q')).toBe(name.slice(0, 100));
+  expect(http.post).not.toHaveBeenCalled();
+});
