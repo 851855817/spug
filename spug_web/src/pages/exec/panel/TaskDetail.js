@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Checkbox, Collapse, Empty, InputNumber, Modal, Space, Spin, Typography } from 'antd';
 import { hasPermission, http } from 'libs';
-import Evidence, { Status } from './TaskEvidence';
+import { Status } from './TaskEvidence';
 import ResolveForm from './ResolveForm';
 import TaskItem from './TaskItem';
 import UploadResults from './UploadResults';
@@ -82,13 +82,12 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
       {Object.entries(COUNT_LABELS).filter(([key]) => counts[key] > 0).map(([key, label]) =>
         <Typography.Text key={key} type={key === 'failed' ? 'danger' : key === 'uncertain' ? 'warning' : undefined}>{label} {counts[key]}</Typography.Text>)}
     </Space>
-    {ready && <Typography.Paragraph type="secondary">按本次预检范围执行；修改参数需重新预检。</Typography.Paragraph>}
     {task.retry_parent_id && <Typography.Paragraph type="secondary">重试来源：任务 #{task.retry_parent_id}</Typography.Paragraph>}
-    {batch.enabled && <Alert showIcon type={batch.state === 'tripped' ? 'warning' : 'info'} style={{marginTop: 12}}
-      message={`第 ${batch.index} / ${batch.total} 批 · 每批 ${batch.batch_size || 1} 个面板 · 后续 ${batch.pending || 0} 个面板`}
-      description={batch.pause_reason || (batch.state === 'completed' ? '所有批次已结束，请查看逐项结果。' : '每批结束后暂停，核对结果后手动继续。')}/>}
-    {task.operation.startsWith('ssl_') && <Alert showIcon type="warning" message="SSL 可能同步未选网站和面板证书，并重载 Web 服务。"/>}
-    {task.operation === 'site_rewrite' && <Alert type="info" showIcon message="伪静态仅核实文件保存，运行状态仍需确认。"/>}
+    {batch.enabled && batch.state !== 'completed' && <Typography.Paragraph type="secondary" style={{marginTop: 12}}>
+      第 {batch.index} / {batch.total} 批 · 后续 {batch.pending || 0} 个面板
+    </Typography.Paragraph>}
+    {batch.enabled && batch.state !== 'completed' && batch.pause_reason && <Alert showIcon type="warning" message={batch.pause_reason}/>}
+    {ready && task.operation.startsWith('ssl_') && <Alert showIcon type="warning" message="SSL 可能同步未选网站和面板证书，并重载 Web 服务。"/>}
     <Space wrap style={{margin: '16px 0'}}>
       {batch.enabled && !batch.active && !batch.deployment_pending && hasPermission('exec.panel.execute') &&
         (batch.deployable || []).map(item => <Button key={`${item.target_id}:${item.child_key}`} loading={busy}
@@ -132,11 +131,9 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
           onChange={value => {setBatchSize(value); if (value && failureThreshold > value) setFailureThreshold(value);}}/>
         <Typography.Text>失败熔断阈值</Typography.Text><InputNumber aria-label="失败熔断阈值" min={1} max={batchSize || 1} precision={0}
           value={failureThreshold} onChange={setFailureThreshold}/>
-        <Typography.Text type="secondary">默认先验证一台；远端处理中或待核实会暂停后续下发。</Typography.Text>
       </Space>}
       <div>{hasPermission('exec.panel.execute') && <Button type="primary" disabled={!confirmed || !validPolicy} loading={busy} onClick={() => command('start')}>确认并开始执行</Button>}</div>
     </div>}
-    <Collapse style={{marginTop: 16}}><Collapse.Panel key="audit" header="任务审计记录"><Evidence value={task.audit}/></Collapse.Panel></Collapse>
     {resolution && <ResolveForm taskId={task.id} {...resolution} onClose={() => setResolution(null)} onSaved={result => {
       actionRevision.current++; setTask(result);
     }}/>}

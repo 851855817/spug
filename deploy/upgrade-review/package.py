@@ -13,10 +13,20 @@ import tarfile
 API_FILE = 'apps/baota/operations/php_update.py'
 HEALTH_FILE = 'apps/setting/health.py'
 UI_FILE = 'spug_web/src/pages/exec/operations/RunDetail.js'
+TASK_RESULTS_UI = {
+    UI_FILE,
+    'spug_web/src/pages/exec/panel/TaskDetail.js',
+    'spug_web/src/pages/exec/panel/TaskItem.js',
+    'spug_web/src/pages/exec/panel/UploadResults.js',
+    'spug_web/src/pages/exec/task/Output.js',
+    'spug_web/src/pages/exec/transfer/Output.js',
+    'spug_web/src/pages/schedule/Info.js',
+    'spug_web/src/pages/pipeline/console/Body.js',
+}
 LOGIN_FILE = 'apps/baota/login_views.py'
 LOGIN_MODULES = (LOGIN_FILE, 'apps/baota/urls.py')
 LOGIN_UI = {'spug_web/src/pages/baota/index.js', 'spug_web/src/pages/system/role/codes.js'}
-PROFILES = {'php-update': API_FILE, 'host-report': HEALTH_FILE, 'operations-ui': None,
+PROFILES = {'php-update': API_FILE, 'host-report': HEALTH_FILE, 'operations-ui': None, 'task-results-ui': None,
             'panel-login': LOGIN_MODULES}
 HELPERS = ('apply-expiry.py', 'deploy-compact-ui.py', 'fingerprint.py', 'release_safety.py')
 
@@ -41,10 +51,10 @@ def validate_runtime_changes(names, profile='php-update'):
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
         if runtime != {'spug_api/' + name for name in LOGIN_MODULES} or ui != LOGIN_UI:
             raise ValueError('Login release only accepts the fixed login API and UI changes')
-    elif profile == 'operations-ui':
+    elif profile in ('operations-ui', 'task-results-ui'):
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
-        if runtime or ui != {UI_FILE}:
-            raise ValueError('UI release only accepts the fixed operations page change')
+        if runtime or ui != (TASK_RESULTS_UI if profile == 'task-results-ui' else {UI_FILE}):
+            raise ValueError('UI release only accepts the fixed reviewed page changes')
     elif runtime != {'spug_api/' + module}:
         raise ValueError('This release only accepts the selected reviewed runtime change')
 
@@ -66,8 +76,8 @@ def write_manifests(stage, revision, previous_revision, previous_content,
         api_hashes = {module: sha256(stage / 'source/spug_api' / module)} if module else {}
         previous_hashes = {module: hashlib.sha256(previous_content).hexdigest()} if module else {}
     preserved_hashes = {}
-    if profile in ('operations-ui', 'panel-login'):
-        if ((profile == 'operations-ui' and previous_content is not None) or not isinstance(preserved_content, dict) or
+    if profile in ('operations-ui', 'task-results-ui', 'panel-login'):
+        if ((profile in ('operations-ui', 'task-results-ui') and previous_content is not None) or not isinstance(preserved_content, dict) or
                 set(preserved_content) != {API_FILE, HEALTH_FILE} or
                 not all(isinstance(value, bytes) for value in preserved_content.values())):
             raise ValueError('Missing fixed UI baseline module contents')
@@ -149,7 +159,7 @@ def main():
                        git('show', previous + ':spug_api/apps/baota/urls.py').replace(b'\r\n', b'\n')}
     else:
         old_content = git('show', previous + ':spug_api/' + module).replace(b'\r\n', b'\n') if module else None
-    if args.profile in ('operations-ui', 'panel-login'):
+    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login'):
         preserved_content = {name: git('show', previous + ':spug_api/' + name).replace(b'\r\n', b'\n')
                              for name in (API_FILE, HEALTH_FILE)}
     else:

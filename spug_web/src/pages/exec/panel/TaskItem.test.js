@@ -114,3 +114,30 @@ test.each([['individual', '单独设置'], ['common', '统一设置']])('upload 
   expect(container.querySelector('details').open).toBe(false);
   expect(container.textContent).not.toContain('technical-hash');
 });
+
+test('skipped operations retain the concrete reason without a technical dump', () => {
+  act(() => {ReactDOM.render(<TaskItem operation="site_rewrite" child={{state: 'skipped', snapshot: {
+    label: 'example.test', message: 'OpenLiteSpeed 尚未适配', plan: {}}}}/>, container);});
+  expect(container.textContent).toContain('OpenLiteSpeed 尚未适配');
+});
+
+test.each([
+  ['software_install', {blockers: ['可用内存低于 512 MiB'], requirements: {memory_mb: 512}}, '可用内存低于 512 MiB'],
+  ['software_uninstall', {impact: {sites: ['customer.example'], databases: ['customer_db']}}, 'customer.example'],
+])('preflight business evidence stays available for %s', (operation, plan, data) => {
+  act(() => {ReactDOM.render(<TaskItem operation={operation} child={{state: 'failed', snapshot: {
+    message: '请查看预检明细', plan}}}/>, container);});
+  const details = container.querySelector('details');
+  act(() => {details.open = true; details.dispatchEvent(new Event('toggle', {bubbles: true}));});
+  expect(container.textContent).toContain(data);
+});
+
+test('existing SSL keeps its validity data, concrete sync scope and verification limit', () => {
+  act(() => {ReactDOM.render(<TaskItem operation="ssl_apply" child={{state: 'already', snapshot: {
+    message: 'include 与实际 TLS 未核验', before: {ssl: {expires_at: '2027-01-01'},
+      ssl_sync_inventory: {matching_sites: [{name: 'other.example'}], truncated: true}}, plan: {}}}}/>, container);});
+  expect(container.textContent).toContain('include 与实际 TLS 未核验');
+  const details = container.querySelector('details');
+  act(() => {details.open = true; details.dispatchEvent(new Event('toggle', {bubbles: true}));});
+  expect(container.textContent).toContain('2027-01-01'); expect(container.textContent).toContain('other.example');
+});

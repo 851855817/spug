@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Descriptions, Space, Typography } from 'antd';
+import { Alert, Space, Typography } from 'antd';
 import Evidence, { Status } from './TaskEvidence';
 import UpgradeReview from './UpgradeReview';
 import { phpLabel } from './helpers';
@@ -12,6 +12,19 @@ export default function TaskItem({operation, child}) {
   const plan = snapshot.plan || {};
   const result = child.result || {};
   const observed = result.evidence || {};
+  const preflight = {};
+  if (plan.blockers?.length) preflight.blockers = plan.blockers.map(value => ({cpu: 'CPU 核数不足', memory: '内存不足',
+    disk: '磁盘空间不足', os: '操作系统不支持', dependencies: '缺少依赖', mutex: '软件冲突',
+    license: '授权未核实', protocol: '安装协议不支持'})[value] || value);
+  if (plan.requirements) preflight.requirements = plan.requirements;
+  if (plan.dependencies) preflight.dependencies = plan.dependencies;
+  if (plan.impact && !['php_update', 'panel_upgrade'].includes(operation)) preflight.impact = plan.impact;
+  if (plan.domains?.length > 3) preflight.domains = plan.domains;
+  if (typeof plan.rules === 'string') preflight.rules = plan.rules;
+  if (operation.startsWith('ssl_')) {
+    if (before.ssl_sync_inventory) preflight.ssl_sync_inventory = before.ssl_sync_inventory;
+    if (before.ssl) preflight.certificate = before.ssl;
+  }
   const upgrade = operation === 'panel_upgrade';
   const legacy = plan.mode === 'legacy_stable' || plan.channel === 'stable';
   const fields = [];
@@ -43,7 +56,8 @@ export default function TaskItem({operation, child}) {
     '升级时面板会短暂断连，实际版本由官方稳定通道决定。' : '升级时面板会短暂断连。';
   if (upgrade && child.state === 'success' && observed.version) message = '升级完成，已核验实际版本。';
   if (message === '预检通过') message = '';
-  const important = ['failed', 'uncertain', 'remote'].includes(child.state);
+  const important = ['failed', 'uncertain', 'remote', 'skipped'].includes(child.state) ||
+    (operation.startsWith('ssl_') && child.state === 'already');
   return <div>
     <Space wrap className={styles.heading}>
       <Typography.Text strong>{title}</Typography.Text>
@@ -52,20 +66,15 @@ export default function TaskItem({operation, child}) {
     {fields.length > 0 && <div className={styles.fields}>{fields.map(([label, value]) => <span key={label}>
       <Typography.Text type="secondary">{label}：</Typography.Text>{value}
     </span>)}</div>}
-    {message && (important ? <Alert showIcon type={child.state === 'failed' ? 'error' : 'warning'} message={message}/> :
-      <Typography.Paragraph className={styles.message} type="secondary">{message}</Typography.Paragraph>)}
+    {message && important && <Alert showIcon type={child.state === 'failed' ? 'error' : 'warning'} message={message}/>}
+    {message && child.state === 'ready' && upgrade && <Typography.Paragraph className={styles.message} type="secondary">{message}</Typography.Paragraph>}
     <UpgradeReview operation={operation} snapshot={snapshot} evidence={observed}/>
     <details className={styles.details} onToggle={event => setExpanded(event.currentTarget.open)}>
-      <summary>详细记录</summary>
-      {expanded && <Descriptions bordered size="small" column={1}>
-        <Descriptions.Item label="预检说明"><Evidence value={snapshot.message}/></Descriptions.Item>
-        <Descriptions.Item label="目标"><Evidence value={snapshot.target}/></Descriptions.Item>
-        <Descriptions.Item label="预检时状态"><Evidence value={before}/></Descriptions.Item>
-        <Descriptions.Item label="执行计划与影响"><Evidence value={plan}/></Descriptions.Item>
-        <Descriptions.Item label="结果与核验"><Evidence value={result}/></Descriptions.Item>
-        <Descriptions.Item label="下发记录"><Evidence value={child.intents}/></Descriptions.Item>
-        <Descriptions.Item label="人工判定"><Evidence value={child.resolutions}/></Descriptions.Item>
-      </Descriptions>}
+      <summary>核验数据</summary>
+      {expanded && <>
+        {Object.keys(preflight).length > 0 && <><Typography.Text strong>预检数据</Typography.Text><Evidence value={preflight}/></>}
+        {Object.keys(observed).length ? <><Typography.Text strong>核验结果</Typography.Text><Evidence value={observed}/></> : <Typography.Text type="secondary">暂无核验数据</Typography.Text>}
+      </>}
     </details>
   </div>;
 }

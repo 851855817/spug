@@ -118,13 +118,10 @@ function Body() {
         <div className={css.title}>{S.node?.name}</div>
         {S.readonly ? (
           <Badge status="default" text={t('历史记录回放')}/>
-        ) : wsState === '0' ? (
-          <Badge status="processing" text={t('Websocket 正在连接中')}/>
-        ) : wsState === '1' ? (
-          <Badge status="success" text={t('Websocket 已连接')}/>
-        ) : (
-          <Badge status="error" text={t('Websocket 连接已关闭')}/>
-        )}
+        ) : wsState === '2' ? (
+          <Badge status="error" text={t('连接中断，结果待核实')}/>
+        ) : S.outputs[S.nodeID]?.status ? <Badge color={({success: 'green', error: 'red', processing: 'blue'})[S.outputs[S.nodeID].status] || 'orange'}
+          text={t(({success: '执行成功', error: '执行失败', failed: '执行失败', processing: '执行中', pending: '等待中', rejected: '已拒绝', cancelled: '已取消'})[S.outputs[S.nodeID].status] || '待核实')}/> : null}
 
         {['build', 'ssh_exec', 'data_transfer', 'data_upload'].includes(S.node.module) && S.outputs[S.nodeID]?.status === 'processing' ? (
           <Popconfirm title={t('确定要终止执行？')} onConfirm={handleTerminate}>

@@ -5,7 +5,7 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { observer } from 'mobx-react';
-import { PageHeader, Tooltip, Button, message } from 'antd';
+import { PageHeader, Tooltip, Button, Tag, message } from 'antd';
 import {
   LoadingOutlined,
   CheckCircleOutlined,
@@ -199,6 +199,9 @@ function OutView(props) {
       <div className={style.body}>
         <div className={style.header}>
           <div className={style.title}>{cItem.title}</div>
+          <Tag color={cItem.status === 0 ? 'green' : cItem.status === -2 ? 'blue' : cItem.status > 0 ? 'red' : 'orange'}>
+            {cItem.status === 0 ? t('执行成功') : cItem.status === -2 ? t('执行中') : cItem.status === -1 ? t('结果待核实') : Number.isInteger(cItem.status) ? `${t('执行失败')} (${cItem.status})` : t('待核实')}
+          </Tag>
           {loading ? (
             <LoadingOutlined className={style.icon} style={{color: '#faad14'}}/>
           ) : (

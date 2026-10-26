@@ -123,164 +123,6 @@ test('cancel explains that in-flight work can finish and only sends cancel after
   expect(http.post).toHaveBeenCalledWith('/api/ops/runs/7/cancel/', {});
 });
 
-test('detail distinguishes failed collection from check warnings, filters failures and creates baselines only from success targets', async () => {
-  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
-  expect(container.textContent).toContain('SSH认证失败');
-  expect(container.textContent).toContain('系统版本');
-  const targetOptions = [...select('基线来源主机').options].map(option => option.value);
-  expect(targetOptions).toContain('11'); expect(targetOptions).not.toContain('12');
-  choose('结果状态', ['failed']);
-  expect(container.textContent).not.toContain('Debian 12');
-  choose('基线来源主机', [11]);
-  act(() => {Simulate.change(container.querySelector('input[aria-label="基线名称"]'), {target: {value: '生产标准'}});});
-  await act(async () => {button('保存不可变基线').click();});
-  expect(http.post).toHaveBeenCalledWith('/api/ops/baselines/', {run_id: 7, target_id: 11, name: '生产标准'});
-});
-
-test('comparison permits only the same job version and retains missing versus unknown values', async () => {
-  http.get.mockImplementation(url => Promise.resolve(url.includes('/baselines/') ? {items: [
-    {id: 1, name: '同版本', job: 'linux_inspection', version: '1'}, {id: 2, name: '旧版本', job: 'linux_inspection', version: '0'}, {id: 3, name: '其他作业', job: 'php_environment', version: '1'}]} : url.includes('/diff/') ? {baseline: {name: '同版本'}, items: [{host: {id: 1, name: 'A'}, state: 'success', changes: [
-      {key: 'os', label: '系统版本', before: 'Debian 11', after: 'Debian 12', state: 'different'},
-      {key: 'php', label: 'PHP', before: '7.4', after: null, state: 'missing'}, {key: 'web', label: 'Web', before: 'Nginx', after: null, state: 'unknown'}]}]} : run));
-  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
-  expect(select('选择同版本基线').textContent).toContain('同版本');
-  expect(select('选择同版本基线').textContent).not.toContain('旧版本');
-  expect(select('选择同版本基线').textContent).not.toContain('其他作业');
-  choose('选择同版本基线', [1]);
-  await act(async () => {button('比较差异').click();});
-  expect(http.get).toHaveBeenCalledWith('/api/ops/runs/7/diff/', {params: {baseline_id: 1}});
-  expect(container.textContent).toContain('变化'); expect(container.textContent).toContain('缺失'); expect(container.textContent).toContain('未知');
-});
-
-test('PHP baselines also require the same branch and audit uses server event and actor fields', async () => {
-  http.get.mockImplementation(url => Promise.resolve(url.includes('/baselines/') ? {items: [
-    {id: 1, name: 'PHP74基线', job: 'php_environment', version: '1', params: {php_version: '74'}},
-    {id: 2, name: 'PHP82基线', job: 'php_environment', version: '1', params: {php_version: '82'}}]} :
-    {...run, job: 'php_environment', params: {php_version: '74'}, audit: [{event: 'baseline_created', actor_id: 2, created_at: '2026-10-24 10:00:00'}]}));
-  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
-  expect(select('选择同版本基线').textContent).toContain('PHP74基线');
-  expect(select('选择同版本基线').textContent).not.toContain('PHP82基线');
-  expect(container.textContent).toContain('创建基线');
-  expect(container.textContent).toContain('用户 #2');
-});
-
-describe.each(['刷新基线', '搜索基线', '下一页基线', '继续下一批', '取消未执行项'])('pending comparison invalidated by %s', invalidation => {
-  test.each(['success', 'failure'])('ignores the late %s and allows a fresh comparison', async outcome => {
-    let resolveDiff; let rejectDiff;
-    const delayed = new Promise((resolve, reject) => {resolveDiff = resolve; rejectDiff = reject;});
-    const baseline = {id: 1, name: '有效基线', job: 'linux_inspection', version: '1'};
-    const fresh = {baseline: {name: '有效基线'}, items: []};
-    let diffCalls = 0;
-    http.get.mockImplementation(url => url.includes('/baselines/') ? Promise.resolve({items: [baseline], total: 201}) :
-      url.includes('/diff/') ? ++diffCalls === 1 ? delayed : Promise.resolve(fresh) : Promise.resolve(run));
-    http.post.mockResolvedValue(run);
-    await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
-    choose('选择同版本基线', [1]);
-    act(() => {button('比较差异').click();});
-    expect(http.get).toHaveBeenCalledWith('/api/ops/runs/7/diff/', {params: {baseline_id: 1}});
-    if (invalidation === '搜索基线') {
-      act(() => {Simulate.change(container.querySelector('input[aria-label="搜索基线名称"]'), {target: {value: '有效'}});});
-    }
-    await act(async () => {button(invalidation).click();});
-    if (['继续下一批', '取消未执行项'].includes(invalidation)) {
-      expect(http.post).not.toHaveBeenCalled();
-      await act(async () => {await Modal.confirm.mock.calls[0][0].onOk();});
-      expect(http.post).toHaveBeenCalledTimes(1);
-    }
-    await act(async () => {
-      if (outcome === 'success') resolveDiff({baseline: {name: '已经失效的旧比较'}, items: []});
-      else rejectDiff(new Error('late failure'));
-    });
-    expect(container.textContent).not.toContain('已经失效的旧比较');
-    expect(container.textContent).not.toContain('差异读取失败');
-    choose('选择同版本基线', [1]);
-    expect(button('比较差异').disabled).toBe(false);
-    await act(async () => {button('比较差异').click();});
-    expect(container.textContent).toContain('基线：有效基线');
-    expect(diffCalls).toBe(2);
-  });
-});
-
-test.each(['success', 'failure'])('ordinary detail refresh preserves a still-valid pending comparison %s', async outcome => {
-  let resolveDiff; let rejectDiff;
-  const delayed = new Promise((resolve, reject) => {resolveDiff = resolve; rejectDiff = reject;});
-  http.get.mockImplementation(url => url.includes('/baselines/') ? Promise.resolve({items: [
-    {id: 1, name: '标准', job: 'linux_inspection', version: '1'}]}) : url.includes('/diff/') ? delayed : Promise.resolve(run));
-  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
-  choose('选择同版本基线', [1]);
-  act(() => {button('比较差异').click();});
-  await act(async () => {button('刷新详情').click();});
-  await act(async () => {
-    if (outcome === 'success') resolveDiff({baseline: {name: '仍然有效的比较'}, items: []});
-    else rejectDiff(new Error('current failure'));
-  });
-  expect(container.textContent).toContain(outcome === 'success' ? '基线：仍然有效的比较' : '差异读取失败');
-  expect(button('比较差异').disabled).toBe(false);
-  expect(http.post).not.toHaveBeenCalled();
-});
-
-test('reports preserve independent comparison snapshots but exclude invalidated late results', async () => {
-  const originalCreate = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
-  const originalRevoke = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
-  const createUrl = jest.fn().mockReturnValue('blob:comparison');
-  Object.defineProperty(URL, 'createObjectURL', {configurable: true, value: createUrl});
-  Object.defineProperty(URL, 'revokeObjectURL', {configurable: true, value: jest.fn()});
-  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
-  const download = async () => {
-    const requests = http.get.mock.calls.length;
-    act(() => {button('下载 JSON 报告').click();});
-    const blob = createUrl.mock.calls[createUrl.mock.calls.length - 1][0];
-    const result = await new Promise(resolve => {const reader = new FileReader(); reader.onload = () => resolve(JSON.parse(reader.result)); reader.readAsText(blob);});
-    expect(http.get).toHaveBeenCalledTimes(requests);
-    expect(http.post).not.toHaveBeenCalled();
-    return result;
-  };
-  try {
-    let current = run; let delayed; let resolveDiff;
-    http.get.mockImplementation(url => url.includes('/baselines/') ? Promise.resolve({items: [
-      {id: 1, name: '标准', job: 'linux_inspection', version: '1'}]}) : url.includes('/diff/') ?
-      delayed || Promise.resolve({baseline: {name: '已完成比较'}, items: []}) : Promise.resolve(current));
-    await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
-    choose('选择同版本基线', [1]);
-    await act(async () => {button('比较差异').click();});
-    current = {...run, state: 'cancelled'};
-    await act(async () => {button('刷新详情').click();});
-    const report = await download();
-    expect(report.run.state).toBe('cancelled');
-    expect(report.comparison.run_snapshot.state).toBe('paused');
-    expect(report.comparison.baseline.name).toBe('已完成比较');
-    expect(report.comparison.compared_at).toEqual(expect.any(String));
-    delayed = new Promise(resolve => {resolveDiff = resolve;});
-    act(() => {button('比较差异').click();});
-    await act(async () => {button('刷新基线').click();});
-    await act(async () => {resolveDiff({baseline: {name: '失效比较'}, items: []});});
-    expect((await download()).comparison).toBeNull();
-  } finally {
-    click.mockRestore();
-    if (originalCreate) Object.defineProperty(URL, 'createObjectURL', originalCreate); else delete URL.createObjectURL;
-    if (originalRevoke) Object.defineProperty(URL, 'revokeObjectURL', originalRevoke); else delete URL.revokeObjectURL;
-  }
-});
-
-test('old baselines remain reachable through server pagination and compatible name search', async () => {
-  http.get.mockImplementation((url, options) => Promise.resolve(url.includes('/baselines/') ? {items: [
-    {id: options?.params?.page === 2 ? 1 : 201, name: options?.params?.page === 2 ? '旧标准' : '新标准', job: 'php_environment', version: '1', params: {php_version: '74'}}
-  ], total: 201} : {...run, job: 'php_environment', params: {php_version: '74'}}));
-  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
-  expect(http.get).toHaveBeenCalledWith('/api/ops/baselines/', {params: {page: 1, page_size: 100, job: 'php_environment', version: '1', php_version: '74', q: ''}});
-  await act(async () => {button('下一页基线').click();});
-  choose('选择同版本基线', [1]);
-  expect(select('选择同版本基线').textContent).toContain('旧标准');
-  expect(button('比较差异').disabled).toBe(false);
-  await act(async () => {
-    const input = container.querySelector('input[aria-label="搜索基线名称"]');
-    Simulate.change(input, {target: {value: '生产标准'}});
-  });
-  await act(async () => {button('搜索基线').click();});
-  expect(http.get).toHaveBeenLastCalledWith('/api/ops/baselines/', {params: {page: 1, page_size: 100, job: 'php_environment', version: '1', php_version: '74', q: '生产标准'}});
-  expect(button('比较差异').disabled).toBe(true);
-});
-
 test('polling stops when the current run pauses and refresh stays manual', async () => {
   jest.useFakeTimers();
   http.get.mockImplementation(url => Promise.resolve(url.includes('/baselines/') ? {items: []} : {...run, state: 'running'}));
@@ -405,34 +247,6 @@ test('confirmed creation switches to records and focuses its result without cont
   expect(http.post.mock.calls[0][0]).toBe('/api/ops/runs/');
 });
 
-test('attention filtering includes successful hosts with abnormal or unknown checks and shows fixed failure advice', async () => {
-  const attentionRun = {...run, targets: [run.targets[0], run.targets[1],
-    {id: 13, host: {id: 3, name: '告警主机', hostname: '192.0.2.3'}, state: 'success', checks: [
-      {key: 'disk', label: '根分区使用', status: 'warning', value: 99}, {key: 'kernel', label: '内核', status: 'unknown', value: null}]},
-    {id: 14, host: {id: 4, name: '待核实主机'}, state: 'unknown', category: 'interrupted', checks: []},
-    {id: 15, host: {id: 5, name: '尚未执行主机'}, state: 'pending', checks: []},
-  ]};
-  http.get.mockImplementation(url => Promise.resolve(url.includes('/baselines/') ? {items: []} : attentionRun));
-  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
-  expect(container.textContent).toContain('采集成功仅表示取得结果');
-  expect(container.textContent).toContain('需处理 3 台');
-  expect(container.textContent).toContain('指标异常 1 项');
-  expect(container.textContent).toContain('指标未知 1 项');
-  expect(container.textContent).toContain('异常 1 项（根分区使用）');
-  expect(container.textContent).toContain('未知 1 项（内核）');
-  expect(container.textContent).toContain('核对 SSH 用户、密钥及登录权限');
-  expect(container.textContent).toContain('核对 Worker 状态');
-  act(() => {button('只看需处理').click();});
-  expect(button('只看需处理').getAttribute('aria-pressed')).toBe('true');
-  expect(container.textContent).toContain('告警主机');
-  expect(container.textContent).toContain('待核实主机');
-  expect(container.textContent).not.toContain('Debian 12');
-  expect(container.textContent).not.toContain('尚未执行主机');
-  act(() => {button('只看需处理').click();});
-  expect(container.textContent).toContain('Debian 12');
-  expect(http.post).not.toHaveBeenCalled();
-});
-
 test('switching selected results prevents an older response from filling the new result section', async () => {
   let resolveOld;
   const otherRun = {...run, id: 8, job_name: '新选择作业', targets: []};
@@ -447,4 +261,39 @@ test('switching selected results prevents an older response from filling the new
   expect(container.textContent).not.toContain('旧响应作业');
   expect(window.location.search).toBe('?run_id=8');
   expect(http.post).not.toHaveBeenCalled();
+});
+
+test.each(['linux_inspection', 'php_environment', 'web_service'])('compact results for %s show health, cause and actual data without baseline requests', async job => {
+  http.get.mockResolvedValue({...run, job, state: 'completed', audit: [{event: 'created', actor_id: 1}], targets: [
+    run.targets[0], run.targets[1], {id: 13, host: {name: '磁盘告警'}, state: 'success', checks: [
+      {key: 'disk', label: '根分区使用率', status: 'warning', value: 99, summary: '使用率超过阈值'}]},
+  ]});
+  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
+  expect(container.textContent).toContain('正常 1');
+  expect(container.textContent).toContain('异常 2');
+  expect(container.textContent).toContain('根分区使用率：使用率超过阈值');
+  expect(container.textContent).toContain('SSH认证失败');
+  expect(container.textContent).toContain('99');
+  expect(container.textContent).toContain('Debian 12');
+  expect(container.textContent).not.toContain('配置基线与差异');
+  expect(container.textContent).not.toContain('作业记录');
+  expect(http.get.mock.calls.map(([url]) => url)).toEqual(['/api/ops/runs/7/']);
+  expect(http.post).not.toHaveBeenCalled();
+  choose('结果状态', ['abnormal']);
+  expect(container.textContent).not.toContain('Debian 12');
+  expect(container.textContent).toContain('磁盘告警');
+});
+
+test.each([
+  ['success', [{key: 'x', label: '数据', status: 'ok', value: 0}], '正常'],
+  ['success', [{key: 'x', label: '数据', status: 'unknown', value: null}], '待核实'],
+  ['success', [{key: 'x', label: '数据', status: 'unrecognized', value: 1}], '待核实'],
+  ['success', [{key: 'x', label: '数据', status: 'ok', value: null}], '待核实'],
+  ['success', [], '待核实'], ['unknown', [], '待核实'], ['failed', [], '异常'],
+  ['pending', [], '待执行'], ['running', [], '采集中'], ['cancelled', [], '已取消'],
+])('compact results never infer normal from missing or incomplete evidence (%s, %j)', async (state, checks, expected) => {
+  http.get.mockResolvedValue({...run, state: 'completed', targets: [{id: 11, host: {name: '测试主机'}, state, checks}]});
+  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
+  const row = [...container.querySelectorAll('section')].find(item => item.textContent.startsWith('测试主机'));
+  expect(row.children[1].textContent).toBe(expected);
 });

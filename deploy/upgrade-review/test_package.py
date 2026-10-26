@@ -151,7 +151,7 @@ class PackagingTests(unittest.TestCase):
 
     def test_package_cli_builds_the_selected_fixed_overlay_and_reads_the_php_baseline(self):
         package = self.helper('package.py')
-        for profile, api_name in (('host-report', HEALTH), ('php-update', PHP), ('operations-ui', None)):
+        for profile, api_name in (('host-report', HEALTH), ('php-update', PHP), ('operations-ui', None), ('task-results-ui', None)):
             with self.subTest(profile=profile), TemporaryDirectory() as folder:
                 root = Path(folder)
                 stage = self.profile_stage(root)
@@ -174,11 +174,11 @@ class PackagingTests(unittest.TestCase):
                     if values[0] == 'status':
                         return b''
                     if values[0] == 'diff':
-                        return ('spug_api/' + api_name if api_name else package.UI_FILE).encode()
+                        return ('spug_api/' + api_name if api_name else '\n'.join(sorted(package.TASK_RESULTS_UI)) if profile == 'task-results-ui' else package.UI_FILE).encode()
                     if values[0] == 'ls-files':
                         return ('spug_api/' + PHP + '\nspug_api/' + HEALTH).encode()
                     if values[0] == 'show':
-                        return b'preserved PHP' if values[1].endswith(PHP) else b'new health' if profile == 'operations-ui' else b'old health'
+                        return b'preserved PHP' if values[1].endswith(PHP) else b'new health' if profile in ('operations-ui', 'task-results-ui') else b'old health'
                     self.fail('Unexpected packaging command')
                 arguments = ['package.py', 'b' * 40, '--node', 'node']
                 if profile != 'php-update':
@@ -193,7 +193,7 @@ class PackagingTests(unittest.TestCase):
                 self.assertEqual(manifest['profile'], profile)
                 self.assertEqual(set(manifest['api_sha256']), {api_name} if api_name else set())
                 preserved = {PHP: hashlib.sha256(b'preserved PHP').hexdigest()} if profile != 'php-update' else {}
-                if profile == 'operations-ui':
+                if profile in ('operations-ui', 'task-results-ui'):
                     preserved[HEALTH] = hashlib.sha256(b'new health').hexdigest()
                 self.assertEqual(manifest['preserved_api_sha256'], preserved)
                 copies = [line for line in (packaged / 'Dockerfile').read_text().splitlines()
@@ -203,7 +203,7 @@ class PackagingTests(unittest.TestCase):
                     self.assertIn(['git', 'show', 'b' * 40 + ':spug_api/' + api_name], calls)
                 if profile != 'php-update':
                     self.assertIn(['git', 'show', 'b' * 40 + ':spug_api/' + PHP], calls)
-                if profile == 'operations-ui':
+                if profile in ('operations-ui', 'task-results-ui'):
                     self.assertIn(['git', 'show', 'b' * 40 + ':spug_api/' + HEALTH], calls)
 
     def test_image_api_comparison_rejects_changes_additions_deletions_and_invalid_hashes(self):
@@ -257,8 +257,9 @@ class PackagingTests(unittest.TestCase):
                     checker.verify(runtime, stage, 'a' * 40)
 
     def test_operations_ui_prepare_writes_receipt_only_after_full_api_and_baseline_identity_checks(self):
-        for failure in (None, 'backend-drift', 'baseline-moved'):
-            with self.subTest(failure=failure), TemporaryDirectory() as folder:
+        for profile, failure in ((p, f) for p in ('operations-ui', 'task-results-ui')
+                                 for f in (None, 'backend-drift', 'baseline-moved')):
+            with self.subTest(profile=profile, failure=failure), TemporaryDirectory() as folder:
                 prepare = self.helper('prepare.py')
                 root = Path(folder)
                 stage = self.profile_stage(root / 'fixture')
@@ -269,7 +270,7 @@ class PackagingTests(unittest.TestCase):
                 revision, previous = 'a' * 40, 'b' * 40
                 new_id, old_id = 'sha256:' + 'c' * 64, 'sha256:' + 'd' * 64
                 package = self.helper('package.py')
-                package.write_manifests(stage, revision, previous, None, 'operations-ui',
+                package.write_manifests(stage, revision, previous, None, profile,
                                         {PHP: b'preserved PHP', HEALTH: b'new health'})
                 archive = root / ('upgrade-' + revision[:7] + '.tar.gz')
                 with tarfile.open(archive, 'w:gz') as output:

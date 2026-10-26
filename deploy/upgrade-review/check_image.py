@@ -10,7 +10,7 @@ PHP_MODULE = 'apps/baota/operations/php_update.py'
 HEALTH_MODULE = 'apps/setting/health.py'
 LOGIN_MODULE = 'apps/baota/login_views.py'
 LOGIN_MODULES = (LOGIN_MODULE, 'apps/baota/urls.py')
-PROFILES = {'php-update': PHP_MODULE, 'host-report': HEALTH_MODULE, 'operations-ui': None,
+PROFILES = {'php-update': PHP_MODULE, 'host-report': HEALTH_MODULE, 'operations-ui': None, 'task-results-ui': None,
             'panel-login': LOGIN_MODULES}
 
 
@@ -51,7 +51,7 @@ def verify(root, stage, revision):
                         for value in hashes.values())):
             raise ValueError('Image API overlay differs')
     preserved = release.get('preserved_api_sha256', {})
-    expected_preserved = ({PHP_MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'panel-login') else
+    expected_preserved = ({PHP_MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'task-results-ui', 'panel-login') else
                           {PHP_MODULE} if profile == 'host-report' else set())
     if (not isinstance(preserved, dict) or set(preserved) != expected_preserved or
             not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)
