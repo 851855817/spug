@@ -263,7 +263,7 @@ test('switching selected results prevents an older response from filling the new
   expect(http.post).not.toHaveBeenCalled();
 });
 
-test.each(['linux_inspection', 'php_environment', 'web_service'])('compact results for %s show health, cause and actual data without baseline requests', async job => {
+test.each(['linux_inspection', 'php_environment', 'web_environment'])('compact results for %s show health, cause and actual data without baseline requests', async job => {
   http.get.mockResolvedValue({...run, job, state: 'completed', audit: [{event: 'created', actor_id: 1}], targets: [
     run.targets[0], run.targets[1], {id: 13, host: {name: '磁盘告警'}, state: 'success', checks: [
       {key: 'disk', label: '根分区使用率', status: 'warning', value: 99, summary: '使用率超过阈值'}]},
@@ -296,4 +296,70 @@ test.each([
   await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
   const row = [...container.querySelectorAll('section')].find(item => item.textContent.startsWith('测试主机'));
   expect(row.children[1].textContent).toBe(expected);
+});
+
+test.each([
+  ['php_environment', 'display_errors', true, '显示错误', 'display_errors=On', '非实际报错记录'],
+  ['php_environment', 'expose_php', true, '公开 PHP 标识', 'expose_php=On', '公开 PHP 版本'],
+  ['php_environment', 'allow_url_include', true, '允许远程包含', 'allow_url_include=On', '远程文件包含'],
+  ['php_environment', 'extension_curl', false, 'cURL 扩展', 'cURL 扩展未加载', 'PHP CLI'],
+  ['php_environment', 'extension_openssl', false, 'OpenSSL 扩展', 'OpenSSL 扩展未加载', 'PHP CLI'],
+  ['php_environment', 'extension_mbstring', false, 'mbstring 扩展', 'mbstring 扩展未加载', 'PHP CLI'],
+  ['linux_inspection', 'memory_available_percent', 7, '可用内存 %', '可用内存 7%', '低于 10%'],
+  ['linux_inspection', 'root_used_percent', 94, '根分区使用 %', '根分区使用率 94%', '达到 90%'],
+  ['web_environment', 'port_80_listening', false, 'TCP 80 监听', 'TCP 80 未监听', '监听配置'],
+  ['web_environment', 'port_443_listening', false, 'TCP 443 监听', 'TCP 443 未监听', '监听配置'],
+])('historical generic warnings explain the measured cause for %s/%s without collecting again', async (job, key, value, label, cause, detail) => {
+  http.get.mockResolvedValue({...run, job, state: 'completed', targets: [{id: 11, host: {name: '历史主机'}, state: 'success',
+    checks: [{key, label, status: 'warning', value, summary: '需要关注'}]}]});
+  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
+  const row = container.querySelector('section');
+  expect(row.children[2].textContent).toContain(cause);
+  expect(row.children[2].textContent).toContain(detail);
+  expect(row.textContent).not.toContain('需要关注');
+  expect(http.get.mock.calls.map(([url]) => url)).toEqual(['/api/ops/runs/7/']);
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('PHP switches have unambiguous names and values rather than implying an actual PHP error', async () => {
+  http.get.mockResolvedValue({...run, job: 'php_environment', state: 'completed', targets: [{id: 11, state: 'success',
+    checks: [{key: 'display_errors', label: '显示错误', status: 'warning', value: true, summary: '需要关注'}]}]});
+  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
+  expect(container.textContent).toContain('PHP 错误显示开关');
+  expect(container.textContent).toContain('On（已开启）');
+});
+
+test.each([['unrecognized', '1'], ['php_environment', '2']])('unknown job/schema %s/%s does not invent a version-one diagnosis', async (job, version) => {
+  http.get.mockResolvedValue({...run, job, version, state: 'completed', targets: [{id: 11, state: 'success',
+    checks: [{key: 'display_errors', label: '未知配置', status: 'warning', value: false, summary: '需要关注'}]}]});
+  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
+  expect(container.textContent).not.toContain('display_errors=On');
+  expect(container.textContent).toContain('未提供具体判定依据');
+});
+
+test.each([
+  ['memory_available_percent', true], ['memory_available_percent', -1],
+  ['memory_available_percent', 10], ['root_used_percent', 101], ['root_used_percent', 89.99],
+])('inconsistent historical warning %s=%s does not invent a threshold diagnosis', async (key, value) => {
+  http.get.mockResolvedValue({...run, job: 'linux_inspection', state: 'completed', targets: [{id: 11, state: 'success',
+    checks: [{key, label: '资源指标', status: 'warning', value, summary: '需要关注'}]}]});
+  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
+  expect(container.textContent).toContain('未提供具体判定依据');
+  expect(container.textContent).not.toMatch(/告警线|已监听|未监听/);
+});
+
+test('the exact ninety-percent disk boundary explains the warning and preserves specific evidence', async () => {
+  http.get.mockResolvedValue({...run, job: 'linux_inspection', state: 'completed', targets: [{id: 11, state: 'success',
+    checks: [{key: 'root_used_percent', label: '根分区使用 %', status: 'warning', value: 90, summary: '原始具体说明'}]}]});
+  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
+  expect(container.textContent).toContain('根分区使用率 90%（达到 90% 告警线）');
+  expect(container.textContent).toContain('原始具体说明');
+});
+
+test('an unknown key in a known v1 job keeps its measured value without applying another rule', async () => {
+  http.get.mockResolvedValue({...run, job: 'php_environment', state: 'completed', targets: [{id: 11, state: 'success',
+    checks: [{key: 'custom_switch', label: '自定义配置', status: 'warning', value: true, summary: '需要关注'}]}]});
+  await act(async () => {ReactDOM.render(<RunDetail runId={7}/>, container);});
+  expect(container.textContent).toContain('当前值：是；本条记录未提供具体判定依据');
+  expect(container.textContent).not.toMatch(/display_errors=On|已监听/);
 });

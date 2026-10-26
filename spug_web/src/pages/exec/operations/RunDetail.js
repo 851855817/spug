@@ -10,6 +10,51 @@ const stateColor = state => ['success', 'ok', 'same'].includes(state) ? 'green' 
 function State({value, labels}) {return <Tag color={stateColor(value)}>{labels[value] || '未知'}</Tag>;}
 const RESULT_LABELS = {normal: '正常', abnormal: '异常', unverified: '待核实', pending: '待执行', running: '采集中', cancelled: '已取消'};
 const RESULT_COLORS = {normal: 'green', abnormal: 'red', unverified: 'orange'};
+// Interpret only the fixed v1 probe contract; historical snapshots need no new probe.
+const CHECK_KEYS = {
+  php_environment: ['display_errors', 'expose_php', 'allow_url_include', 'extension_curl', 'extension_openssl', 'extension_mbstring', 'extension_pdo_mysql'],
+  linux_inspection: ['memory_available_percent', 'root_used_percent'],
+  web_environment: ['port_80_listening', 'port_443_listening'],
+};
+const SWITCH_LABELS = {display_errors: 'PHP 错误显示开关', expose_php: 'PHP 版本公开开关', allow_url_include: '远程文件包含开关'};
+function knownCheck(check, run) {return String(run?.version) === '1' && CHECK_KEYS[run?.job]?.includes?.(check.key);}
+function validPercent(value) {return Number.isFinite(value) && value >= 0 && value <= 100;}
+function checkLabel(check, run) {return (knownCheck(check, run) && SWITCH_LABELS[check.key]) || check.label || check.key;}
+function checkValue(check, run) {
+  if (knownCheck(check, run)) {
+    if (typeof check.value === 'boolean') {
+      if (SWITCH_LABELS[check.key]) return check.value ? 'On（已开启）' : 'Off（已关闭）';
+      if (check.key.startsWith('extension_')) return check.value ? '已加载' : '未加载';
+      if (['port_80_listening', 'port_443_listening'].includes(check.key)) return check.value ? '已监听' : '未监听';
+    }
+    if (check.key.endsWith('_percent') && validPercent(check.value)) return `${check.value}%`;
+  }
+  return displayValue(check.value);
+}
+function checkDescription(check, run) {
+  const generic = !check.summary || ['需要关注', '已采集', '指标异常'].includes(check.summary);
+  if (check.status !== 'warning') return generic ? '—' : check.summary;
+  let reason;
+  if (knownCheck(check, run)) {
+    if (check.value === true) reason = {
+      display_errors: 'display_errors=On，可能输出错误详情；生产环境建议 Off。仅 CLI 配置，非实际报错记录。',
+      expose_php: 'expose_php=On，可能公开 PHP 版本；生产环境建议 Off。仅 CLI 配置。',
+      allow_url_include: 'allow_url_include=On，允许远程文件包含；生产环境建议 Off。仅 CLI 配置。',
+    }[check.key];
+    if (check.value === false) {
+      const extension = {extension_curl: 'cURL', extension_openssl: 'OpenSSL', extension_mbstring: 'mbstring'}[check.key];
+      if (extension) reason = `${extension} 扩展未加载；按业务需要核对目标 PHP CLI 的扩展配置，网站 PHP-FPM 需另行核实。`;
+      if (check.key === 'port_80_listening' || check.key === 'port_443_listening') reason =
+        `本机 TCP ${check.key === 'port_80_listening' ? 80 : 443} 未监听；按业务需要核对 Web 服务及监听配置，不代表公网连通性。`;
+    }
+    if (validPercent(check.value)) {
+      if (check.key === 'memory_available_percent' && check.value < 10) reason = `可用内存 ${check.value}%（低于 10% 告警线）；检查进程内存占用。`;
+      if (check.key === 'root_used_percent' && check.value >= 90) reason = `根分区使用率 ${check.value}%（达到 90% 告警线）；检查大文件和日志占用。`;
+    }
+  }
+  if (reason) return generic ? reason : `${reason} ${check.summary}`;
+  return generic ? `当前值：${checkValue(check, run)}；本条记录未提供具体判定依据。` : check.summary;
+}
 function resultState(target) {
   if (target.state === 'failed') return 'abnormal';
   if (['pending', 'running', 'cancelled'].includes(target.state)) return target.state;
@@ -19,25 +64,25 @@ function resultState(target) {
   return checks.length && checks.every(check => check.status === 'ok' && check.value !== null && check.value !== undefined &&
     ['string', 'number', 'boolean'].includes(typeof check.value)) ? 'normal' : 'unverified';
 }
-function resultReason(target) {
+function resultReason(target, run) {
   if (target.state === 'failed') return `采集失败：${target.message || CATEGORY_LABELS[target.category] || '原因未返回'}`;
   if (target.state === 'unknown') return target.message || '采集中断，结果待核实';
   if (target.state !== 'success') return '—';
   const checks = Array.isArray(target.checks) ? target.checks : [];
   const issues = checks.filter(check => check.status !== 'ok' || check.value === null || check.value === undefined ||
     !['string', 'number', 'boolean'].includes(typeof check.value));
-  return issues.map(check => `${check.label || check.key}：${check.summary || (check.status === 'warning' ? '指标异常' : '数据未核实')}`).join('；') ||
+  return issues.map(check => `${checkLabel(check, run)}：${check.status === 'warning' ? checkDescription(check, run) : check.summary || '数据未核实'}`).join('；') ||
     (checks.length ? '—' : '未取得检查数据');
 }
-function Checks({checks}) {
+function Checks({checks, run}) {
   return <Table resizeKey="operations-checks" rowKey="key" size="small" dataSource={checks || []} pagination={false} scroll={{x: 680}} columns={[
-    {title: '检查项', dataIndex: 'label', width: 180},
+    {title: '检查项', dataIndex: 'label', width: 180, render: (_, check) => checkLabel(check, run)},
     {title: '状态', dataIndex: 'status', width: 100, render: (status, check) => {
       const state = resultState({state: 'success', checks: [check]});
       return <Tag color={RESULT_COLORS[state]}>{RESULT_LABELS[state]}</Tag>;
     }},
-    {title: '具体数据', dataIndex: 'value', width: 180, render: displayValue},
-    {title: '说明', dataIndex: 'summary', width: 250},
+    {title: '具体数据', dataIndex: 'value', width: 180, render: (_, check) => checkValue(check, run)},
+    {title: '说明', dataIndex: 'summary', width: 400, render: (_, check) => checkDescription(check, run)},
   ]}/>;
 }
 
@@ -160,12 +205,12 @@ export default function RunDetail({runId}) {
     <Table resizeKey="operations-results-v2" rowKey="id" dataSource={visibleTargets} pagination={false} scroll={{x: 900}} columns={[
       {title: '主机', dataIndex: 'host', width: 260, render: hostName},
       {title: '结果状态', key: 'state', width: 110, render: (_, target) => <Tag color={RESULT_COLORS[resultState(target)]}>{RESULT_LABELS[resultState(target)]}</Tag>},
-      {title: '异常原因', key: 'reason', width: 400, render: (_, target) => <span style={{whiteSpace: 'pre-wrap', overflowWrap: 'anywhere'}}>{resultReason(target)}</span>},
+      {title: '异常原因', key: 'reason', width: 400, render: (_, target) => <span style={{whiteSpace: 'pre-wrap', overflowWrap: 'anywhere'}}>{resultReason(target, run)}</span>},
       {title: '检查数据', key: 'data', width: 150, render: (_, target) => target.checks?.length ?
         <Button type="link" size="small" onClick={() => setExpandedIds(ids => ids.includes(target.id) ? ids.filter(id => id !== target.id) : [...ids, target.id])}>
           {expandedIds.includes(target.id) ? '收起数据' : `查看数据（${target.checks.length} 项）`}</Button> : '暂无数据'},
     ]} expandable={{expandedRowKeys: expandedIds, onExpandedRowsChange: setExpandedIds,
-      rowExpandable: target => Boolean(target.checks?.length), expandedRowRender: target => <Checks checks={target.checks}/>}}/>
+      rowExpandable: target => Boolean(target.checks?.length), expandedRowRender: target => <Checks checks={target.checks} run={run}/>}}/>
 
   </Card>;
 }
