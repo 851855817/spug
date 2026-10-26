@@ -139,7 +139,7 @@ class PanelLoginReleaseTests(unittest.TestCase):
                 self.assertEqual(build.call_args.args[0], ['node', '--require',
                     str(repo / 'deploy/upgrade-review/build-limit.cjs'),
                     'node_modules/react-app-rewired/bin/index.js', 'build'])
-                self.assertIn('--max-old-space-size=512', build.call_args.kwargs['env']['NODE_OPTIONS'])
+                self.assertIn('--max-old-space-size=768', build.call_args.kwargs['env']['NODE_OPTIONS'])
                 self.assertIn('--require=', build.call_args.kwargs['env']['NODE_OPTIONS'])
             packaged = root / ('upgrade-' + 'a' * 7)
             manifest = json.loads((packaged / 'release.json').read_text())
