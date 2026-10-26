@@ -116,7 +116,8 @@ def main():
     module = profile_module(args.profile)
     validate_runtime_changes(git('diff', '--name-only', previous, revision).decode().splitlines(), args.profile)
     environment = dict(os.environ, NODE_OPTIONS='--openssl-legacy-provider', GENERATE_SOURCEMAP='false', CI='false')
-    subprocess.run([args.node, 'node_modules/react-app-rewired/bin/index.js', 'build'],
+    subprocess.run([args.node, '--require', str(repo / 'deploy/upgrade-review/build-limit.cjs'),
+                    'node_modules/react-app-rewired/bin/index.js', 'build'],
                    cwd=repo / 'spug_web', env=environment, check=True, timeout=600)
     if git('rev-parse', 'HEAD').decode().strip() != revision or git('status', '--porcelain').strip():
         raise ValueError('Checkout changed during build')

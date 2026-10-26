@@ -134,8 +134,11 @@ class PanelLoginReleaseTests(unittest.TestCase):
             with mock.patch.object(package, '__file__', str(repo / 'deploy/upgrade-review/package.py')), \
                     mock.patch.object(sys, 'argv', ['package.py', 'b' * 40, '--node', 'node', '--profile', 'panel-login']), \
                     mock.patch.object(package.subprocess, 'check_output', side_effect=git), \
-                    mock.patch.object(package.subprocess, 'run'), mock.patch('builtins.print'):
+                    mock.patch.object(package.subprocess, 'run') as build, mock.patch('builtins.print'):
                 package.main()
+                self.assertEqual(build.call_args.args[0], ['node', '--require',
+                    str(repo / 'deploy/upgrade-review/build-limit.cjs'),
+                    'node_modules/react-app-rewired/bin/index.js', 'build'])
             packaged = root / ('upgrade-' + 'a' * 7)
             manifest = json.loads((packaged / 'release.json').read_text())
             self.assertIsNone(manifest['previous_api_sha256'][LOGIN])

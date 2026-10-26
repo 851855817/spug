@@ -488,6 +488,8 @@ class InventoryAPITests(TransactionTestCase):
         now = timezone.now()
         rows = self.fake_collect('backups')
         rows[0]['backup_at'] = (now - timedelta(hours=48, seconds=1)).isoformat()
+        # Keep the control row exactly at the boundary, independent of fixture calendar dates.
+        rows[1]['backup_at'] = (now - timedelta(hours=48)).isoformat()
         with patch.object(service, 'collect_panel', return_value=rows):
             self.collect(panel, 'backups')
         with patch.object(service.timezone, 'now', return_value=now):
