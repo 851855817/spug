@@ -12,9 +12,11 @@
 - [x] 后端隔离数据库回归：新旧快照混合，旧缓存先筛选后分页，保留摘要与分组／关键词，零结果，不改快照，不调用客户接口。
 - [x] 最小实现：`spug_web/src/pages/panel-inventory/index.js` 和 `spug_api/apps/baota/inventory/service.py`，相应既有测试文件。
 - [x] 固定发布配置 `inventory-filters` 仅允许上述两个运行文件；保全 PHP 更新策略与平台健康模块，沿用全文件核对、新配对备份和兼容回退。补发布范围、清单、镜像与失败恢复测试，不复用旧归档前提。
-- [ ] 独立审查、前后端及发布保护回归、正式构建浏览器模拟验收、完整 CI、服务器隔离准备。
-- [ ] 重新核实现网版本与业务空闲，受控发布；只读核对真实库存筛选、完整 API 仅约定模块变化、业务保全、服务健康；记录版本并更新草稿 PR #4。
+- [x] 独立审查、前后端及发布保护回归、正式构建浏览器模拟验收、完整 CI、服务器隔离准备。
+- [x] 重新核实现网版本与业务空闲，受控发布；只读核对真实库存筛选、完整 API 仅约定模块变化、业务保全、服务健康；记录版本并更新草稿 PR #4。
 
 验证命令：前端 `node node_modules/react-app-rewired/bin/index.js test --watch=false --runInBand`；后端 `python manage.py test apps.baota.inventory.tests --settings=spug.test_settings --noinput`；发布保护 `python -m unittest discover -s deploy/upgrade-review -p 'test_*.py'`。仅使用隔离数据库与模拟接口。
 
 提交前检查点：新增 9 条前端交互先红后绿（15 旧测试保持通过）；后端新增同一场景下网站／备份两类旧缓存筛选先失败后通过。最终前端 25 套／320 项、后端 525 项（Windows 条件跳过 11）、发布保护 100 项（Windows 条件跳过一项）通过。独立只读审查无阻塞。正式构建、CI 与发布仍按后续清单完成，不以此检查点代替上线验收。
+
+发布检查点：2026-10-26 17:06（Asia/Shanghai）上线 `597a36e`；应用两次完整 CI、服务器隔离检查与正式构建浏览器模拟验收通过。实际列表点击已过期显示 4 条、未配置 SSL 显示 2 条、旧缓存 0 显示空列表，总计恢复 11 条。独立验证新配对备份、63 项保全对象、完整 API 仅 listing 模块变化、9 服务与 15 项健康检查正常。详见 [发布记录](../../releases/2026-10-26-inventory-summary-filters.md)。
