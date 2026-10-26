@@ -8,6 +8,7 @@
 | `host-report` | `apps/setting/health.py` | 基准 Git、暂存源码、准备镜像和实际两份 API 根目录的 PHP 模块摘要一致 |
 | `operations-ui` | 仅运维比较页面的 UI 构建 | 前端运行差异仅允许 `RunDetail.js`；不覆盖任何 API。固定保全 PHP 策略与健康模块，新旧镜像完整 API 文件摘要一致，实际两份 API 根在发布前后保持 |
 | `task-results-ui` | 运维作业、面板任务详情与项目、上传结果、原生命令／分发输出、任务计划详情、流水线输出共八个固定 UI 文件 | 精确校验八个运行文件集合，拒绝子集、额外 UI 或 API 变更；无 API 覆盖，沿用完整 API 保全、配对备份与恢复检查 |
+| `inventory-filters` | `apps/baota/inventory/service.py` 及库存页面 UI | 必须恰好一份既有 listing 模块和 `spug_web/src/pages/panel-inventory/index.js`；旧模块摘要必须存在，额外固定保全 PHP 策略与健康模块。无迁移，沿用 API／UI 原始收据、完整运行文件核对、新配对备份及兼容回退 |
 | `panel-login` | `apps/baota/login_views.py`、`apps/baota/urls.py`，及宝塔列表／角色权限 UI | 新登录模块基准必须不存在，URLs 必须有旧摘要；保全 PHP 与健康模块。无迁移和权限数据更新。回退按原始收据删除新增模块并恢复 URLs，两份 API 根恢复完整原态 |
 
 配置不能接收任意文件列表。未知配置、混合模块、模型／调度／设置变化会拒绝；纯前端配置也拒绝其他前端运行文件和空的目标改动。后端测试更新只供隔离回归，不进入镜像或覆盖线上文件。若本次修复超出该范围，应另行设计发布方案。
@@ -25,6 +26,8 @@
    发布本轮基线比较修复时，使用 `--profile operations-ui`。它的两份 API 覆盖清单必须为空，固定两模块保全内容从实际基准 Git 读取；生成的 Dockerfile 只复制 UI。
 
    发布本轮任务结果精简时，使用 `--profile task-results-ui`，同样只复制 UI，不调用 API 覆盖或恢复助手。
+
+   发布库存统计快捷筛选时，使用 `--profile inventory-filters`。镜像只新增覆盖既有 listing 模块及 UI；真实两份 API 只允许清单中的 listing 文件变化，其他所有运行文件必须与发布前快照一致。回退同时恢复 listing 与 UI，不反向迁移或改写缓存。旧前端仍可调用原筛选状态；回退后重新加载页面即可清除新状态选择。
 
 2. **服务器隔离准备。** 将归档复制到 `/opt/spug/`，使用同一提交的 `prepare.py` 执行。必须填写实际新提交和本机归档摘要。准备脚本不修改生产业务数据。
 

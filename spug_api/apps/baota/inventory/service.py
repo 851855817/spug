@@ -156,7 +156,7 @@ def listing(user, kind, query):
         raise ValueError('关键字格式无效')
     q = q.strip().lower()
     state, states = query.get('state', ''), SSL_STATES if kind == 'sites' else BACKUP_STATES
-    if state and state not in states + (('overdue',) if kind == 'backups' else ()):
+    if state and state not in states + ('stale',) + (('overdue',) if kind == 'backups' else ()):
         raise ValueError('状态筛选无效')
     max_age = positive_id(query.get('max_age_hours', 48))
     if max_age not in (24, 48, 72, 168):
@@ -198,7 +198,8 @@ def listing(user, kind, query):
                'stale': sum(row['stale'] for row in rows)}
     if kind == 'backups':
         summary['overdue'] = sum(row['overdue'] is True for row in rows)
-    filtered = [row for row in rows if not state or (row.get('overdue') is True if state == 'overdue' else row[key] == state)]
+    filtered = [row for row in rows if not state or
+                (row['stale'] if state == 'stale' else row.get('overdue') is True if state == 'overdue' else row[key] == state)]
     return {'items': filtered[(page - 1) * size:page * size], 'total': len(filtered), 'page': page,
             'page_size': size, 'summary': summary, 'panels': statuses}
 

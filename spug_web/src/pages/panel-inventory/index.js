@@ -26,6 +26,7 @@ export default function Inventory({kind = 'sites'}) {
   const sites = kind === 'sites';
   const title = sites ? '网站与证书' : '备份检查台';
   const states = sites ? SSL_STATES : BACKUP_STATES;
+  const filterStates = {...states, stale: '旧缓存'};
   const canView = hasPermission('admin');
   const [options, setOptions] = useState({panels: [], groups: []});
   const [optionsError, setOptionsError] = useState('');
@@ -187,7 +188,7 @@ export default function Inventory({kind = 'sites'}) {
           options={options.panels.map(panel => ({value: panel.id, label: `${panel.name} · ${panel.ip || 'IP 未登记'}`}))}/>
         <Input.Search aria-label="关键字" allowClear placeholder={sites ? '网站 / 域名 / 服务器 / 分组 / IP' : '资源 / 服务器 / 分组 / IP'} style={{width: 270}} onSearch={value => filter('q', value.trim())}/>
         <Select aria-label={sites ? 'SSL 状态' : '备份状态'} allowClear placeholder="全部状态" style={{width: 190}} value={filters.state}
-          onChange={value => filter('state', value)} options={Object.entries(states).map(([value, label]) => ({value, label}))}/>
+          onChange={value => filter('state', value)} options={Object.entries(filterStates).map(([value, label]) => ({value, label}))}/>
         {!sites && <Select aria-label="逾期阈值" value={maxAge} style={{width: 160}}
           onChange={value => {setMaxAge(Number(value)); setPagination(current => ({...current, page: 1}));}}
           options={[24, 48, 72, 168].map(value => ({value, label: `逾期阈值 ${value} 小时`}))}/>}
@@ -206,9 +207,14 @@ export default function Inventory({kind = 'sites'}) {
         {progress && <div role="status">{progress}</div>}
         {collectionError && <Alert type="warning" showIcon message={collectionError}/>}</div>
       {data?.summary && <Space wrap style={{marginBottom: 12}}>
-        <Tag>范围内总计 {data.summary.total || 0}</Tag>
-        {Object.entries(states).map(([state, label]) => <Tag key={state} color={color(state)}>{label} {data.summary[state] || 0}</Tag>)}
-        <Tag color="orange">旧缓存 {data.summary.stale || 0}</Tag>
+        {Object.entries({'': '范围内总计', ...filterStates}).map(([state, label]) => <button key={state} type="button"
+          aria-pressed={(filters.state || '') === state} title={`显示${state ? label : '全部'}${sites ? '网站' : '资源'}`}
+          onClick={() => filter('state', state || undefined)}
+          style={{border: 0, padding: 0, background: 'transparent', cursor: 'pointer'}}>
+          <Tag color={color(state)} style={{marginRight: 0, boxShadow: (filters.state || '') === state ? '0 0 0 2px #1890ff' : undefined}}>
+            {label} {data.summary[state || 'total'] || 0}
+          </Tag>
+        </button>)}
       </Space>}
       {error && <Alert type="error" message={error}/>}
       <ResizableTable resizeKey={`inventory-${kind}`} rowKey="id" size="small" loading={loading} dataSource={data?.items || []}

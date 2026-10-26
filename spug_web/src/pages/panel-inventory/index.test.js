@@ -217,3 +217,64 @@ test('a backup record with no filename stays distinct from a resource without a 
   expect(container.querySelector('[data-row="1:site:8"]').textContent).toContain('无记录');
   expect(container.querySelector('[data-row="1:site:9"]').textContent).not.toContain('无记录');
 });
+
+test.each([
+  ['valid', '有效（面板登记）'], ['expiring', '30 天内临期'], ['expired', '已过期'],
+  ['unconfigured', '未配置 SSL'], ['unknown', '未知'], ['stale', '旧缓存'],
+])('site summary %s selects the matching cached result set and synchronizes the status selector', async (state, label) => {
+  await render();
+  const badge = button(label);
+  expect(badge).toBeDefined();
+  await act(async () => {badge.click(); await flush();});
+  expect(http.get).toHaveBeenLastCalledWith('/api/baota/inventory/sites/', {params: {page: 1, page_size: 20, state}});
+  expect(container.querySelector('[aria-label="SSL 状态"]').value).toBe(state);
+  expect(button(label).getAttribute('aria-pressed')).toBe('true');
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('summary filters reset pagination while preserving group, server and keyword, and total clears only status', async () => {
+  await render();
+  await change('分组筛选', '1'); await change('服务器筛选', '2');
+  await act(async () => {
+    const input = container.querySelector('[aria-label="关键字"]');
+    input.value = 'example'; Simulate.keyDown(input, {key: 'Enter'}); await flush();
+    button('下一页').click(); await flush();
+  });
+  await act(async () => {button('已过期').click(); await flush();});
+  expect(http.get).toHaveBeenLastCalledWith('/api/baota/inventory/sites/', {params: {
+    page: 1, page_size: 20, group_id: 1, panel_id: 2, q: 'example', state: 'expired'}});
+  await act(async () => {button('范围内总计').click(); await flush();});
+  expect(http.get).toHaveBeenLastCalledWith('/api/baota/inventory/sites/', {params: {
+    page: 1, page_size: 20, group_id: 1, panel_id: 2, q: 'example'}});
+  expect(container.querySelector('[aria-label="SSL 状态"]').value).toBe('');
+  expect(button('范围内总计').getAttribute('aria-pressed')).toBe('true');
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('a zero-count badge remains clickable, renders no results and can return to all cached rows', async () => {
+  http.get.mockImplementation((path, config) => Promise.resolve(path.endsWith('options/') ? options :
+    config?.params.state === 'unknown' ? {...data, items: [], total: 0} : data));
+  await render();
+  expect(button('未知').textContent).toContain('0');
+  await act(async () => {button('未知').click(); await flush();});
+  expect(container.querySelector('[data-row="1:7"]')).toBeNull();
+  expect(button('未知').getAttribute('aria-pressed')).toBe('true');
+  await act(async () => {button('范围内总计').click(); await flush();});
+  expect(container.querySelector('[data-row="1:7"]')).not.toBeNull();
+});
+
+test('status dropdown updates the active summary and backup summary preserves the selected age threshold', async () => {
+  await render();
+  await change('SSL 状态', 'expired');
+  expect(button('已过期').getAttribute('aria-pressed')).toBe('true');
+  await change('SSL 状态', '');
+  expect(button('范围内总计').getAttribute('aria-pressed')).toBe('true');
+  await render('backups');
+  await change('逾期阈值', '168');
+  await act(async () => {button('超过阈值').click(); await flush();});
+  expect(http.get).toHaveBeenLastCalledWith('/api/baota/inventory/backups/', {params: {
+    page: 1, page_size: 20, max_age_hours: 168, state: 'overdue'}});
+  await act(async () => {button('旧缓存').click(); await flush();});
+  expect(container.querySelector('[aria-label="备份状态"]').value).toBe('stale');
+  expect(http.post).not.toHaveBeenCalled();
+});

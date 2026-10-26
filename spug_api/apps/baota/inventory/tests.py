@@ -308,6 +308,47 @@ class InventoryAPITests(TransactionTestCase):
         self.assertIsNone(result['items'][1]['overdue'])
         self.assertIsNone(result['items'][2]['overdue'])
 
+    def test_stale_filter_uses_the_whole_scoped_cache_before_pagination_without_collecting(self):
+        service = self.service()
+        root, outside = self.group('inside'), self.group('outside')
+        child = self.group('child', root['id'])
+        old = self.configured(name='old cache', group_id=child['id'])
+        fresh = self.configured(name='fresh cache', group_id=root['id'])
+        other = self.configured(name='outside cache', group_id=outside['id'])
+        for kind in ('sites', 'backups'):
+            rows = [copy.deepcopy(self.fake_collect(kind)[0]) for _ in range(2)]
+            for index, row in enumerate(rows, start=1):
+                row['name'] = 'matching.example'
+                row['site_id' if kind == 'sites' else 'asset_id'] = index
+            with patch.object(service, 'collect_panel', return_value=rows):
+                for panel in (old, fresh, other):
+                    self.collect(panel, kind)
+        models.PanelInventorySnapshot.objects.filter(panel__in=(old, other)).update(
+            sampled_at=timezone.now() - timedelta(hours=25))
+        stored = list(models.PanelInventorySnapshot.objects.order_by('id').values())
+        with patch.object(service, 'collect_panel') as collector:
+            for kind in ('sites', 'backups'):
+                with self.subTest(kind=kind):
+                    query = {'state': 'stale', 'group_id': root['id'], 'q': 'matching', 'page_size': 1}
+                    first = self.request('get', f'/baota/inventory/{kind}/', query)
+                    second = self.request('get', f'/baota/inventory/{kind}/', dict(query, page=2))
+                    self.assertEqual(first['total'], 2)
+                    self.assertEqual(first['summary']['total'], 4)
+                    self.assertEqual(first['summary']['stale'], 2)
+                    self.assertEqual(len(first['items']), 1)
+                    self.assertEqual(len(second['items']), 1)
+                    self.assertNotEqual(first['items'][0]['id'], second['items'][0]['id'])
+                    self.assertTrue(all(row['stale'] and row['panel_id'] == old.pk
+                                        for row in first['items'] + second['items']))
+                    empty = self.request('get', f'/baota/inventory/{kind}/', dict(query, panel_id=fresh.pk))
+                    self.assertEqual(empty['total'], 0)
+                    self.assertEqual(empty['items'], [])
+                    self.assertEqual(empty['summary']['total'], 2)
+                    missing = self.request('get', f'/baota/inventory/{kind}/', dict(query, q='no-match'))
+                    self.assertEqual(missing['total'], 0)
+            collector.assert_not_called()
+        self.assertEqual(list(models.PanelInventorySnapshot.objects.order_by('id').values()), stored)
+
     @override_settings(USE_TZ=False, TIME_ZONE='Asia/Shanghai')
     def test_ssl_calendar_boundaries_and_filters_use_the_platform_date(self):
         service, panel = self.service(), self.configured()

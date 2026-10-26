@@ -25,7 +25,7 @@ HEALTH_MODULE = 'apps/setting/health.py'
 LOGIN_MODULE = 'apps/baota/login_views.py'
 LOGIN_MODULES = (LOGIN_MODULE, 'apps/baota/urls.py')
 PROFILES = {'php-update': MODULE, 'host-report': HEALTH_MODULE, 'operations-ui': None, 'task-results-ui': None,
-            'panel-login': LOGIN_MODULES}
+            'panel-login': LOGIN_MODULES, 'inventory-filters': 'apps/baota/inventory/service.py'}
 MAINTENANCE = ('nginx', 'spug-api', 'spug-ws', 'spug-panel-worker',
                'spug-ops-worker', 'spug-scheduler')
 PRESERVED = ('redis', 'spug-worker', 'spug-monitor')
@@ -254,7 +254,7 @@ def load_stage(stage, revision, previous):
             require(isinstance(hashes, dict) and set(hashes) == ({module} if module else set()) and
                     all(valid_sha(v) for v in hashes.values()), 'api-overlay-must-match-profile')
     preserved = release.get('preserved_api_sha256', {})
-    expected_preserved = ({MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'task-results-ui', 'panel-login') else
+    expected_preserved = ({MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters') else
                           {MODULE} if profile == 'host-report' else set())
     require(isinstance(preserved, dict) and set(preserved) == expected_preserved and
             all(valid_sha(value) for value in preserved.values()), 'preserved-api-manifest-invalid')
