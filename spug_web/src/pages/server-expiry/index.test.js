@@ -79,6 +79,16 @@ test('opens with local reads only and shows merged sources, original date and di
   expect(row.textContent).toContain('2030-11-20'); expect(row.textContent).toContain('未开启');
   expect(container.textContent).toContain('09:00'); expect(container.textContent).toContain('站内提醒');
 });
+
+test('home expiry links show the correct state and keyword without editing an asset', async () => {
+  window.history.replaceState({}, '', '/host/expiry?state=within_30&q=192.0.2.1');
+  try {await render();
+    expect(http.get).toHaveBeenCalledWith('/api/ops/expiry/assets/', {params: {page: 1, page_size: 20, state: 'within_30', q: '192.0.2.1'}});
+    expect(container.querySelector('[aria-label="到期状态"]').value).toBe('within_30');
+    expect(container.querySelector('[aria-label="搜索到期资产"]').value).toBe('192.0.2.1');
+    expect(http.post).not.toHaveBeenCalled();
+  } finally {window.history.replaceState({}, '', '/');}
+});
 test('denies reads and actions to ordinary accounts', async () => {
   hasPermission.mockReturnValue(false); await render();
   expect(http.get).not.toHaveBeenCalled(); expect(http.post).not.toHaveBeenCalled();

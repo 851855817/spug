@@ -11,7 +11,13 @@ import { API, expiryLabel, ownerName, safeError, STATES, time } from './common';
 export default function ServerExpiry() {
   const allowed = hasPermission('admin');
   const [options, setOptions] = useState({owners: [], groups: [], timezone: 'Asia/Shanghai', schedule: '09:00'});
-  const [data, setData] = useState(null), [filters, setFilters] = useState({}), [page, setPage] = useState({page: 1, page_size: 20});
+  const [data, setData] = useState(null), [filters, setFilters] = useState(() => {
+    const query = new URLSearchParams(window.location.search), initial = {};
+    if (Object.prototype.hasOwnProperty.call(STATES, query.get('state'))) initial.state = query.get('state');
+    const keyword = query.get('q');
+    if (keyword && keyword.length <= 100 && ![...keyword].some(char => char.charCodeAt(0) < 32)) initial.q = keyword;
+    return initial;
+  }), [page, setPage] = useState({page: 1, page_size: 20});
   const [error, setError] = useState(''), [optionsError, setOptionsError] = useState(''), [revision, setRevision] = useState(0);
   const [tab, setTab] = useState('assets'), [editor, setEditor] = useState(null), [history, setHistory] = useState(null);
   const [unread, setUnread] = useState(0);
@@ -85,7 +91,7 @@ export default function ServerExpiry() {
               options={options.owners.map(owner => ({value: owner.id, label: owner.name}))}/>
             <Select aria-label="资产跟进状态" style={{width: 130}} allowClear placeholder="全部跟进状态" value={filters.followup} onChange={input => filter('followup', input)}
               options={[{value: 'pending', label: '待跟进'}, {value: 'contacted', label: '已联系'}]}/>
-            <Input.Search aria-label="搜索到期资产" placeholder="名称、IP 或主机名" allowClear maxLength={100} style={{width: 220}} onSearch={input => filter('q', input.trim())}/>
+            <Input.Search aria-label="搜索到期资产" defaultValue={filters.q} placeholder="名称、IP 或主机名" allowClear maxLength={100} style={{width: 220}} onSearch={input => filter('q', input.trim())}/>
           </Space>
           {(error || optionsError) && <Alert type="error" message={error || optionsError} style={{marginBottom: 16}}/>}
           <ResizableTable resizeKey="server-expiry" rowKey="key" size="middle" columns={columns} dataSource={data?.items || []}

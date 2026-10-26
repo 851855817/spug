@@ -47,6 +47,25 @@ const change = async (label, value) => {await act(async () => {
   Simulate.change(container.querySelector(`[aria-label="${label}"]`), {target: {value}}); await flush();
 });};
 
+test('todo links initialize visible state and the targeted panel query without collecting', async () => {
+  window.history.replaceState({}, '', '/exec/sites?state=expiring&panel_id=1&q=example.test');
+  try {
+    await render();
+    expect(http.get).toHaveBeenCalledWith('/api/baota/inventory/sites/', {params: {page: 1, page_size: 20,
+      state: 'expiring', panel_id: 1, q: 'example.test'}});
+    expect(container.querySelector('[aria-label="SSL 状态"]').value).toBe('expiring');
+    expect(http.post).not.toHaveBeenCalled();
+  } finally {window.history.replaceState({}, '', '/');}
+});
+
+test('todo navigation ignores invalid state, ids and unrelated action parameters', async () => {
+  window.history.replaceState({}, '', '/exec/sites?state=ssl_renew&panel_id=-1&operation=upgrade');
+  try {await render();
+    expect(http.get).toHaveBeenCalledWith('/api/baota/inventory/sites/', {params: {page: 1, page_size: 20}});
+    expect(http.post).not.toHaveBeenCalled();
+  } finally {window.history.replaceState({}, '', '/');}
+});
+
 beforeEach(() => {
   container = document.createElement('div'); document.body.appendChild(container);
   Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'visible'});

@@ -20,6 +20,8 @@ on:
       - 'spug_web/src/pages/panel-inventory/**'
       - 'spug_web/src/pages/server-expiry/**'
       - 'spug_web/src/pages/server-monitor/**'
+      - 'spug_web/src/pages/home/**'
+      - 'spug_web/src/layout/**'
       - 'spug_web/src/pages/host/Table.js'
       - 'spug_web/src/pages/host/index.js'
       - 'spug_web/src/components/ResourceMonitor*'

@@ -9,6 +9,7 @@
 | `operations-ui` | 仅运维比较页面的 UI 构建 | 前端运行差异仅允许 `RunDetail.js`；不覆盖任何 API。固定保全 PHP 策略与健康模块，新旧镜像完整 API 文件摘要一致，实际两份 API 根在发布前后保持 |
 | `task-results-ui` | 运维作业、面板任务详情与项目、上传结果、原生命令／分发输出、任务计划详情、流水线输出共八个固定 UI 文件 | 精确校验八个运行文件集合，拒绝子集、额外 UI 或 API 变更；无 API 覆盖，沿用完整 API 保全、配对备份与恢复检查 |
 | `inventory-filters` | `apps/baota/inventory/service.py` 及库存页面 UI | 必须恰好一份既有 listing 模块和 `spug_web/src/pages/panel-inventory/index.js`；旧模块摘要必须存在，额外固定保全 PHP 策略与健康模块。无迁移，沿用 API／UI 原始收据、完整运行文件核对、新配对备份及兼容回退 |
+| `workbench-ui` | 首页、导航排序、监控嵌入与两个目标页，共九个固定 UI 文件 | 精确校验 `package.py` 的 `WORKBENCH_UI` 集合，拒绝子集、额外文件及 API 变更。API 覆盖清单为空，沿用完整 API 树保全、新配对备份与仅 UI 的兼容回退 |
 | `panel-login` | `apps/baota/login_views.py`、`apps/baota/urls.py`，及宝塔列表／角色权限 UI | 新登录模块基准必须不存在，URLs 必须有旧摘要；保全 PHP 与健康模块。无迁移和权限数据更新。回退按原始收据删除新增模块并恢复 URLs，两份 API 根恢复完整原态 |
 
 配置不能接收任意文件列表。未知配置、混合模块、模型／调度／设置变化会拒绝；纯前端配置也拒绝其他前端运行文件和空的目标改动。后端测试更新只供隔离回归，不进入镜像或覆盖线上文件。若本次修复超出该范围，应另行设计发布方案。
@@ -27,6 +28,8 @@
 
    发布本轮任务结果精简时，使用 `--profile task-results-ui`，同样只复制 UI，不调用 API 覆盖或恢复助手。
 
+   发布首页监控、到期待办与导航排序时，使用 `--profile workbench-ui`。九个运行文件为 `pages/home/{index.js,Todo.js,index.module.less}`、`pages/server-monitor/index.js`、`pages/panel-inventory/index.js`、`pages/server-expiry/index.js`、`layout/{Sider.js,layout.module.less,navigationOrder.js}`，均相对 `spug_web/src/`。无模型或迁移，不调用 API 覆盖或恢复助手。回退恢复旧 UI；浏览器中的个人导航偏好可保留，旧版会忽略，新版也只应用实际获权路径。
+
    发布库存统计快捷筛选时，使用 `--profile inventory-filters`。镜像只新增覆盖既有 listing 模块及 UI；真实两份 API 只允许清单中的 listing 文件变化，其他所有运行文件必须与发布前快照一致。回退同时恢复 listing 与 UI，不反向迁移或改写缓存。旧前端仍可调用原筛选状态；回退后重新加载页面即可清除新状态选择。
 
 2. **服务器隔离准备。** 将归档复制到 `/opt/spug/`，使用同一提交的 `prepare.py` 执行。必须填写实际新提交和本机归档摘要。准备脚本不修改生产业务数据。
@@ -37,7 +40,7 @@
 
    工具核对归档路径／内容边界和基准镜像标签，无网络构建新镜像，核对实际镜像 API／UI 摘要，在只读、受限、无网络且不挂载生产数据的环境运行回归。回执绑定完整 revision、归档摘要及不可变镜像 ID。准备失败时保留现有服务，修正、提交后重新制作归档，不修改已校验产物来绕过检查。
 
-   `operations-ui` 和 `task-results-ui` 额外以不可变 ID 分别扫描基准与新镜像的 API 根，要求全部文件集合及摘要相同；沿用发布器的字节码、精确根日志排除规则，配置、近似日志名和额外文件仍受保护。准备回执保存基准镜像 ID 和完整 API 树摘要，结束前重新核对基准标签。不能用仅两个模块相同替代此完整检查。
+   `operations-ui`、`task-results-ui` 和 `workbench-ui` 额外以不可变 ID 分别扫描基准与新镜像的 API 根，要求全部文件集合及摘要相同；沿用发布器的字节码、精确根日志排除规则，配置、近似日志名和额外文件仍受保护。准备回执保存基准镜像 ID 和完整 API 树摘要，结束前重新核对基准标签。不能用仅两个模块相同替代此完整检查。
 
 3. **受控发布。** 完整 CI 和独立审查通过后，重新核对实际版本、资源和业务空闲。运行同一归档内的发布器：
 

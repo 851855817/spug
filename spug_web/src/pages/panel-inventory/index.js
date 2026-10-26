@@ -31,7 +31,14 @@ export default function Inventory({kind = 'sites'}) {
   const [options, setOptions] = useState({panels: [], groups: []});
   const [optionsError, setOptionsError] = useState('');
   const [optionsRevision, setOptionsRevision] = useState(0);
-  const [filters, setFilters] = useState({});
+  const [filters, setFilters] = useState(() => {
+    const query = new URLSearchParams(window.location.search), initial = {};
+    if (Object.prototype.hasOwnProperty.call(filterStates, query.get('state'))) initial.state = query.get('state');
+    if (/^[1-9][0-9]{0,14}$/.test(query.get('panel_id') || '')) initial.panel_id = Number(query.get('panel_id'));
+    const keyword = query.get('q');
+    if (keyword && keyword.length <= 200 && ![...keyword].some(char => char.charCodeAt(0) < 32)) initial.q = keyword;
+    return initial;
+  });
   const [maxAge, setMaxAge] = useState(48);
   const [pagination, setPagination] = useState({page: 1, page_size: 20});
   const [data, setData] = useState(null);
@@ -186,7 +193,7 @@ export default function Inventory({kind = 'sites'}) {
         <Select aria-label="服务器筛选" allowClear showSearch optionFilterProp="label" placeholder="全部服务器" style={{width: 230}}
           value={filters.panel_id} onChange={value => filter('panel_id', value ? Number(value) : undefined)}
           options={options.panels.map(panel => ({value: panel.id, label: `${panel.name} · ${panel.ip || 'IP 未登记'}`}))}/>
-        <Input.Search aria-label="关键字" allowClear placeholder={sites ? '网站 / 域名 / 服务器 / 分组 / IP' : '资源 / 服务器 / 分组 / IP'} style={{width: 270}} onSearch={value => filter('q', value.trim())}/>
+        <Input.Search aria-label="关键字" defaultValue={filters.q} allowClear placeholder={sites ? '网站 / 域名 / 服务器 / 分组 / IP' : '资源 / 服务器 / 分组 / IP'} style={{width: 270}} onSearch={value => filter('q', value.trim())}/>
         <Select aria-label={sites ? 'SSL 状态' : '备份状态'} allowClear placeholder="全部状态" style={{width: 190}} value={filters.state}
           onChange={value => filter('state', value)} options={Object.entries(filterStates).map(([value, label]) => ({value, label}))}/>
         {!sites && <Select aria-label="逾期阈值" value={maxAge} style={{width: 160}}
