@@ -65,8 +65,14 @@ def failed_renewal_preflight(target):
     """
     if (not isinstance(target, dict) or target.get('state') != 'prepared'
             or target.get('reconcile_requested') is not False
-            or target.get('task__state') != 'prepared' or target.get('task__operation') != 'ssl_renew'
-            or target.get('task__audit') != []):
+            or target.get('task__state') != 'prepared' or target.get('task__operation') != 'ssl_renew'):
+        return False
+    audit = target.get('task__audit')
+    # prepare() always records creation; it has not authorized a dispatch.
+    if audit != [] and not (isinstance(audit, list) and len(audit) == 1
+            and isinstance(audit[0], dict) and set(audit[0]) == {'action', 'actor_id', 'at'}
+            and audit[0]['action'] == 'prepare' and type(audit[0]['actor_id']) is int
+            and audit[0]['actor_id'] > 0 and isinstance(audit[0]['at'], str) and bool(audit[0]['at'])):
         return False
     children = target.get('children')
     return isinstance(children, list) and bool(children) and all(

@@ -24,6 +24,20 @@ class FailedPreflightIdleTests(unittest.TestCase):
         self.assertTrue(self.is_idle(self.row))
         self.assertEqual(self.row, original)
 
+    def test_creation_audit_is_not_an_execution_intent(self):
+        self.row['task__audit'] = [{'action': 'prepare', 'actor_id': 1, 'at': '2026-10-26T13:30:00Z'}]
+        original = copy.deepcopy(self.row)
+        self.assertTrue(self.is_idle(self.row))
+        self.assertEqual(self.row, original)
+
+    def test_creation_audit_with_any_later_action_or_malformed_history_blocks(self):
+        for audit in ([{'action': 'prepare'}, {'action': 'start'}],
+                      [{'action': 'prepare'}, {'action': 'reconcile'}],
+                      [{'action': 'prepare'}, {'action': 'prepare'}],
+                      [{'action': 'prepare'}], [{}], ['prepare'], None, {'action': 'prepare'}):
+            with self.subTest(audit=audit):
+                self.assertFalse(self.is_idle(dict(self.row, task__audit=audit)))
+
     def test_other_or_executable_work_and_incomplete_history_always_block(self):
         changes = [
             {'state': 'running'}, {'state': 'preflight_queued'}, {'reconcile_requested': True},

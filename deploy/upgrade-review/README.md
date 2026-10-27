@@ -80,4 +80,4 @@
 
 `ssl-renew-diagnostics` 配置仅接受既有 `apps/baota/operations/certificates.py` 和 `spug_web/src/pages/exec/panel/TaskItem.js` 的运行变更。保留 PHP 更新及平台健康模块的基线摘要，验证证书模块的旧摘要及全部 API 文件树；不包含模型、迁移或权限修改。准备、配对备份、API/UI 原始收据、业务空闲门和兼容回退均沿用现有发布流程。测试：`python -m unittest discover -s deploy/upgrade-review -p 'test_*.py'`。
 
-发布空闲检查保留完整的 SSL 续签失败预览：仅当任务及目标均为 prepared、全部冻结子项与结果均为 failed、执行意图／人工判定／审计为空且无远程结果或待核验请求时视为无待执行业务。所有任务仍纳入保全摘要；存在 ready 子项、缺失历史或其他非终态任务仍拒绝发布，任何并发提交均由阶段间摘要一致性检查阻止。
+发布空闲检查保留完整的 SSL 续签失败预览：仅当任务及目标均为 prepared、全部冻结子项与结果均为 failed、执行意图／人工判定为空、审计为空或只有唯一完整创建预检事件，且无远程结果或待核验请求时视为无待执行业务。所有任务仍纳入保全摘要；存在 ready 子项、缺失历史或其他非终态任务仍拒绝发布，任何并发提交均由阶段间摘要一致性检查阻止。
