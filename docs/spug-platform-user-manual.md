@@ -668,5 +668,6 @@
 - [宝塔任务详情](baota-panel-tasks-user-guide.md)
 - [巡检模板及来源审查](../deploy/inspection-templates/README.md)
 - [资源监控部署与版本记录](../deploy/resource-monitor/DEPLOYMENT.md)
+- [个人“不再提醒”与恢复](personal-reminders-guide.md)
 
 **简要术语：**API 是程序访问面板的接口；SSH 是登录服务器操作系统的通道；CLI 是命令行程序；FPM 是常用于网站运行 PHP 的进程服务；Inode 是文件系统分配文件记录的资源，容量有剩余也可能因它耗尽而无法创建文件；冻结预检是保存本次目标和参数快照；待核实表示尚不能确认最终结果。
