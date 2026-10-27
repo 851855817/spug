@@ -10,7 +10,8 @@ jest.mock('antd', () => {
   const List = Wrapper; List.Item = Wrapper;
   return {Card: Wrapper, List, Tag: Wrapper, Space: Wrapper, Empty: ({description}) => <div>{description}</div>,
     Alert: ({message}) => <div role="alert">{message}</div>, Spin: Wrapper,
-    Button: ({children, onClick, disabled}) => <button disabled={disabled} onClick={onClick}>{children}</button>};
+    Button: ({children, onClick, disabled}) => <button disabled={disabled} onClick={onClick}>{children}</button>,
+    Modal: ({visible, children, onCancel}) => visible ? <div role="dialog">{children}<button onClick={onCancel}>关闭</button></div> : null};
 });
 const flush = async () => {for (let i = 0; i < 20; i++) await Promise.resolve();};
 let container, failed, incomplete;
@@ -30,11 +31,13 @@ const visibility = async state => act(async () => {
   document.dispatchEvent(new Event('visibilitychange')); await flush();
 });
 beforeEach(() => {
+  localStorage.clear(); localStorage.setItem('id', String(Math.random()));
+  Object.defineProperty(window, 'crypto', {configurable: true, value: {getRandomValues: values => require('crypto').randomFillSync(values)}});
   jest.useFakeTimers(); failed = false; incomplete = false;
   Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'visible'});
   container = document.createElement('div'); document.body.appendChild(container);
   hasPermission.mockReturnValue(true);
-  http.get.mockImplementation((path, config) => failed && path.includes('inventory') && config.params.state === 'expired'
+  http.get.mockImplementation((path, config) => path.includes('/setting/user/') ? Promise.resolve({}) : failed && path.includes('inventory') && config.params.state === 'expired'
     ? Promise.reject('private credential must not be displayed') : Promise.resolve(result(path, config)));
 });
 afterEach(async () => {act(() => {ReactDOM.unmountComponentAtNode(container);}); await flush(); container.remove();
@@ -42,7 +45,7 @@ afterEach(async () => {act(() => {ReactDOM.unmountComponentAtNode(container);});
 
 test('four local expiry categories show true totals and up to three actionable entries each', async () => {
   await render();
-  expect(http.get).toHaveBeenCalledTimes(4);
+  expect(http.get.mock.calls.filter(([path]) => !path.includes('/setting/user/'))).toHaveLength(4);
   expect(http.post).not.toHaveBeenCalled();
   expect(container.textContent).toContain('证书已过期'); expect(container.textContent).toContain('服务器30 天内到期');
   expect(container.textContent).toContain('12'); expect(container.textContent).toContain('剩余 5 天');
@@ -70,12 +73,13 @@ test('each failed category reports failure without masking other todos or displa
 
 test('todos refresh local data every minute only while the page is visible', async () => {
   await render();
-  await act(async () => {jest.advanceTimersByTime(60000); await flush();}); expect(http.get).toHaveBeenCalledTimes(8);
+  const calls = () => http.get.mock.calls.filter(([path]) => !path.includes('/setting/user/')).length;
+  await act(async () => {jest.advanceTimersByTime(60000); await flush();}); expect(calls()).toBe(8);
   await visibility('hidden');
-  await act(async () => {jest.advanceTimersByTime(180000); await flush();}); expect(http.get).toHaveBeenCalledTimes(8);
-  await visibility('visible'); expect(http.get).toHaveBeenCalledTimes(12);
+  await act(async () => {jest.advanceTimersByTime(180000); await flush();}); expect(calls()).toBe(8);
+  await visibility('visible'); expect(calls()).toBe(12);
   act(() => {ReactDOM.unmountComponentAtNode(container);});
-  await act(async () => {jest.advanceTimersByTime(120000); await flush();}); expect(http.get).toHaveBeenCalledTimes(12);
+  await act(async () => {jest.advanceTimersByTime(120000); await flush();}); expect(calls()).toBe(12);
   expect(http.post).not.toHaveBeenCalled();
 });
 
@@ -117,4 +121,21 @@ test('long resource names retain a bounded search prefix accepted by target page
   expect(site.searchParams.get('q')).toBe(name.slice(0, 200));
   expect(server.searchParams.get('q')).toBe(name.slice(0, 100));
   expect(http.post).not.toHaveBeenCalled();
+});
+
+test('dismiss hides only one cycle, persists across refresh and can be restored without following its link', async () => {
+  const settings = {};
+  http.get.mockImplementation((path, config) => Promise.resolve(path.includes('/setting/user/') ? {...settings} : result(path, config)));
+  http.post.mockImplementation((path, body) => {settings[body.key] = body.value; return Promise.resolve({...settings});});
+  await render();
+  const first = container.querySelector('[aria-label="证书已过期"]');
+  await act(async () => {first.querySelector('button').click(); await flush();});
+  expect(first.textContent).not.toContain('expired-0.example.test');
+  expect(first.textContent).toContain('expired-3.example.test');
+  expect(http.post).toHaveBeenCalledTimes(1);
+  await act(async () => {[...container.querySelectorAll('button')].find(b => b.textContent === '刷新待办').click(); await flush();});
+  expect(first.textContent).not.toContain('expired-0.example.test');
+  await act(async () => {[...container.querySelectorAll('button')].find(b => b.textContent.includes('已忽略')).click(); await flush();});
+  await act(async () => {[...container.querySelectorAll('button')].find(b => b.textContent === '恢复提醒').click(); await flush();});
+  expect(first.textContent).toContain('expired-0.example.test');
 });

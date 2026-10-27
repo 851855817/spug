@@ -30,6 +30,10 @@ on:
       - 'spug_web/src/pages/host/index.js'
       - 'spug_web/src/components/ResourceMonitor*'
       - 'spug_web/src/components/ResizableTable*'
+      - 'spug_web/src/components/ReminderDismiss*'
+      - 'spug_web/src/components/personalReminders*'
+      - 'spug_web/src/components/reminderDismiss*'
+      - 'spug_api/apps/setting/test_reminder_preferences.py'
       - 'spug_web/src/components/TableCard.js'
       - 'spug_web/src/components/useResourceMonitorSources.js'
       - 'spug_web/src/routes.js'
@@ -75,7 +79,7 @@ jobs:
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api \
             --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test "${baota_test_modules[@]}" apps.setting.test_health apps.ops.tests apps.ops.test_result_counts apps.ops.expiry.tests apps.baota.inventory.tests --settings=spug.test_settings --noinput
+            manage.py test "${baota_test_modules[@]}" apps.setting.test_health apps.setting.test_reminder_preferences apps.ops.tests apps.ops.test_result_counts apps.ops.expiry.tests apps.baota.inventory.tests --settings=spug.test_settings --noinput
       - name: Test independent host diagnostics
         run: python3 -m unittest discover -s deploy/platform-health/tests
       - name: Test release backup failure handling

@@ -98,7 +98,7 @@ def main():
         ['docker', 'image', 'inspect', image], text=True))[0], revision)
     source = stage / 'source'
     preservation = {}
-    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui'):
+    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui'):
         # Read the fixed literal without importing staged Python: imports can
         # write unarchived __pycache__ files and invalidate the bundle binding.
         tree = ast.parse((source / 'deploy/upgrade-review/publish.py').read_text())
@@ -123,7 +123,7 @@ def main():
         '-e', 'PYTHONUNBUFFERED=1', '-v', str(source / 'spug_api') + ':/source/spug_api:ro',
         '--workdir', '/source/spug_api', '--entrypoint', 'python3', image_id]
     modules = ['apps.baota.' + path.stem for path in sorted((source / 'spug_api/apps/baota').glob('test*.py'))]
-    subprocess.run(command + ['manage.py', 'test', *modules, 'apps.setting.test_health', 'apps.ops.tests',
+    subprocess.run(command + ['manage.py', 'test', *modules, 'apps.setting.test_health', 'apps.setting.test_reminder_preferences', 'apps.ops.tests',
         'apps.ops.test_result_counts', 'apps.ops.expiry.tests', 'apps.baota.inventory.tests',
         '--settings=spug.test_settings', '--noinput'], check=True, timeout=300)
     for folder in ('upgrade-review', 'expiry'):

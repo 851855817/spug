@@ -8,6 +8,8 @@ import { Alert, Button, Card, Tag } from 'antd';
 import { hasPermission, http } from 'libs';
 import { usePageVisibility } from '../server-monitor/useServerMonitor';
 import styles from './index.module.less';
+import ReminderDismiss, { ReminderControls } from '../../components/ReminderDismiss';
+import { siteReminder, serverReminder, usePersonalReminders } from '../../components/personalReminders';
 
 const categories = [
   {key: 'certificate-expired', label: '证书已过期', api: '/api/baota/inventory/sites/', path: '/exec/sites', state: 'expired', certificate: true},
@@ -32,6 +34,7 @@ function remaining(days) {
 
 function TodoIndex() {
   const allowed = hasPermission('admin');
+  const prefs = usePersonalReminders(allowed);
   const visible = usePageVisibility();
   const [revision, setRevision] = useState(0);
   const [results, setResults] = useState([]);
@@ -41,7 +44,7 @@ function TodoIndex() {
     let valid = true, timer;
     setLoading(true);
     Promise.allSettled(categories.map(category => http.get(category.api,
-      {params: {page: 1, page_size: 3, state: category.state}}))).then(values => {
+      {params: {page: 1, page_size: 20, state: category.state}}))).then(values => {
       if (valid) setResults(values.map((value, index) => ({...categories[index],
         data: value.status === 'fulfilled' ? value.value : null})));
     }).finally(() => {
@@ -65,13 +68,17 @@ function TodoIndex() {
           <div className={styles.todoHeading}><a href={link(category)}>{category.label}</a>
             {category.data ? <Tag color={category.data.total ? category.state === 'expired' ? 'red' : 'orange' : 'default'}>{category.data.total}</Tag>
               : <span role="alert">读取失败，请刷新重试</span>}</div>
-          {category.data?.items.slice(0, 3).map(item => <a className={styles.todoItem} key={item.id || item.key} href={link(category, item)}>
+          {category.data?.items.filter(item => !prefs.isMuted(category.certificate ? siteReminder(item) : serverReminder(item))).slice(0, 3).map(item => <div className={styles.todoRow} key={item.id || item.key}>
+            <a className={styles.todoItem} href={link(category, item)}>
             <span className={styles.todoName}><b>{item.name}</b><small>{category.certificate ? item.panel_name : item.address}</small></span>
             <span className={styles.todoDue}><b>{remaining(item.days_remaining)}</b><small>{category.certificate ? item.expires_at : item.expires_on}
               {item.stale && ' · 旧缓存'}</small></span>
-          </a>)}
+            </a><ReminderDismiss item={category.certificate ? siteReminder(item) : serverReminder(item)}/>
+          </div>)}
+          {category.data?.items.length > 0 && category.data.items.every(item => prefs.isMuted(category.certificate ? siteReminder(item) : serverReminder(item))) &&
+            <small>本页事项已忽略，点击标题查看全部。</small>}
         </section>)}
-        <div className={styles.todoHint}>按已登记到期日期；证书来自上次采集。每类显示前 3 条，点击标题查看全部。</div>
+        <div className={styles.todoHint}>每类显示当前页前 3 条未忽略事项；统计为全部数量，点击标题查看全部。<ReminderControls/></div>
       </>}
     </Card>
   )

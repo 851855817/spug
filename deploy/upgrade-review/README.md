@@ -11,6 +11,7 @@
 | `inventory-filters` | `apps/baota/inventory/service.py` 及库存页面 UI | 必须恰好一份既有 listing 模块和 `spug_web/src/pages/panel-inventory/index.js`；旧模块摘要必须存在，额外固定保全 PHP 策略与健康模块。无迁移，沿用 API／UI 原始收据、完整运行文件核对、新配对备份及兼容回退 |
 | `workbench-ui` | 首页、导航排序、监控嵌入与两个目标页，共九个固定 UI 文件 | 精确校验 `package.py` 的 `WORKBENCH_UI` 集合，拒绝子集、额外文件及 API 变更。API 覆盖清单为空，沿用完整 API 树保全、新配对备份与仅 UI 的兼容回退 |
 | `branding-ui` | KOps · 云枢品牌与公共开源说明，共十六个固定 UI 文件 | 精确校验 `BRANDING_UI`，API 覆盖为空；完整 API 树及两个保全模块不变。新静态资源使用 `kops-20261027/`，不覆盖四个可回退入口以外的旧文件 |
+| `personal-reminders-ui` | 首页、顶栏通知、到期站内提醒及共享个人设置控件，共七个固定 UI 文件 | 精确校验 `PERSONAL_REMINDERS_UI`，API 覆盖为空，无迁移；完整 API 树保全、新配对备份及四入口 UI 回退。偏好复用现有按账号隔离的用户设置，旧 UI 忽略这些设置 |
 | `panel-login` | `apps/baota/login_views.py`、`apps/baota/urls.py`，及宝塔列表／角色权限 UI | 新登录模块基准必须不存在，URLs 必须有旧摘要；保全 PHP 与健康模块。无迁移和权限数据更新。回退按原始收据删除新增模块并恢复 URLs，两份 API 根恢复完整原态 |
 
 配置不能接收任意文件列表。未知配置、混合模块、模型／调度／设置变化会拒绝；纯前端配置也拒绝其他前端运行文件和空的目标改动。后端测试更新只供隔离回归，不进入镜像或覆盖线上文件。若本次修复超出该范围，应另行设计发布方案。
@@ -28,6 +29,8 @@
    发布本轮基线比较修复时，使用 `--profile operations-ui`。它的两份 API 覆盖清单必须为空，固定两模块保全内容从实际基准 Git 读取；生成的 Dockerfile 只复制 UI。
 
    发布本轮任务结果精简时，使用 `--profile task-results-ui`，同样只复制 UI，不调用 API 覆盖或恢复助手。
+
+   发布个人“不再提醒”时，使用 `--profile personal-reminders-ui`。七个固定运行文件为 `components/{personalReminders.js,ReminderDismiss.js,reminderDismiss.module.css}`、`pages/home/{Todo.js,index.module.less}`、`layout/Notification.js` 和 `pages/server-expiry/Reminders.js`，均相对 `spug_web/src/`。准备时在隔离数据库运行个人设置账号隔离回归；线上设置 API、模型及迁移保持原样。回退恢复四个 UI 入口，不删除个人偏好，不改写全局已读状态。
 
    发布 KOps · 云枢品牌时，使用 `--profile branding-ui`。法律入口无需登录或管理员权限，源码地址绑定完整发布提交。所有配置的构建都会注入 `REACT_APP_RELEASE_REVISION`；正式发布前须确认 `851855817/spug` 为公开仓库且精确提交可免费浏览和下载。根 LICENSE 与 public 许可副本原文相同。暂存源码增加根 LICENSE 和 public 静态源文件，供隔离回归核对；这些不进入 API 根。旧图标保留，回退只需还原既有四个 UI 入口，追加资源可保留。
 
