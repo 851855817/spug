@@ -151,7 +151,7 @@ class PackagingTests(unittest.TestCase):
 
     def test_package_cli_builds_the_selected_fixed_overlay_and_reads_the_php_baseline(self):
         package = self.helper('package.py')
-        for profile, api_name in (('host-report', HEALTH), ('php-update', PHP), ('operations-ui', None), ('task-results-ui', None), ('workbench-ui', None), ('branding-ui', None), ('personal-reminders-ui', None),
+        for profile, api_name in (('host-report', HEALTH), ('php-update', PHP), ('operations-ui', None), ('task-results-ui', None), ('workbench-ui', None), ('branding-ui', None), ('personal-reminders-ui', None), ('inventory-role-presets-ui', None),
                                   ('inventory-filters', 'apps/baota/inventory/service.py')):
             with self.subTest(profile=profile), TemporaryDirectory() as folder:
                 root = Path(folder)
@@ -181,9 +181,10 @@ class PackagingTests(unittest.TestCase):
                     if values[0] == 'status':
                         return b''
                     if values[0] == 'diff':
-                        if profile in ('workbench-ui', 'branding-ui', 'personal-reminders-ui'):
+                        if profile in ('workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui'):
                             return '\n'.join(sorted({'workbench-ui': package.WORKBENCH_UI, 'branding-ui': package.BRANDING_UI,
-                                                     'personal-reminders-ui': package.PERSONAL_REMINDERS_UI}[profile])).encode()
+                                                     'personal-reminders-ui': package.PERSONAL_REMINDERS_UI,
+                                                     'inventory-role-presets-ui': package.INVENTORY_ROLE_PRESETS_UI}[profile])).encode()
                         if profile == 'inventory-filters':
                             return ('spug_api/' + api_name + '\nspug_web/src/pages/panel-inventory/index.js').encode()
                         return ('spug_api/' + api_name if api_name else '\n'.join(sorted(package.TASK_RESULTS_UI)) if profile == 'task-results-ui' else package.UI_FILE).encode()
@@ -193,7 +194,7 @@ class PackagingTests(unittest.TestCase):
                                 ('\0spug_api/' + api_name if profile == 'inventory-filters' else '') +
                                 '\0' + unicode_asset + '\0').encode()
                     if values[0] == 'show':
-                        return b'preserved PHP' if values[1].endswith(PHP) else b'new health' if values[1].endswith(HEALTH) and profile in ('operations-ui', 'task-results-ui', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui') else b'old health'
+                        return b'preserved PHP' if values[1].endswith(PHP) else b'new health' if values[1].endswith(HEALTH) and profile in ('operations-ui', 'task-results-ui', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui') else b'old health'
                     self.fail('Unexpected packaging command')
                 arguments = ['package.py', 'b' * 40, '--node', 'node']
                 if profile != 'php-update':
@@ -210,7 +211,7 @@ class PackagingTests(unittest.TestCase):
                 self.assertEqual(manifest['profile'], profile)
                 self.assertEqual(set(manifest['api_sha256']), {api_name} if api_name else set())
                 preserved = {PHP: hashlib.sha256(b'preserved PHP').hexdigest()} if profile != 'php-update' else {}
-                if profile in ('operations-ui', 'task-results-ui', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui'):
+                if profile in ('operations-ui', 'task-results-ui', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui'):
                     preserved[HEALTH] = hashlib.sha256(b'new health').hexdigest()
                 self.assertEqual(manifest['preserved_api_sha256'], preserved)
                 copies = [line for line in (packaged / 'Dockerfile').read_text().splitlines()
@@ -220,7 +221,7 @@ class PackagingTests(unittest.TestCase):
                     self.assertIn(['git', 'show', 'b' * 40 + ':spug_api/' + api_name], calls)
                 if profile != 'php-update':
                     self.assertIn(['git', 'show', 'b' * 40 + ':spug_api/' + PHP], calls)
-                if profile in ('operations-ui', 'task-results-ui', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui'):
+                if profile in ('operations-ui', 'task-results-ui', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui'):
                     self.assertIn(['git', 'show', 'b' * 40 + ':spug_api/' + HEALTH], calls)
 
     def test_image_api_comparison_rejects_changes_additions_deletions_and_invalid_hashes(self):
@@ -274,7 +275,7 @@ class PackagingTests(unittest.TestCase):
                     checker.verify(runtime, stage, 'a' * 40)
 
     def test_operations_ui_prepare_writes_receipt_only_after_full_api_and_baseline_identity_checks(self):
-        for profile, failure in ((p, f) for p in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui')
+        for profile, failure in ((p, f) for p in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui')
                                  for f in (None, 'backend-drift', 'baseline-moved')):
             with self.subTest(profile=profile, failure=failure), TemporaryDirectory() as folder:
                 prepare = self.helper('prepare.py')

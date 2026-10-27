@@ -5,6 +5,8 @@ import { AuthDiv, Breadcrumb } from 'components';
 import ResizableTable from '../../components/ResizableTable';
 import { hasPermission, http } from 'libs';
 import { buildGroupTree, descendantIds } from '../baota/helpers';
+import ReminderDismiss, { ReminderControls } from '../../components/ReminderDismiss';
+import { siteReminder, usePersonalReminders } from '../../components/personalReminders';
 
 const SSL_STATES = {valid: '有效（面板登记）', expiring: '30 天内临期', expired: '已过期', unconfigured: '未配置 SSL', unknown: '未知'};
 const BACKUP_STATES = {no_record: '无备份记录', local_missing: '本地文件缺失', empty: '本地文件为空', in_progress: '进行中',
@@ -28,6 +30,7 @@ export default function Inventory({kind = 'sites'}) {
   const states = sites ? SSL_STATES : BACKUP_STATES;
   const filterStates = {...states, stale: '旧缓存'};
   const canView = hasPermission('admin');
+  const prefs = usePersonalReminders(canView && sites);
   const [options, setOptions] = useState({panels: [], groups: []});
   const [optionsError, setOptionsError] = useState('');
   const [optionsRevision, setOptionsRevision] = useState(0);
@@ -157,10 +160,17 @@ export default function Inventory({kind = 'sites'}) {
     {title: '证书登记摘要', key: 'ssl', width: 200, render: (_, row) => <><Tag color={color(row.ssl_state)}>{SSL_STATES[row.ssl_state] || '未知'}</Tag>
       <div>到期：{row.expires_at || '未知'}</div>{row.days_remaining != null && <div>剩余 {row.days_remaining} 天</div>}</>},
     timestampColumn,
-    {title: '证书任务', key: 'action', width: 155, render: (_, row) => {
-      if (row.ssl_state === 'unknown' || panelStates.get(row.panel_id)?.configured === false) return <Typography.Text type="secondary">请先核对证书状态</Typography.Text>;
+    {title: '证书任务 / 提醒', key: 'action', width: 190, render: (_, row) => {
       const operation = row.ssl_state === 'unconfigured' ? 'ssl_apply' : 'ssl_renew';
-      return <a href={`/exec/panel?panel_id=${encodeURIComponent(row.panel_id)}&site_id=${encodeURIComponent(row.site_id)}&operation=${operation}`}>{operation === 'ssl_apply' ? '填写申请任务' : '填写续签任务'}</a>;
+      const reminder = ['expired', 'expiring'].includes(row.ssl_state) ? siteReminder(row) : null;
+      return <>
+        {row.ssl_state === 'unknown' || panelStates.get(row.panel_id)?.configured === false ?
+          <Typography.Text type="secondary">请先核对证书状态</Typography.Text> :
+          <a href={`/exec/panel?panel_id=${encodeURIComponent(row.panel_id)}&site_id=${encodeURIComponent(row.site_id)}&operation=${operation}`}>{operation === 'ssl_apply' ? '填写申请任务' : '填写续签任务'}</a>}
+        {reminder && <div>{prefs.isMuted(reminder) ? <><Typography.Text type="secondary">已忽略</Typography.Text>
+          <Button type="link" size="small" disabled={prefs.pending || prefs.status !== 'ready'}
+            onClick={() => prefs.restore(reminder).catch(() => {})}>恢复提醒</Button></> : <ReminderDismiss item={reminder}/>}</div>}
+      </>;
     }},
   ];
   const backupColumns = [
@@ -200,6 +210,7 @@ export default function Inventory({kind = 'sites'}) {
           onChange={value => {setMaxAge(Number(value)); setPagination(current => ({...current, page: 1}));}}
           options={[24, 48, 72, 168].map(value => ({value, label: `逾期阈值 ${value} 小时`}))}/>}
         <Button onClick={() => {setRevision(value => value + 1); setOptionsRevision(value => value + 1);}}>刷新缓存</Button>
+        {sites && <ReminderControls/>}
       </Space>
       {optionsError && <Alert type="error" message={optionsError}/>}
       <div style={{marginBottom: 16}}><Space wrap>

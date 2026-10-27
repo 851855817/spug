@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { act, Simulate } from 'react-dom/test-utils';
 import { hasPermission, http } from 'libs';
 import Inventory from './index';
+import { getReminderPreferences, siteReminder } from '../../components/personalReminders';
 
 jest.mock('libs', () => ({hasPermission: jest.fn(), http: {get: jest.fn(), post: jest.fn()}}));
 jest.mock('components', () => {
@@ -26,6 +27,7 @@ jest.mock('antd', () => {
   </select>;
   return {Card: Wrapper, Space: Wrapper, Tag: Wrapper, Typography: {Text: Wrapper, Paragraph: Wrapper}, Select,
     TreeSelect: ({treeData, ...props}) => <Select {...props} options={treeData.map(node => ({value: node.value, label: node.title}))}/>,
+    Modal: ({children, visible}) => visible ? <div role="dialog">{children}</div> : null,
     Alert: ({message, description}) => <div role="alert">{message}{description}</div>,
     Button: ({children, onClick, disabled, loading}) => <button disabled={disabled || loading} onClick={onClick}>{children}</button>,
     Input: {Search: ({onSearch, ...props}) => <input aria-label={props['aria-label']}
@@ -66,7 +68,9 @@ test('todo navigation ignores invalid state, ids and unrelated action parameters
   } finally {window.history.replaceState({}, '', '/');}
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  localStorage.setItem('id',String(Math.random())); localStorage.setItem('token','fixture');
+  Object.defineProperty(window,'crypto',{configurable:true,value:{getRandomValues: values => require('crypto').randomFillSync(values)}});
   container = document.createElement('div'); document.body.appendChild(container);
   Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'visible'});
   hasPermission.mockReturnValue(true);
@@ -74,10 +78,53 @@ beforeEach(() => {
     {id: 2, name: '备用', ip: '192.0.2.2', group_id: 2, configured: true},
     {id: 3, name: '未配置', group_id: 1, configured: false}], groups: [{id: 1, name: '生产'}, {id: 2, name: '子组', parent_id: 1}]};
   data = {items: [site], total: 41, page: 1, page_size: 20, summary: {total: 1, unconfigured: 1, stale: 1}, panels: [panel]};
-  http.get.mockImplementation(path => Promise.resolve(path.endsWith('options/') ? options : data));
+  const settings={};
+  http.get.mockImplementation(path => Promise.resolve(path==='/api/setting/user/' ? {...settings} : path.endsWith('options/') ? options : data));
   http.post.mockResolvedValue({...panel, status: 'ok', stale: false});
+  http.post.mockImplementation((path,body)=>{
+    if(path==='/api/setting/user/'){settings[body.key]=body.value;return Promise.resolve({...settings});}
+    return Promise.resolve({...panel,status:'ok',stale:false});
+  });
+  await getReminderPreferences().load();http.get.mockClear();
 });
-afterEach(async () => {act(() => {ReactDOM.unmountComponentAtNode(container);}); await flush(); container.remove(); jest.clearAllMocks();});
+afterEach(async () => {act(() => {ReactDOM.unmountComponentAtNode(container);}); await flush(); container.remove(); jest.clearAllMocks();localStorage.clear();});
+
+test('certificate reminders share the homepage identity while keeping inventory rows and renewal links',async()=>{
+  data={...data,items:[{...site,ssl_state:'expired',expires_at:'2026-10-01'}]};
+  await render();
+  const item=siteReminder(data.items[0]);
+  const row=()=>container.querySelector('[data-row="1:7"]');
+  expect(row().textContent).toContain('不再提醒');
+  await act(async()=>{[...row().querySelectorAll('button')].find(b=>b.textContent==='不再提醒').click();await flush();});
+  expect(getReminderPreferences().isMuted(item)).toBe(true);
+  expect(row().textContent).toContain('已忽略');
+  expect(row().querySelector('a').getAttribute('href')).toContain('operation=ssl_renew');
+  expect(http.post.mock.calls.map(([path])=>path)).toEqual(['/api/setting/user/']);
+  await act(async()=>{[...row().querySelectorAll('button')].find(b=>b.textContent==='恢复提醒').click();await flush();});
+  expect(getReminderPreferences().isMuted(item)).toBe(false);
+  expect(row().textContent).toContain('不再提醒');
+  expect(data.total).toBe(41);
+});
+
+test('an ignored certificate from another entry is reflected and its new expiry date can remind again',async()=>{
+  data={...data,items:[{...site,ssl_state:'expiring',expires_at:'2026-11-01'}]};
+  await getReminderPreferences().mute(siteReminder(data.items[0]));
+  await render();
+  expect(container.querySelector('[data-row="1:7"]').textContent).toContain('恢复提醒');
+  data={...data,items:[{...data.items[0],expires_at:'2027-11-01'}]};
+  await act(async()=>{button('刷新缓存').click();await flush();});
+  expect(container.querySelector('[data-row="1:7"]').textContent).toContain('不再提醒');
+});
+
+test('failed dismissal keeps the certificate visible and does not submit a renewal or collection',async()=>{
+  data={...data,items:[{...site,ssl_state:'expired',expires_at:'2026-10-01'}]};
+  await render();http.post.mockRejectedValue(new Error('fixture raw secret'));
+  await act(async()=>{[...container.querySelector('[data-row="1:7"]').querySelectorAll('button')].find(b=>b.textContent==='不再提醒').click();await flush();});
+  expect(container.textContent).toContain('不再提醒保存失败');
+  expect(container.textContent).not.toContain('fixture raw secret');
+  expect(getReminderPreferences().isMuted(siteReminder(data.items[0]))).toBe(false);
+  expect(http.post.mock.calls.map(([path])=>path)).toEqual(['/api/setting/user/']);
+});
 
 test('mount reads cached inventory only and displays old data with both collection timestamps', async () => {
   await render();

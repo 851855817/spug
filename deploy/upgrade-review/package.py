@@ -52,8 +52,10 @@ PERSONAL_REMINDERS_UI = {
     'spug_web/src/pages/home/index.module.less', 'spug_web/src/layout/Notification.js',
     'spug_web/src/pages/server-expiry/Reminders.js',
 }
+INVENTORY_ROLE_PRESETS_UI = {INVENTORY_UI, 'spug_web/src/pages/system/role/PagePerm.js',
+                             'spug_web/src/pages/system/role/presets.js'}
 PROFILES = {'php-update': API_FILE, 'host-report': HEALTH_FILE, 'operations-ui': None, 'task-results-ui': None,
-            'panel-login': LOGIN_MODULES, 'inventory-filters': INVENTORY_FILE, 'workbench-ui': None, 'branding-ui': None, 'personal-reminders-ui': None,
+            'panel-login': LOGIN_MODULES, 'inventory-filters': INVENTORY_FILE, 'workbench-ui': None, 'branding-ui': None, 'personal-reminders-ui': None, 'inventory-role-presets-ui': None,
             'ssl-renew-diagnostics': SSL_FILE}
 HELPERS = ('apply-expiry.py', 'deploy-compact-ui.py', 'fingerprint.py', 'release_safety.py')
 
@@ -86,9 +88,9 @@ def validate_runtime_changes(names, profile='php-update'):
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
         if runtime != {'spug_api/' + SSL_FILE} or ui != {SSL_UI}:
             raise ValueError('SSL diagnostics release only accepts the fixed certificate adapter and task item UI')
-    elif profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui'):
+    elif profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui'):
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
-        expected = PERSONAL_REMINDERS_UI if profile == 'personal-reminders-ui' else BRANDING_UI if profile == 'branding-ui' else WORKBENCH_UI if profile == 'workbench-ui' else TASK_RESULTS_UI if profile == 'task-results-ui' else {UI_FILE}
+        expected = INVENTORY_ROLE_PRESETS_UI if profile == 'inventory-role-presets-ui' else PERSONAL_REMINDERS_UI if profile == 'personal-reminders-ui' else BRANDING_UI if profile == 'branding-ui' else WORKBENCH_UI if profile == 'workbench-ui' else TASK_RESULTS_UI if profile == 'task-results-ui' else {UI_FILE}
         if runtime or ui != expected:
             raise ValueError('UI release only accepts the fixed reviewed page changes')
     elif runtime != {'spug_api/' + module}:
@@ -114,8 +116,8 @@ def write_manifests(stage, revision, previous_revision, previous_content,
         api_hashes = {module: sha256(stage / 'source/spug_api' / module)} if module else {}
         previous_hashes = {module: hashlib.sha256(previous_content).hexdigest()} if module else {}
     preserved_hashes = {}
-    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'ssl-renew-diagnostics'):
-        if ((profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui') and previous_content is not None) or not isinstance(preserved_content, dict) or
+    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics'):
+        if ((profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui') and previous_content is not None) or not isinstance(preserved_content, dict) or
                 set(preserved_content) != {API_FILE, HEALTH_FILE} or
                 not all(isinstance(value, bytes) for value in preserved_content.values())):
             raise ValueError('Missing fixed UI baseline module contents')
@@ -201,7 +203,7 @@ def main():
                        git('show', previous + ':spug_api/apps/baota/urls.py').replace(b'\r\n', b'\n')}
     else:
         old_content = git('show', previous + ':spug_api/' + module).replace(b'\r\n', b'\n') if module else None
-    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'ssl-renew-diagnostics'):
+    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics'):
         preserved_content = {name: git('show', previous + ':spug_api/' + name).replace(b'\r\n', b'\n')
                              for name in (API_FILE, HEALTH_FILE)}
     else:

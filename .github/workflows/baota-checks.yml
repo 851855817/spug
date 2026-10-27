@@ -25,6 +25,7 @@ on:
       - 'spug_web/src/branding/**'
       - 'spug_web/src/pages/login/**'
       - 'spug_web/src/pages/system/setting/About.js'
+      - 'spug_web/src/pages/system/role/**'
       - 'spug_web/public/**'
       - 'spug_web/src/pages/host/Table.js'
       - 'spug_web/src/pages/host/index.js'
