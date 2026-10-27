@@ -1,10 +1,11 @@
+// Modified by K on 2026-10-27 for KOps · 云枢 branding and legal notices.
 import React, { useRef, useState } from 'react';
 import { Button, Layout, Menu } from 'antd';
 import { HolderOutlined } from '@ant-design/icons';
 import { hasPermission, history } from 'libs';
 import styles from './layout.module.less';
 import routes from '../routes';
-import logo from './logo-spug-white.png';
+import Brand from '../branding/Brand';
 import { moveChild, navigationOrderKey, orderChildren, readNavigationOrder } from './navigationOrder';
 
 let selectedKey = window.location.pathname;
@@ -87,7 +88,7 @@ export default function Sider(props) {
   return (
     <Layout.Sider width={208} collapsed={props.collapsed} className={styles.sider}>
       <div className={styles.logo}>
-        <img src={logo} alt="Logo"/>
+        <Brand compact={props.collapsed} light/>
       </div>
       {!props.collapsed && <div className={styles.navTools}>
         <Button type="text" size="small" onClick={() => {dragged.current = null; setDropPath(''); setEditing(value => !value);}}>{editing ? '完成' : '调整导航'}</Button>

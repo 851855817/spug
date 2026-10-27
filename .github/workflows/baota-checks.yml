@@ -22,6 +22,10 @@ on:
       - 'spug_web/src/pages/server-monitor/**'
       - 'spug_web/src/pages/home/**'
       - 'spug_web/src/layout/**'
+      - 'spug_web/src/branding/**'
+      - 'spug_web/src/pages/login/**'
+      - 'spug_web/src/pages/system/setting/About.js'
+      - 'spug_web/public/**'
       - 'spug_web/src/pages/host/Table.js'
       - 'spug_web/src/pages/host/index.js'
       - 'spug_web/src/components/ResourceMonitor*'
@@ -192,4 +196,5 @@ jobs:
           CI: 'false'
           NODE_OPTIONS: --openssl-legacy-provider
           GENERATE_SOURCEMAP: 'false'
+          REACT_APP_RELEASE_REVISION: ${{ github.sha }}
         run: node node_modules/react-app-rewired/bin/index.js build

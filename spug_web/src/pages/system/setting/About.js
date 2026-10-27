@@ -1,3 +1,4 @@
+// Modified by K on 2026-10-27 for KOps · 云枢 branding and legal notices.
 /**
  * Copyright (c) OpenSpug Organization. https://github.com/openspug/spug
  * Copyright (c) <spug.dev@gmail.com>
@@ -9,6 +10,8 @@ import { SmileTwoTone } from '@ant-design/icons';
 import { Descriptions, Spin, Button, Alert, notification } from 'antd';
 import { observer } from 'mobx-react'
 import { http, VERSION, t, docsUrl } from 'libs';
+import Brand from '../../../branding/Brand';
+import { LegalNotice } from '../../../branding/LegalNotice';
 
 
 @observer
@@ -32,7 +35,7 @@ class About extends React.Component {
             key: 'new_version',
             duration: 0,
             top: 88,
-            message: t('发现新版本 {}', res.version),
+            message: t('Spug 上游发现新版本 {}', res.version),
             icon: <SmileTwoTone/>,
             btn: <a target="_blank" rel="noopener noreferrer" href={docsUrl('update-version/')}>{t('如何升级？')}</a>,
             description: <pre style={{lineHeight: '30px'}}>{res.content}<br/>{res.extra}</pre>
@@ -42,7 +45,7 @@ class About extends React.Component {
             key: 'new_version',
             duration: 0,
             top: 88,
-            message: t('已是最新版本'),
+            message: t('Spug 上游已是最新版本'),
             icon: <SmileTwoTone/>,
             btn: <Button type="link" onClick={() => notification.close('new_version')}>{t('知道了')}</Button>,
             description: <pre style={{lineHeight: '30px'}}>{res.extra}</pre>
@@ -56,14 +59,14 @@ class About extends React.Component {
     const {info, fetching} = this.state;
     return (
       <Spin spinning={fetching}>
-        <div className={styles.title}>{t('关于')}</div>
+        <div className={styles.title}><Brand/></div>
         <Descriptions column={1}>
           <Descriptions.Item label={t('操作系统')}>{info['system_version']}</Descriptions.Item>
           <Descriptions.Item label={t('Python版本')}>{info['python_version']}</Descriptions.Item>
           <Descriptions.Item label={t('Django版本')}>{info['django_version']}</Descriptions.Item>
-          <Descriptions.Item label={t('Spug API版本')}>{info['spug_version']}</Descriptions.Item>
-          <Descriptions.Item label={t('Spug Web版本')}>{VERSION}</Descriptions.Item>
-          <Descriptions.Item label={t('官网文档')}>
+          <Descriptions.Item label={t('Spug 上游内核 API 版本')}>{info['spug_version']}</Descriptions.Item>
+          <Descriptions.Item label={t('Spug 上游内核 Web 版本')}>{VERSION}</Descriptions.Item>
+          <Descriptions.Item label={t('Spug 上游官网')}>
             <a href="https://spug.cc" target="_blank" rel="noopener noreferrer">https://spug.cc</a>
           </Descriptions.Item>
           <Descriptions.Item label={t('更新日志')}>
@@ -71,6 +74,7 @@ class About extends React.Component {
                rel="noopener noreferrer">{docsUrl('change-log/')}</a>
           </Descriptions.Item>
         </Descriptions>
+        <LegalNotice/>
         {info['spug_version'] && info['spug_version'] !== VERSION && (
           <Alert showIcon style={{width: 500}} type="warning" message={t('Spug API版本与Web版本不匹配，请尝试刷新浏览器后再次查看。')}/>
         )}

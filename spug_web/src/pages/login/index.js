@@ -1,3 +1,4 @@
+// Modified by K on 2026-10-27 for KOps · 云枢 branding and legal notices.
 /**
  * Copyright (c) OpenSpug Organization. https://github.com/openspug/spug
  * Copyright (c) <spug.dev@gmail.com>
@@ -8,15 +9,14 @@ import { Form, Input, Button, Tabs, Modal, Dropdown, message } from 'antd';
 import {
   UserOutlined,
   LockOutlined,
-  CopyrightOutlined,
-  GithubOutlined,
   MailOutlined,
   GlobalOutlined
 } from '@ant-design/icons';
 import styles from './login.module.css';
 import history from 'libs/history';
 import { http, updatePermissions, t, langMode, setLanguage, docsUrl } from 'libs';
-import logo from 'layout/logo-spug-txt.png';
+import Brand from '../../branding/Brand';
+import { LegalNotice } from '../../branding/LegalNotice';
 import envStore from 'pages/config/environment/store';
 import appStore from 'pages/config/app/store';
 import requestStore from 'pages/deploy/request/store';
@@ -119,8 +119,8 @@ export default function () {
         </Dropdown>
       </div>
       <div className={styles.titleContainer}>
-        <div><img className={styles.logo} src={logo} alt="logo"/></div>
-        <div className={styles.desc}>{t('灵活、强大、易用的开源运维平台')}</div>
+        <div><Brand large/></div>
+        <div className={styles.desc}>服务器、网站与批量任务，统一掌控。</div>
       </div>
       <div className={styles.formContainer}>
         <Tabs
@@ -176,15 +176,7 @@ export default function () {
       </div>
 
       <div className={styles.footerZone}>
-        <div className={styles.linksZone}>
-          <a className={styles.links} title={t('官网')} href="https://spug.cc" target="_blank"
-             rel="noopener noreferrer">{t('官网')}</a>
-          <a className={styles.links} title="Github" href="https://github.com/openspug/spug" target="_blank"
-             rel="noopener noreferrer"><GithubOutlined/></a>
-          <a title={t('文档')} href={docsUrl('about-spug/')} target="_blank"
-             rel="noopener noreferrer">{t('文档')}</a>
-        </div>
-        <div style={{color: 'rgba(0, 0, 0, .45)'}}>Copyright <CopyrightOutlined/> {new Date().getFullYear()} By OpenSpug</div>
+        <LegalNotice/>
       </div>
     </div>
   )

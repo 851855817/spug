@@ -4,7 +4,7 @@
     background-position: center 110px;
     background-size: 100%;
     background-color: #f0f2f5;
-    height: 100vh;
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
 }
@@ -38,7 +38,7 @@
 }
 
 .formContainer {
-    width: 368px;
+    width: min(368px, calc(100% - 40px));
     margin: 0 auto;
     flex: 1;
 }

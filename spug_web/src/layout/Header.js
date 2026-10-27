@@ -1,3 +1,4 @@
+// Modified by K on 2026-10-27 for KOps · 云枢 branding and legal notices.
 /**
  * Copyright (c) OpenSpug Organization. https://github.com/openspug/spug
  * Copyright (c) <spug.dev@gmail.com>
@@ -21,7 +22,7 @@ import styles from './layout.module.less';
 import http from '../libs/http';
 import history from '../libs/history';
 import { t, langMode, setLanguage } from '../libs/i18n';
-import avatar from './avatar.png';
+import { LegalLink } from '../branding/LegalNotice';
 
 export default function (props) {
 
@@ -81,6 +82,7 @@ export default function (props) {
         </div>
       </div>
       <Notification/>
+      <LegalLink className={styles.terminal}/>
       <AuthDiv className={styles.terminal} auth="host.console.view|host.console.list" onClick={openTerminal}>
         <CodeOutlined style={{fontSize: 16}}/>
       </AuthDiv>
@@ -92,7 +94,7 @@ export default function (props) {
       <div className={styles.user}>
         <Dropdown menu={userMenu} style={{background: '#000'}}>
           <span className={styles.action}>
-            <Avatar size="small" src={avatar} style={{marginRight: 8}}/>
+            <Avatar size="small" icon={<UserOutlined/>} style={{marginRight: 8}}/>
             {t(localStorage.getItem('nickname'))}
           </span>
         </Dropdown>
