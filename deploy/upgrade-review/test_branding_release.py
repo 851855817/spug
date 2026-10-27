@@ -8,6 +8,7 @@ HERE = Path(__file__).parent
 PROFILE = 'branding-ui'
 UI = {'spug_web/src/branding/Brand.js', 'spug_web/src/branding/LegalNotice.js',
       'spug_web/src/branding/source.js', 'spug_web/src/branding/branding.module.css',
+    'spug_web/src/pages/ssh/index.js', 'spug_web/src/pages/ssh/Setting.js',
       'spug_web/src/layout/Sider.js', 'spug_web/src/layout/Header.js', 'spug_web/src/layout/Footer.js',
       'spug_web/src/pages/login/index.js', 'spug_web/src/pages/login/login.module.css',
       'spug_web/src/pages/system/setting/About.js', 'spug_web/public/index.html',

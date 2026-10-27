@@ -10,7 +10,7 @@
 | `task-results-ui` | 运维作业、面板任务详情与项目、上传结果、原生命令／分发输出、任务计划详情、流水线输出共八个固定 UI 文件 | 精确校验八个运行文件集合，拒绝子集、额外 UI 或 API 变更；无 API 覆盖，沿用完整 API 保全、配对备份与恢复检查 |
 | `inventory-filters` | `apps/baota/inventory/service.py` 及库存页面 UI | 必须恰好一份既有 listing 模块和 `spug_web/src/pages/panel-inventory/index.js`；旧模块摘要必须存在，额外固定保全 PHP 策略与健康模块。无迁移，沿用 API／UI 原始收据、完整运行文件核对、新配对备份及兼容回退 |
 | `workbench-ui` | 首页、导航排序、监控嵌入与两个目标页，共九个固定 UI 文件 | 精确校验 `package.py` 的 `WORKBENCH_UI` 集合，拒绝子集、额外文件及 API 变更。API 覆盖清单为空，沿用完整 API 树保全、新配对备份与仅 UI 的兼容回退 |
-| `branding-ui` | KOps · 云枢品牌与公共开源说明，共十四个固定 UI 文件 | 精确校验 `BRANDING_UI`，API 覆盖为空；完整 API 树及两个保全模块不变。新静态资源使用 `kops-20261027/`，不覆盖四个可回退入口以外的旧文件 |
+| `branding-ui` | KOps · 云枢品牌与公共开源说明，共十六个固定 UI 文件 | 精确校验 `BRANDING_UI`，API 覆盖为空；完整 API 树及两个保全模块不变。新静态资源使用 `kops-20261027/`，不覆盖四个可回退入口以外的旧文件 |
 | `panel-login` | `apps/baota/login_views.py`、`apps/baota/urls.py`，及宝塔列表／角色权限 UI | 新登录模块基准必须不存在，URLs 必须有旧摘要；保全 PHP 与健康模块。无迁移和权限数据更新。回退按原始收据删除新增模块并恢复 URLs，两份 API 根恢复完整原态 |
 
 配置不能接收任意文件列表。未知配置、混合模块、模型／调度／设置变化会拒绝；纯前端配置也拒绝其他前端运行文件和空的目标改动。后端测试更新只供隔离回归，不进入镜像或覆盖线上文件。若本次修复超出该范围，应另行设计发布方案。

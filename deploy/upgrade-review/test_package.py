@@ -162,6 +162,9 @@ class PackagingTests(unittest.TestCase):
                     target = repo / 'spug_api' / api_name
                     target.parent.mkdir(parents=True); target.write_bytes(b'new listing')
                 shutil.copytree(stage / 'build', repo / 'spug_web/build')
+                unicode_asset = 'spug_web/public/resource/主机导入模板.xlsx'
+                (repo / unicode_asset).parent.mkdir(parents=True, exist_ok=True)
+                (repo / unicode_asset).write_bytes(b'unchanged public fixture')
                 for name in ('expiry/apply-expiry.py', 'upgrade-review/publish-ui.py',
                              'upgrade-review/fingerprint.py', 'inventory/release_safety.py'):
                     path = repo / 'deploy' / name
@@ -184,7 +187,10 @@ class PackagingTests(unittest.TestCase):
                             return ('spug_api/' + api_name + '\nspug_web/src/pages/panel-inventory/index.js').encode()
                         return ('spug_api/' + api_name if api_name else '\n'.join(sorted(package.TASK_RESULTS_UI)) if profile == 'task-results-ui' else package.UI_FILE).encode()
                     if values[0] == 'ls-files':
-                        return ('spug_api/' + PHP + '\nspug_api/' + HEALTH + ('\nspug_api/' + api_name if profile == 'inventory-filters' else '')).encode()
+                        self.assertIn('-z', values)
+                        return ('spug_api/' + PHP + '\0spug_api/' + HEALTH +
+                                ('\0spug_api/' + api_name if profile == 'inventory-filters' else '') +
+                                '\0' + unicode_asset + '\0').encode()
                     if values[0] == 'show':
                         return b'preserved PHP' if values[1].endswith(PHP) else b'new health' if values[1].endswith(HEALTH) and profile in ('operations-ui', 'task-results-ui', 'inventory-filters', 'workbench-ui', 'branding-ui') else b'old health'
                     self.fail('Unexpected packaging command')
@@ -198,6 +204,7 @@ class PackagingTests(unittest.TestCase):
                     package.main()
                     self.assertEqual(build.call_args.kwargs['env']['REACT_APP_RELEASE_REVISION'], 'a' * 40)
                 packaged = root / ('upgrade-' + 'a' * 7)
+                self.assertEqual((packaged / 'source' / unicode_asset).read_bytes(), b'unchanged public fixture')
                 manifest = json.loads((packaged / 'release.json').read_text())
                 self.assertEqual(manifest['profile'], profile)
                 self.assertEqual(set(manifest['api_sha256']), {api_name} if api_name else set())

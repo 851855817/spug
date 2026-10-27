@@ -1,3 +1,4 @@
+// Modified by K on 2026-10-27 for KOps · 云枢 branding and legal notices.
 /**
  * Copyright (c) OpenSpug Organization. https://github.com/openspug/spug
  * Copyright (c) <spug.dev@gmail.com>
@@ -27,7 +28,8 @@ import Setting from './Setting';
 import { http, hasPermission, includes, t } from 'libs';
 import gStore from 'gStore';
 import styles from './index.module.less';
-import LogoSpugText from 'layout/logo-spug-white.png';
+import Brand from '../../branding/Brand';
+import { LegalLink } from '../../branding/LegalNotice';
 import lds from 'lodash';
 
 let posX = 0
@@ -47,7 +49,7 @@ function WebSSH(props) {
   const [sshMode] = useState(hasPermission('host.console.view'))
 
   useEffect(() => {
-    window.document.title = 'Spug web terminal'
+    window.document.title = 'KOps · 云枢 · Web 终端'
     window.addEventListener('beforeunload', leaveTips)
     fetchNodes()
     gStore.fetchUserSettings()
@@ -217,19 +219,13 @@ function WebSSH(props) {
     )
   }
 
-  const spug_web_terminal =
-    '                                                 __       __                          _                __\n' +
-    '   _____ ____   __  __ ____ _   _      __ ___   / /_     / /_ ___   _____ ____ ___   (_)____   ____ _ / /\n' +
-    '  / ___// __ \\ / / / // __ `/  | | /| / // _ \\ / __ \\   / __// _ \\ / ___// __ `__ \\ / // __ \\ / __ `// / \n' +
-    ' (__  )/ /_/ // /_/ // /_/ /   | |/ |/ //  __// /_/ /  / /_ /  __// /   / / / / / // // / / // /_/ // /  \n' +
-    '/____// .___/ \\__,_/ \\__, /    |__/|__/ \\___//_.___/   \\__/ \\___//_/   /_/ /_/ /_//_//_/ /_/ \\__,_//_/   \n' +
-    '     /_/            /____/                                                                               \n'
+  const terminalWelcome = 'KOps · 云枢\nWeb 终端'
 
   return hasPermission('host.console.view|host.console.list') ? (
     <div className={styles.container} onMouseUp={() => posX = 0} onMouseMove={handleMouseMove}>
       <div className={styles.sider} style={{width}}>
         <a className={styles.logo} href="/host" target="_blank">
-          <img src={LogoSpugText} alt="logo"/>
+          <Brand light/>
         </a>
         <div className={styles.hosts}>
           <Spin spinning={fetching}>
@@ -256,7 +252,7 @@ function WebSSH(props) {
           onTabClick={key => setActiveId(key)}
           onEdit={(key, action) => action === 'remove' ? handleRemove(key, 'self') : null}
           style={{background: '#fff', width: `calc(100vw - ${width}px)`}}
-          tabBarExtraContent={hosts.length === 0 ? (
+          tabBarExtraContent={<><LegalLink/>{hosts.length === 0 ? (
             <div className={styles.tips}>{t('小提示：双击标签快速复制窗口，右击标签展开更多操作。')}</div>
           ) : sshMode ? (
             <React.Fragment>
@@ -268,7 +264,7 @@ function WebSSH(props) {
                 icon={<LeftOutlined/>}>{t('文件管理器')}</AuthButton>
               <SkinFilled className={styles.setting} onClick={() => setVisible2(true)}/>
             </React.Fragment>
-          ) : null}
+          ) : null}</>}
           items={hosts.map(item => ({
             key: item.vId,
             label: <TabRender host={item}/>,
@@ -281,7 +277,7 @@ function WebSSH(props) {
             )
           }))}/>
         {hosts.length === 0 && (
-          <pre className={sshMode ? styles.fig : styles.fig2}>{spug_web_terminal}</pre>
+          <pre className={sshMode ? styles.fig : styles.fig2}>{terminalWelcome}</pre>
         )}
       </div>
       <Drawer

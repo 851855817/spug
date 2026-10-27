@@ -127,7 +127,7 @@ class PanelLoginReleaseTests(unittest.TestCase):
                 if values[0] == 'diff':
                     return '\n'.join(['spug_api/' + name for name in (LOGIN, URLS)] + list(UI)).encode()
                 if values[0] == 'ls-files':
-                    return '\n'.join('spug_api/' + name for name in (LOGIN, URLS, PHP, HEALTH)).encode()
+                    return '\0'.join('spug_api/' + name for name in (LOGIN, URLS, PHP, HEALTH)).encode()
                 if values[0] == 'show':
                     return {URLS: b'old urls', PHP: b'php', HEALTH: b'health'}[values[1].split(':spug_api/')[1]]
                 self.fail('unexpected Git command')

@@ -39,6 +39,7 @@ WORKBENCH_UI = {
 BRANDING_UI = {
     'spug_web/src/branding/Brand.js', 'spug_web/src/branding/LegalNotice.js',
     'spug_web/src/branding/source.js', 'spug_web/src/branding/branding.module.css',
+    'spug_web/src/pages/ssh/index.js', 'spug_web/src/pages/ssh/Setting.js',
     'spug_web/src/layout/Sider.js', 'spug_web/src/layout/Header.js', 'spug_web/src/layout/Footer.js',
     'spug_web/src/pages/login/index.js', 'spug_web/src/pages/login/login.module.css',
     'spug_web/src/pages/system/setting/About.js', 'spug_web/public/index.html',
@@ -169,7 +170,8 @@ def main():
     stage = repo.parent / ('upgrade-' + revision[:7])
     stage.mkdir(exist_ok=False)
     shutil.copytree(repo / 'spug_web/build', stage / 'build')
-    for name in git('ls-files', 'spug_api', 'deploy', 'spug_web/public', 'LICENSE').decode().splitlines():
+    # NUL delimiters preserve Git paths containing Chinese characters, spaces or newlines.
+    for name in filter(None, git('ls-files', '-z', 'spug_api', 'deploy', 'spug_web/public', 'LICENSE').decode().split('\0')):
         source = repo / name
         if source.is_symlink():
             raise ValueError('Linked source file')
