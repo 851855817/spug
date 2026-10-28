@@ -2,7 +2,7 @@
 // Static fallback variables also keep the initial frame readable before fetch.
 :root {
   --kops-page: #f0f2f5; --kops-surface: #fff; --kops-raised: #f8fafc;
-  --kops-text: #172b4d; --kops-muted: #53617a; --kops-border: #cbd5e1;
+  --kops-text: #172b4d; --kops-muted: #53617a; --kops-border: #cbd5e1; --kops-border-soft: #e2e8f0;
   --kops-primary: #2563fc; --kops-primary-hover: #1d4ed8; --kops-on-primary: #fff;
   --kops-subtle: #f1f5f9; --kops-selected: #e8efff;
   --kops-sidebar: #101f35; --kops-sidebar-text: #c9d7e7; --kops-sidebar-active: #fff;
@@ -10,6 +10,29 @@
   --kops-warning: #92400e; --kops-warning-bg: #fffbeb;
   --kops-error: #b91c1c; --kops-error-bg: #fef2f2;
   --kops-disabled: #64748b; --kops-shadow: #102a4310;
+}
+// Warm/cool light surfaces must also reach controls rendered outside the page.
+html[data-kops-mode='light'] {
+  .ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-input-number-handler,
+  .ant-picker, .ant-select:not(.ant-select-customize-input) .ant-select-selector,
+  .ant-select-dropdown, .ant-dropdown-menu, .ant-modal-content, .ant-modal-header,
+  .ant-drawer-content, .ant-drawer-header, .ant-popover-inner, .ant-picker-panel-container,
+  .ant-picker-panel, .ant-picker-header, .ant-picker-footer, .ant-picker-time-panel-column,
+  .ant-message-notice-content, .ant-notification-notice, .ant-collapse-content,
+  .ant-btn-default:not(.ant-btn-dangerous):not([disabled]) {
+    background: var(--kops-surface); color: var(--kops-text);
+  }
+  .ant-input, .ant-input-affix-wrapper, .ant-input-number, .ant-picker,
+  .ant-select:not(.ant-select-customize-input) .ant-select-selector,
+  .ant-btn-default:not(.ant-btn-dangerous):not([disabled]) { border-color: var(--kops-border); }
+  .ant-input[disabled], .ant-input-affix-wrapper-disabled, .ant-input-number-disabled,
+  .ant-picker-disabled, .ant-select-disabled:not(.ant-select-customize-input) .ant-select-selector {
+    background: var(--kops-subtle); color: var(--kops-disabled);
+  }
+  .ant-input:focus, .ant-input-focused, .ant-input-affix-wrapper-focused, .ant-input-number-focused,
+  .ant-picker-focused { border-color: var(--kops-primary); }
+  .ant-select-item-option-active:not(.ant-select-item-option-disabled),
+  .ant-dropdown-menu-item:hover { background: var(--kops-subtle); }
 }
 body, .ant-layout { color: var(--kops-text); background: var(--kops-page); }
 .ant-layout-sider, .ant-menu.ant-menu-dark, .ant-menu-dark .ant-menu-sub, .ant-layout-sider-trigger {

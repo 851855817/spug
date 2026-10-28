@@ -18,7 +18,8 @@ from apps.setting.utils import AppSetting
 PUBLIC_URL = '/setting/appearance/public/'
 ADMIN_URL = '/setting/appearance/'
 DEFAULT = {'version': 1, 'preset': 'classic-blue', 'revision': 'default'}
-PRESETS = ('classic-blue', 'jade', 'indigo', 'graphite', 'night')
+PRESETS = ('classic-blue', 'jade', 'indigo', 'graphite', 'night', 'obsidian-gold',
+           'midnight-teal', 'moonlit-violet', 'porcelain', 'pine-mist', 'champagne')
 
 
 def make_user(username, token, **fields):

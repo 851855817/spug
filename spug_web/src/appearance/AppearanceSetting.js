@@ -22,6 +22,8 @@ export default function AppearanceSetting({store=appearanceStore}) {
       okText:'恢复并应用',cancelText:'取消',onOk:()=>apply('classic-blue',revision)});
   }
   function reload() {setDraft(null);setError('');store.refresh();}
+  const groups=[{name:'商务精选',presets:PRESETS.filter(row=>row.collection==='refined')},
+    {name:'经典配色',presets:PRESETS.filter(row=>row.collection!=='refined')}];
   return <section aria-label="外观配色" className={styles.settings}>
     <h2>外观配色</h2>
     <p className={styles.subtitle}>管理员统一设置，所有账号使用相同配色。选择模板可预览，应用后全站生效。</p>
@@ -30,17 +32,19 @@ export default function AppearanceSetting({store=appearanceStore}) {
       action={<Button onClick={reload} disabled={state.saving}>重新载入</Button>}/>}
     <fieldset className={styles.choices} disabled={!state.loaded||state.saving}>
       <legend>选择配色模板</legend>
-      <div className={styles.grid}>{PRESETS.map(preset=><label key={preset.id}
+      {groups.map(group=><div key={group.name}><h3 className={styles.groupTitle}>{group.name}</h3>
+      <div className={styles.grid}>{group.presets.map(preset=><label key={preset.id}
         className={`${styles.choice} ${selected.id===preset.id ? styles.selected : ''}`}>
-        <div className={styles.swatches} aria-hidden="true">
-          <i style={{background:preset.colors.sidebar}}/><i style={{background:preset.colors.primary}}/>
-          <i style={{background:preset.colors.page}}/><i style={{background:preset.colors.surface}}/>
+        <div className={styles.swatches} style={themeVariables(preset.id)} aria-hidden="true">
+          <div className={styles.swatchSidebar}><b/><i/><i/><i/></div>
+          <div className={styles.swatchCanvas}><header/><div className={styles.swatchCards}><i/><i/></div>
+            <div className={styles.swatchTable}><i/><i/><i/></div></div>
         </div>
         <div className={styles.choiceName}><input type="radio" name="site-palette" value={preset.id} checked={selected.id===preset.id}
           onChange={()=>{setDraft({preset:preset.id,revision:state.current.revision});setError('');}}/>
-          <span>{preset.name}</span>{current.id===preset.id && <small>使用中</small>}</div>
+          <span>{preset.name}</span><small>{current.id===preset.id ? '使用中' : preset.mode==='dark' ? '深色' : '浅色'}</small></div>
         <p>{preset.description}</p>
-      </label>)}</div>
+      </label>)}</div></div>)}
     </fieldset>
     <div className={styles.previewTitle}>配色预览 <small>示例数据</small></div>
     <div className={styles.preview} style={themeVariables(selected.id)} aria-label={`${selected.name}配色预览`}>

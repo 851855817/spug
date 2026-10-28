@@ -14,7 +14,8 @@ from libs import json_response
 
 
 SETTING_KEY = 'ui_appearance'
-PRESETS = frozenset(('classic-blue', 'jade', 'indigo', 'graphite', 'night'))
+PRESETS = frozenset(('classic-blue', 'jade', 'indigo', 'graphite', 'night', 'obsidian-gold',
+                     'midnight-teal', 'moonlit-violet', 'porcelain', 'pine-mist', 'champagne'))
 DEFAULT = {'version': 1, 'preset': 'classic-blue', 'revision': 'default'}
 REVISION = re.compile(r'[0-9a-f]{32}')
 CONFLICT = '外观配置已发生变化，请重新读取后确认并应用。'

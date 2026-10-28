@@ -28,7 +28,8 @@ APPEARANCE_MODULE = 'apps/setting/appearance.py'
 APPEARANCE_MODULES = (APPEARANCE_MODULE, 'apps/setting/urls.py', 'spug/settings.py')
 PROFILES = {'php-update': MODULE, 'host-report': HEALTH_MODULE, 'operations-ui': None, 'task-results-ui': None,
             'panel-login': LOGIN_MODULES, 'inventory-filters': 'apps/baota/inventory/service.py', 'workbench-ui': None, 'branding-ui': None, 'personal-reminders-ui': None, 'inventory-role-presets-ui': None,
-            'ssl-renew-diagnostics': 'apps/baota/operations/certificates.py', 'site-appearance': APPEARANCE_MODULES}
+            'ssl-renew-diagnostics': 'apps/baota/operations/certificates.py', 'site-appearance': APPEARANCE_MODULES,
+            'refined-palettes': APPEARANCE_MODULE}
 MAINTENANCE = ('nginx', 'spug-api', 'spug-ws', 'spug-panel-worker',
                'spug-ops-worker', 'spug-scheduler')
 PRESERVED = ('redis', 'spug-worker', 'spug-monitor')
@@ -241,7 +242,7 @@ def load_stage(stage, revision, previous):
     bind_stage_to_archive(stage, archive)
     profile = release.get('profile', 'php-update')
     require(isinstance(profile, str) and profile in PROFILES, 'release-profile-invalid')
-    if profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance'):
+    if profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'refined-palettes'):
         baseline_id = checks.get('baseline_image_id')
         require(isinstance(baseline_id, str) and re.fullmatch('sha256:[0-9a-f]{64}', baseline_id) and
                 baseline_id != checks['image_id'] and valid_sha(checks.get('unchanged_api_tree_sha256')),
@@ -261,7 +262,7 @@ def load_stage(stage, revision, previous):
             require(isinstance(hashes, dict) and set(hashes) == ({module} if module else set()) and
                     all(valid_sha(v) for v in hashes.values()), 'api-overlay-must-match-profile')
     preserved = release.get('preserved_api_sha256', {})
-    expected_preserved = ({MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance') else
+    expected_preserved = ({MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'refined-palettes') else
                           {MODULE} if profile == 'host-report' else set())
     require(isinstance(preserved, dict) and set(preserved) == expected_preserved and
             all(valid_sha(value) for value in preserved.values()), 'preserved-api-manifest-invalid')
@@ -654,7 +655,7 @@ class DockerHost:
         require(label == revision, 'prepared-image-revision-mismatch')
         image_id = self.run(['docker', 'image', 'inspect', '--format', '{{.Id}}', self.release['image']])
         require(image_id == self.release['prepared_image_id'], 'prepared-image-id-mismatch')
-        if self.release.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance'):
+        if self.release.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'refined-palettes'):
             baseline_id = self.run(['docker', 'image', 'inspect', '--format', '{{.Id}}',
                                     'spug-baota:' + previous[:7]])
             require(baseline_id == self.release['prepared_baseline_image_id'], 'prepared-baseline-image-id-mismatch')
