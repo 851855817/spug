@@ -39,6 +39,7 @@ APPEARANCE_UI = {
     'spug_web/src/appearance/presets.js', 'spug_web/src/appearance/store.js',
     'spug_web/src/appearance/Provider.js', 'spug_web/src/appearance/AppearanceSetting.js',
     'spug_web/src/appearance/appearance.module.css', 'spug_web/src/appearance/theme.less',
+    'spug_web/src/appearance/antd.dark.less',
     'spug_web/src/branding/branding.module.css',
     'spug_web/src/components/ResizableTable.less', 'spug_web/src/components/index.module.less',
     'spug_web/src/components/reminderDismiss.module.css', 'spug_web/src/layout/layout.module.less',
