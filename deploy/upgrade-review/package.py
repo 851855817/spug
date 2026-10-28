@@ -179,7 +179,7 @@ def validate_runtime_changes(names, profile='php-update'):
         api = {name for name in names if name.startswith('spug_api/')}
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
         if api or ui != BRANDING_CLEANUP_UI:
-            raise ValueError('Branding cleanup only accepts the fixed fifteen UI changes and no API files')
+            raise ValueError('Branding cleanup only accepts the fixed sixteen UI changes and no API files')
     elif profile == 'refined-palettes':
         runtime = {name for name in names if name.startswith('spug_api/')} - {'spug_api/apps/setting/test_appearance.py'}
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
