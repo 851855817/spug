@@ -15,11 +15,11 @@ export default observer(function () {
   function handleSubmit() {
     Modal.confirm({
       title: t('密钥修改确认'),
-      content: <span style={{color: '#f5222d'}}>{t('请谨慎修改密钥对，修改密钥对可能会让现有的主机都无法进行验证，影响与主机相关的各项功能！')}</span>,
+      content: <span style={{color: 'var(--kops-error)'}}>{t('请谨慎修改密钥对，修改密钥对可能会让现有的主机都无法进行验证，影响与主机相关的各项功能！')}</span>,
       onOk: () => {
         Modal.confirm({
           title: t('小提示'),
-          content: <div>{t('修改密钥对需要')}<span style={{color: '#f5222d'}}>{t('重启服务后生效')}</span>{t('，已添加的主机可能需要重新进行编辑验证后才可以正常连接。')}</div>,
+          content: <div>{t('修改密钥对需要')}<span style={{color: 'var(--kops-error)'}}>{t('重启服务后生效')}</span>{t('，已添加的主机可能需要重新进行编辑验证后才可以正常连接。')}</div>,
           onOk: doModify
         })
       }

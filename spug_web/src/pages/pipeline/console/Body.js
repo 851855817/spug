@@ -125,17 +125,17 @@ function Body() {
 
         {['build', 'ssh_exec', 'data_transfer', 'data_upload'].includes(S.node.module) && S.outputs[S.nodeID]?.status === 'processing' ? (
           <Popconfirm title={t('确定要终止执行？')} onConfirm={handleTerminate}>
-            <StopOutlined className={css.icon} style={{color: '#faad14'}}/>
+            <StopOutlined className={css.icon} style={{color: 'var(--kops-warning)'}}/>
           </Popconfirm>
         ) : (
-          <StopOutlined className={css.icon} style={{color: '#dfdfdf'}}/>
+          <StopOutlined className={css.icon} style={{color: 'var(--kops-muted)'}}/>
         )}
         {['build', 'ssh_exec', 'data_transfer', 'data_upload'].includes(S.node.module) ? (
           <Tooltip title={t('打开web终端')}>
             <CodeOutlined className={css.icon} onClick={() => openTerminal()}/>
           </Tooltip>
         ) : (
-          <CodeOutlined className={css.icon} style={{color: '#dfdfdf'}}/>
+          <CodeOutlined className={css.icon} style={{color: 'var(--kops-muted)'}}/>
         )}
       </div>
       {['ssh_exec', 'data_transfer', 'data_upload'].includes(S.node?.module) && (

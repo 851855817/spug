@@ -185,9 +185,9 @@ function OutView(props) {
             <div key={key} className={[style.item, key === current ? style.active : ''].join(' ')}
                  onClick={() => handleSwitch(key)}>
               {item.status === -2 ? (
-                <LoadingOutlined style={{color: '#1890ff'}}/>
+                <LoadingOutlined style={{color: 'var(--kops-primary)'}}/>
               ) : item.status === 0 ? (
-                <CheckCircleOutlined style={{color: '#52c41a'}}/>
+                <CheckCircleOutlined style={{color: 'var(--kops-success)'}}/>
               ) : (
                 <ExclamationCircleOutlined style={{color: 'red'}}/>
               )}
@@ -203,19 +203,19 @@ function OutView(props) {
             {cItem.status === 0 ? t('执行成功') : cItem.status === -2 ? t('执行中') : cItem.status === -1 ? t('结果待核实') : Number.isInteger(cItem.status) ? `${t('执行失败')} (${cItem.status})` : t('待核实')}
           </Tag>
           {loading ? (
-            <LoadingOutlined className={style.icon} style={{color: '#faad14'}}/>
+            <LoadingOutlined className={style.icon} style={{color: 'var(--kops-warning)'}}/>
           ) : (
             <Tooltip title={t('终止执行')}>
               {cItem.status === -2 ? (
-                <StopOutlined className={style.icon} style={{color: '#faad14'}} onClick={handleTerminate}/>
+                <StopOutlined className={style.icon} style={{color: 'var(--kops-warning)'}} onClick={handleTerminate}/>
               ) : (
-                <StopOutlined className={style.icon} style={{color: '#dfdfdf'}}/>
+                <StopOutlined className={style.icon} style={{color: 'var(--kops-muted)'}}/>
               )}
             </Tooltip>
           )}
           {failedKeys.includes(current) && (
             <Tooltip title={t('重试')}>
-              <RedoOutlined className={style.icon} style={{color: '#ff4d4f'}} onClick={() => handleRetry([current])}/>
+              <RedoOutlined className={style.icon} style={{color: 'var(--kops-error)'}} onClick={() => handleRetry([current])}/>
             </Tooltip>
           )}
           <Tooltip title={t('打开web终端')}>

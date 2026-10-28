@@ -5,7 +5,7 @@
     left: 0;
     right: 0;
     padding: 8px 16px 0 16px;
-    background: #f0f0f0;
+    background: var(--kops-border);
     display: flex;
     flex-direction: row;
     align-items: flex-end;
@@ -27,13 +27,13 @@
       }
 
       &:hover {
-        color: #2563fc;
+        color: var(--kops-primary);
       }
     }
 
     .active {
-      background: #ffffff;
-      color: #2563fc;
+      background: var(--kops-surface);
+      color: var(--kops-primary);
     }
   }
 
@@ -52,9 +52,9 @@
     bottom: 0;
     left: 0;
     right: 0;
-    border-top: 1px solid #dfdfdf;
+    border-top: 1px solid var(--kops-border);
     padding: 8px 18px;
-    background-color: #ffffff;
+    background-color: var(--kops-surface);
     z-index: 99;
   }
 
@@ -89,9 +89,9 @@
     }
 
     .item:hover, .active {
-      border-color: #4d8ffd;
-      background: #f5faff;
-      color: #2563fc;
+      border-color: var(--kops-primary);
+      background: var(--kops-selected);
+      color: var(--kops-primary);
     }
   }
 }

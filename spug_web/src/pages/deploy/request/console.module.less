@@ -9,20 +9,20 @@
     line-height: 56px;
     text-align: center;
     cursor: pointer;
-    color: rgba(0, 0, 0, .45);
+    color: var(--kops-muted);
     margin-right: 56px;
 
     &:hover {
-      color: #000000bf;
+      color: var(--kops-text);
     }
   }
 }
 
 .miniCard {
   width: 180px;
-  box-shadow: 0 0 8px rgba(0, 0, 0, .2);
+  box-shadow: 0 0 8px var(--kops-shadow);
   border-radius: 5px;
-  border: 1px solid #d9d9d9;
+  border: 1px solid var(--kops-border);
 
   .header {
     display: flex;
@@ -41,11 +41,11 @@
 
     .icon {
       font-size: 16px;
-      color: rgba(0, 0, 0, .45);
+      color: var(--kops-muted);
     }
 
     .icon:hover {
-      color: #000;
+      color: var(--kops-text);
     }
   }
 
@@ -62,7 +62,7 @@
       cursor: pointer;
 
       &.active {
-        background: #e6f7ff;
+        background: var(--kops-selected);
       }
 
       :global(.anticon) {
@@ -80,14 +80,14 @@
     }
 
     .item:hover {
-      background: #e6f7ff;
+      background: var(--kops-selected);
     }
   }
 }
 
 .output {
   display: flex;
-  background-color: #fff;
+  background-color: var(--kops-surface);
   height: calc(100vh - 218px);
   overflow: hidden;
 
@@ -95,7 +95,7 @@
     display: flex;
     flex-direction: column;
     width: 250px;
-    border-right: 1px solid #dfdfdf;
+    border-right: 1px solid var(--kops-border);
 
     .title {
       margin: 16px 16px 12px 16px;
@@ -114,7 +114,7 @@
         cursor: pointer;
 
         &.active {
-          background: #e6f7ff;
+          background: var(--kops-selected);
         }
 
         :global(.anticon) {
@@ -131,7 +131,7 @@
       }
 
       .item:hover {
-        background: #e6f7ff;
+        background: var(--kops-selected);
       }
     }
   }
@@ -150,7 +150,7 @@
 
       .icon {
         font-size: 18px;
-        color: #1890ff;
+        color: var(--kops-primary);
         cursor: pointer;
         margin-left: 12px;
       }

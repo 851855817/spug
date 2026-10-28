@@ -20,13 +20,13 @@ let timer;
 function Icon(props) {
   switch (props.type) {
     case 'monitor':
-      return <MonitorOutlined style={{fontSize: 24, color: '#1890ff'}}/>
+      return <MonitorOutlined style={{fontSize: 24, color: 'var(--kops-primary)'}}/>
     case 'schedule':
-      return <ScheduleOutlined style={{fontSize: 24, color: '#1890ff'}}/>
+      return <ScheduleOutlined style={{fontSize: 24, color: 'var(--kops-primary)'}}/>
     case 'flag':
-      return <FlagOutlined style={{fontSize: 24, color: '#1890ff'}}/>
+      return <FlagOutlined style={{fontSize: 24, color: 'var(--kops-primary)'}}/>
     case 'alert':
-      return <AlertOutlined style={{fontSize: 24, color: '#ff4d4f'}}/>
+      return <AlertOutlined style={{fontSize: 24, color: 'var(--kops-error)'}}/>
     default:
       return null
   }
@@ -143,7 +143,7 @@ export default function () {
                   <List.Item.Meta
                     style={{opacity: reads.includes(item.id) ? 0.4 : 1}}
                     avatar={<Icon type={item.source}/>}
-                    title={<span style={{fontWeight: 400, color: '#404040'}}>{t(item.title)}</span>}
+                    title={<span style={{fontWeight: 400, color: 'var(--kops-text)'}}>{t(item.title)}</span>}
                     description={[
                       <div key="1" style={{fontSize: 12, overflowWrap: 'anywhere'}}>{t(item.content)}</div>,
                       <div key="2" style={{fontSize: 12}}>{moment(item['created_at']).fromNow()}

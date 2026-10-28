@@ -106,13 +106,13 @@ function NoticeIndex(props) {
         <List>
           {records.map(item => (
             <List.Item key={item.id} className={styles.item} onClick={() => setNotice(item)}>
-              {!item.read_ids.includes(id) && <SoundOutlined style={{color: '#ff4d4f', marginRight: 4}}/>}
+              {!item.read_ids.includes(id) && <SoundOutlined style={{color: 'var(--kops-error)', marginRight: 4}}/>}
               <span className={styles.title}>{item.title}</span>
               <span className={styles.date}>{item.created_at.substr(0, 10)}</span>
             </List.Item>
           ))}
           {records.length === 0 && (
-            <div style={{marginTop: 12, color: '#999'}}>{t('暂无公告信息')}</div>
+            <div style={{marginTop: 12, color: 'var(--kops-muted)'}}>{t('暂无公告信息')}</div>
           )}
         </List>
       )}

@@ -130,19 +130,19 @@ export default observer(function Console() {
           {status === 'error' ? (
             <ExclamationCircleOutlined style={{color: 'red'}}/>
           ) : status === 'success' ? (
-            <CheckCircleOutlined style={{color: '#52c41a'}}/>
+            <CheckCircleOutlined style={{color: 'var(--kops-success)'}}/>
           ) : (
-            <LoadingOutlined style={{color: '#1890ff'}}/>
+            <LoadingOutlined style={{color: 'var(--kops-primary)'}}/>
           )}
           <div style={{flex: 1}}/>
           {loading ? (
-            <LoadingOutlined className={styles.icon} style={{color: '#faad14'}}/>
+            <LoadingOutlined className={styles.icon} style={{color: 'var(--kops-warning)'}}/>
           ) : (
             <Tooltip title={t('终止构建')}>
               {status === 'doing' ? (
-                <StopOutlined style={{color: '#faad14'}} onClick={handleTerminate}/>
+                <StopOutlined style={{color: 'var(--kops-warning)'}} onClick={handleTerminate}/>
               ) : (
-                <StopOutlined style={{color: '#dfdfdf'}}/>
+                <StopOutlined style={{color: 'var(--kops-muted)'}}/>
               )}
             </Tooltip>
           )}

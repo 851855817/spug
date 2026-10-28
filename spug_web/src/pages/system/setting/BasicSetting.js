@@ -32,7 +32,7 @@ export default observer(function () {
           label={t('调用凭据')}
           labelCol={{span: 24}}
           extra={<span>{t('如需要使用Spug的邮件、微信和MFA等内置服务，请关注公众号')}
-              <span style={{color: '#008dff', cursor: 'pointer'}}>
+              <span style={{color: 'var(--kops-primary)', cursor: 'pointer'}}>
                   <Popover content={spugWx}>
                     <span>Spug</span>
                   </Popover>

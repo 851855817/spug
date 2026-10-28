@@ -229,7 +229,7 @@ function WebSSH(props) {
         </a>
         <div className={styles.hosts}>
           <Spin spinning={fetching}>
-            <Input allowClear className={styles.search} prefix={<SearchOutlined style={{color: '#999'}}/>}
+            <Input allowClear className={styles.search} prefix={<SearchOutlined style={{color: 'var(--kops-muted)'}}/>}
                    placeholder={t('输入主机名/IP检索')} onChange={e => setSearchValue(e.target.value)}/>
             <Button icon={<SyncOutlined/>} type="link" loading={fetching} onClick={fetchNodes}/>
             {treeData.length > 0 ? (
@@ -251,7 +251,7 @@ function WebSSH(props) {
           type="editable-card"
           onTabClick={key => setActiveId(key)}
           onEdit={(key, action) => action === 'remove' ? handleRemove(key, 'self') : null}
-          style={{background: '#fff', width: `calc(100vw - ${width}px)`}}
+          style={{background: 'var(--kops-surface)', width: `calc(100vw - ${width}px)`}}
           tabBarExtraContent={<><LegalLink/>{hosts.length === 0 ? (
             <div className={styles.tips}>{t('小提示：双击标签快速复制窗口，右击标签展开更多操作。')}</div>
           ) : sshMode ? (

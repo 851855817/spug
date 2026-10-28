@@ -74,7 +74,7 @@ export default function Editor({asset, mode, options, onClose, onSaved}) {
         onChange={setFollowup} options={[{value: 'pending', label: '待跟进'}, {value: 'contacted', label: '已联系'}]}/></Form.Item>
       <Form.Item label="无需到期管理"><Switch aria-label="无需到期管理" checked={exempt} onChange={setExempt} disabled={saving}/></Form.Item>
       <Form.Item label="开启站内提醒"><Switch aria-label="开启站内提醒" checked={reminder} onChange={setReminder} disabled={saving || exempt}/>
-        <div style={{color: '#888', marginTop: 6}}>默认关闭，开启后每日 09:00 检查；仅管理员可见。</div></Form.Item>
+        <div style={{color: 'var(--kops-muted)', marginTop: 6}}>默认关闭，开启后每日 09:00 检查；仅管理员可见。</div></Form.Item>
     </>}
     <Form.Item label={renew ? '续费备注' : '备注'}><Input.TextArea aria-label={renew ? '续费备注' : '备注'} value={note}
       onChange={event => setNote(event.target.value)} maxLength={500} rows={3} disabled={saving}/></Form.Item>

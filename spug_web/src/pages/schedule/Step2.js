@@ -86,9 +86,9 @@ export default observer(function (props) {
           .then(res => {
             if (fetchId !== lastFetchId) return;
             if (res.success) {
-              setNextRunTime(<span style={{fontSize: 12, color: '#52c41a'}}>{res.msg}</span>)
+              setNextRunTime(<span style={{fontSize: 12, color: 'var(--kops-success)'}}>{res.msg}</span>)
             } else {
-              setNextRunTime(<span style={{fontSize: 12, color: '#ff4d4f'}}>{res.msg}</span>)
+              setNextRunTime(<span style={{fontSize: 12, color: 'var(--kops-error)'}}>{res.msg}</span>)
             }
           })
       } else {

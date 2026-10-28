@@ -184,7 +184,7 @@ export default observer(function () {
                           overflow: 'hidden',
                           textOverflow: 'ellipsis'
                         }}>{`${tag} ${info.author} ${info.message}`}</span>
-                        <span style={{color: '#999', fontSize: 12}}>{info['date']} </span>
+                        <span style={{color: 'var(--kops-muted)', fontSize: 12}}>{info['date']} </span>
                       </div>
                     </Select.Option>
                   ))
@@ -194,7 +194,7 @@ export default observer(function () {
                                    disabled={type === '2' && item.id >= rb_id}>
                       <div style={{display: 'flex', justifyContent: 'space-between'}}>
                         <span>{item.env_name} - {item.version}</span>
-                        <span style={{color: '#999', fontSize: 12}}>{t('构建于')} {moment(item.created_at).fromNow()}</span>
+                        <span style={{color: 'var(--kops-muted)', fontSize: 12}}>{t('构建于')} {moment(item.created_at).fromNow()}</span>
                       </div>
                     </Select.Option>
                   ))
@@ -203,7 +203,7 @@ export default observer(function () {
             </Input.Group>
           </Form.Item>
           <Form.Item style={{display: 'inline-block', width: 82, textAlign: 'center', marginBottom: 0}}>
-            {fetching ? <LoadingOutlined style={{fontSize: 18, color: '#1890ff'}}/> :
+            {fetching ? <LoadingOutlined style={{fontSize: 18, color: 'var(--kops-primary)'}}/> :
               <Button type="link" icon={<SyncOutlined/>} disabled={fetching} onClick={fetchVersions}>{t('刷新')}</Button>
             }
           </Form.Item>
@@ -219,7 +219,7 @@ export default observer(function () {
                       overflow: 'hidden',
                       textOverflow: 'ellipsis'
                     }}>{item.id.substr(0, 6)} {item['author']} {item['message']}</span>
-                    <span style={{color: '#999', fontSize: 12}}>{item['date']} </span>
+                    <span style={{color: 'var(--kops-muted)', fontSize: 12}}>{item['date']} </span>
                   </div>
                 </Select.Option>
               )) : null}
@@ -244,7 +244,7 @@ export default observer(function () {
               format="YYYY-MM-DD HH:mm"
               placeholder={t('请设置发布时间')}
               onChange={setPlan}/>
-            {plan ? <span style={{marginLeft: 24, fontSize: 12, color: '#888'}}>{t('大约 {}', plan.fromNow())}</span> : null}
+            {plan ? <span style={{marginLeft: 24, fontSize: 12, color: 'var(--kops-muted)'}}>{t('大约 {}', plan.fromNow())}</span> : null}
           </Form.Item>
         )}
       </Form>
