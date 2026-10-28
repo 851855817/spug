@@ -177,7 +177,7 @@ jobs:
             -e BAOTA_CI_DB_HOST=baota-ci-db -e BAOTA_CI_DB_PASSWORD=disposable-ci-password \
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test apps.baota.test_tasks apps.baota.test_batches apps.baota.test_upload_store apps.baota.test_upload_tasks apps.baota.test_resource_monitor apps.ops.tests apps.ops.test_result_counts apps.ops.expiry.tests apps.baota.inventory.tests --settings=spug.baota_ci_settings --noinput
+            manage.py test apps.baota.test_tasks apps.baota.test_batches apps.baota.test_upload_store apps.baota.test_upload_tasks apps.baota.test_resource_monitor apps.setting.test_appearance apps.ops.tests apps.ops.test_result_counts apps.ops.expiry.tests apps.baota.inventory.tests --settings=spug.baota_ci_settings --noinput
       - name: Remove disposable database
         if: always()
         run: |
