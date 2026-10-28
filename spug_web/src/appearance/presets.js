@@ -53,7 +53,7 @@ export const PRESETS = [
     sidebar:'#182D25',sidebarText:'#C8D9CE',shadow:'#17362712',
   }},
   {id:'champagne',name:'香槟砂',description:'浅砂岩底 · 克制古铜金',mode:'light',collection:'refined',colors:{...light,
-    primary:'#80623A',primaryHover:'#654D2E',page:'#F3F0E8',surface:'#FFFEFA',raised:'#F8F5EC',
+    primary:'#785B35',primaryHover:'#654D2E',page:'#F3F0E8',surface:'#FFFEFA',raised:'#F8F5EC',
     text:'#393429',muted:'#6B6251',border:'#D8CFBC',borderSoft:'#E7E0D2',subtle:'#F0EADC',selected:'#EBE1CA',
     sidebar:'#2C291F',sidebarText:'#E0D7C3',shadow:'#39301812',
   }},

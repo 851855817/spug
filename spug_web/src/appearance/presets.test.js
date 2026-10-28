@@ -20,6 +20,9 @@ test('existing and six refined palettes preserve readable text, links and filled
       expect(contrast(colors.muted,colors[surface])).toBeGreaterThanOrEqual(4.5);
     }
     expect(contrast(colors.primary,colors.surface)).toBeGreaterThanOrEqual(4.5);
+    if(preset.collection==='refined') for(const surface of ['page','raised','subtle','selected']) {
+      expect(contrast(colors.primary,colors[surface])).toBeGreaterThanOrEqual(4.5);
+    }
     expect(contrast(colors.onPrimary,colors.primary)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(colors.onPrimary,colors.primaryHover)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(colors.sidebarText,colors.sidebar)).toBeGreaterThanOrEqual(4.5);
