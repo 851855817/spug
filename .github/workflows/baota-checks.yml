@@ -16,6 +16,7 @@ on:
       - 'spug_api/apps/setting/test_appearance.py'
       - 'spug_api/apps/setting/urls.py'
       - 'spug_api/spug/test_*.py'
+      - 'spug_web/src/**'
       - 'spug_web/src/pages/baota/**'
       - 'spug_web/src/pages/exec/panel/**'
       - 'spug_web/src/pages/exec/operations/**'
