@@ -3,7 +3,7 @@
  * Copyright (c) <spug.dev@gmail.com>
  * Released under the AGPL-3.0 License.
  */
-import React  from 'react';
+import React, {useState} from 'react';
 import { observer } from 'mobx-react';
 import { Form, Popover, Input, Button, message } from 'antd';
 import styles from './index.module.css';
@@ -11,6 +11,7 @@ import { http, t } from 'libs';
 import store from './store';
 
 export default observer(function () {
+  const [showProvider,setShowProvider] = useState(false);
   function handleSubmit() {
     const spug_key = store.settings.spug_key;
     if (!spug_key) return message.error(t('请输入调用凭据'));
@@ -23,7 +24,7 @@ export default observer(function () {
       .finally(() => store.loading = false)
   }
 
-  const spugWx = <img src="https://cdn.spug.cc/img/spug-weixin.jpeg" alt='spug'/>;
+  const spugWx = <img src="https://cdn.spug.cc/img/spug-weixin.jpeg" alt="Spug 服务商公众号"/>;
   return (
     <React.Fragment>
       <div className={styles.title}>{t('基本设置')}</div>
@@ -31,17 +32,20 @@ export default observer(function () {
         <Form.Item
           label={t('调用凭据')}
           labelCol={{span: 24}}
-          extra={<span>{t('如需要使用Spug的邮件、微信和MFA等内置服务，请关注公众号')}
+          extra={<div>{t('仅使用外部邮件、微信和 MFA 服务时填写，无需使用请留空。')}
+            <Button type="link" style={{padding: 0}} onClick={()=>setShowProvider(!showProvider)}
+              aria-expanded={showProvider}>{t('服务商信息与凭据获取')}</Button>
+            {showProvider && <div>{t('如需要使用Spug的邮件、微信和MFA等内置服务，请关注公众号')}
               <span style={{color: 'var(--kops-primary)', cursor: 'pointer'}}>
                   <Popover content={spugWx}>
                     <span>Spug</span>
                   </Popover>
               </span>
-              {t('在【我的】页面获取调用凭据，否则请留空。')}</span>}>
+              {t('在【我的】页面获取调用凭据，否则请留空。')}</div>}</div>}>
           <Input
             value={store.settings.spug_key}
             onChange={e => store.update('spug_key', e.target.value)}
-            placeholder={t('请输入Spug微信公众号获取到的Token')}/>
+            placeholder={t('请输入服务商提供的调用凭据')}/>
         </Form.Item>
         <Form.Item style={{marginTop: 24}}>
           <Button type="primary" loading={store.loading} onClick={handleSubmit}>{t('保存设置')}</Button>

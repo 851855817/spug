@@ -126,6 +126,24 @@ BRANDING_UI = {
     'spug_web/public/kops-20261027/favicon.svg', 'spug_web/public/kops-20261027/manifest.json',
     'spug_web/public/kops-20261027/LICENSE.txt',
 }
+BRANDING_CLEANUP_UI = {
+    'spug_web/src/branding/LegalNotice.js',
+    'spug_web/src/pages/system/setting/About.js',
+    'spug_web/src/pages/system/setting/BasicSetting.js',
+    'spug_web/src/pages/system/setting/KeySetting.js',
+    'spug_web/src/pages/system/setting/LDAPSetting.js',
+    'spug_web/src/pages/baota/PanelForm.js',
+    'spug_web/src/pages/host/Import.js',
+    'spug_web/src/pages/schedule/Step3.js',
+    'spug_web/src/pages/deploy/app/AddSelect.js',
+    'spug_web/src/pages/deploy/app/Ext1Setup2.js',
+    'spug_web/src/pages/deploy/app/Ext1Setup3.js',
+    'spug_web/src/pages/deploy/app/Ext2Setup2.js',
+    'spug_web/src/locales/en/system_setting.js',
+    'spug_web/src/locales/en/host.js',
+    'spug_web/src/locales/en/schedule.js',
+    'spug_web/src/locales/en/deploy_app.js',
+}
 PERSONAL_REMINDERS_UI = {
     'spug_web/src/components/personalReminders.js', 'spug_web/src/components/ReminderDismiss.js',
     'spug_web/src/components/reminderDismiss.module.css', 'spug_web/src/pages/home/Todo.js',
@@ -137,7 +155,7 @@ INVENTORY_ROLE_PRESETS_UI = {INVENTORY_UI, 'spug_web/src/pages/system/role/PageP
 PROFILES = {'php-update': API_FILE, 'host-report': HEALTH_FILE, 'operations-ui': None, 'task-results-ui': None,
             'panel-login': LOGIN_MODULES, 'inventory-filters': INVENTORY_FILE, 'workbench-ui': None, 'branding-ui': None, 'personal-reminders-ui': None, 'inventory-role-presets-ui': None,
             'ssl-renew-diagnostics': SSL_FILE, 'site-appearance': APPEARANCE_MODULES,
-            'refined-palettes': APPEARANCE_FILE}
+            'refined-palettes': APPEARANCE_FILE, 'branding-cleanup-ui': None}
 HELPERS = ('apply-expiry.py', 'deploy-compact-ui.py', 'fingerprint.py', 'release_safety.py')
 
 
@@ -157,7 +175,12 @@ def validate_runtime_changes(names, profile='php-update'):
     module = profile_module(profile)
     runtime = {name for name in names if name.startswith('spug_api/')
                and not Path(name).name.startswith('test')}
-    if profile == 'refined-palettes':
+    if profile == 'branding-cleanup-ui':
+        api = {name for name in names if name.startswith('spug_api/')}
+        ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
+        if api or ui != BRANDING_CLEANUP_UI:
+            raise ValueError('Branding cleanup only accepts the fixed fifteen UI changes and no API files')
+    elif profile == 'refined-palettes':
         runtime = {name for name in names if name.startswith('spug_api/')} - {'spug_api/apps/setting/test_appearance.py'}
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
         if runtime != {'spug_api/' + APPEARANCE_FILE} or ui != REFINED_PALETTES_UI:
@@ -215,8 +238,8 @@ def write_manifests(stage, revision, previous_revision, previous_content,
         api_hashes = {module: sha256(stage / 'source/spug_api' / module)} if module else {}
         previous_hashes = {module: hashlib.sha256(previous_content).hexdigest()} if module else {}
     preserved_hashes = {}
-    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'refined-palettes'):
-        if ((profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui') and previous_content is not None) or not isinstance(preserved_content, dict) or
+    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'refined-palettes', 'branding-cleanup-ui'):
+        if ((profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'branding-cleanup-ui') and previous_content is not None) or not isinstance(preserved_content, dict) or
                 set(preserved_content) != {API_FILE, HEALTH_FILE} or
                 not all(isinstance(value, bytes) for value in preserved_content.values())):
             raise ValueError('Missing fixed UI baseline module contents')
@@ -308,7 +331,7 @@ def main():
                        git('show', previous + ':spug_api/apps/baota/urls.py').replace(b'\r\n', b'\n')}
     else:
         old_content = git('show', previous + ':spug_api/' + module).replace(b'\r\n', b'\n') if module else None
-    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'refined-palettes'):
+    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'refined-palettes', 'branding-cleanup-ui'):
         preserved_content = {name: git('show', previous + ':spug_api/' + name).replace(b'\r\n', b'\n')
                              for name in (API_FILE, HEALTH_FILE)}
     else:

@@ -23,14 +23,16 @@ test('the compact brand keeps its accessible name without overflowing the collap
 test('legal and source notices are usable without authentication, permission checks or API calls', () => {
   localStorage.clear();
   act(() => {ReactDOM.render(<LegalNotice/>, container);});
-  expect(container.textContent).toContain('基于 Spug 二次开发');
-  expect(container.textContent).toContain('OpenSpug');
+  expect(container.textContent).toContain('KOps · 云枢');
+  expect(container.textContent).not.toMatch(/spug/i);
   act(() => {container.querySelector('button').click();});
   const dialog = container.querySelector('[role="dialog"]');
+  expect(dialog.textContent).toContain('基于 Spug 二次开发');
+  expect(dialog.textContent).toContain('OpenSpug');
   expect(dialog.textContent).toContain('AGPL');
   expect(dialog.textContent).toContain('不提供任何担保');
   expect(dialog.textContent).toContain('再分发');
-  expect(dialog.textContent).toContain('2026-10-27');
+  expect(dialog.textContent).toContain('2026-10-28');
   expect(dialog.querySelector('a[href$="/kops-20261027/LICENSE.txt"]')).not.toBeNull();
   act(() => {dialog.querySelector('button').click();});
   expect(container.querySelector('[role="dialog"]')).toBeNull();

@@ -64,7 +64,7 @@ class AddSelect extends React.Component {
           <div>
             <div className={styles.cardTitle}>{t('常规发布')}</div>
             <div className={styles.cardDesc}>
-              {t('由 Spug 来控制发布的主流程，你可以通过添加钩子脚本来执行额外的自定义操作。')}
+              {t('由平台控制发布的主流程，你可以通过添加钩子脚本来执行额外的自定义操作。')}
             </div>
           </div>
         </Card>
@@ -78,7 +78,7 @@ class AddSelect extends React.Component {
           <div>
             <div className={styles.cardTitle}>{t('自定义发布')}</div>
             <div className={styles.cardDesc}>
-              {t('你可以完全自己定义发布的所有流程和操作，Spug 负责按顺序依次执行你记录的动作。')}
+              {t('你可以完全自己定义发布的所有流程和操作，平台负责按顺序依次执行你记录的动作。')}
             </div>
           </div>
         </Card>
