@@ -11,6 +11,9 @@ import subprocess
 import tarfile
 
 
+APPEARANCE_MODULES = ('apps/setting/appearance.py', 'apps/setting/urls.py', 'spug/settings.py')
+
+
 def unchanged_api_digest(baseline, candidate):
     if not isinstance(baseline, dict) or not 1 <= len(baseline) <= 20000 or candidate != baseline:
         raise ValueError('UI image backend file set or content differs')
@@ -22,6 +25,25 @@ def unchanged_api_digest(baseline, candidate):
                 not isinstance(value, str) or not re.fullmatch('[0-9a-f]{64}', value)):
             raise ValueError('Invalid backend snapshot entry')
     return hashlib.sha256(json.dumps(baseline, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def appearance_api_digest(baseline, candidate, previous, overlay):
+    """Compare the complete image trees and permit only the fixed appearance overlay."""
+    unchanged_api_digest(baseline, baseline)
+    unchanged_api_digest(candidate, candidate)
+    if (not isinstance(previous, dict) or not isinstance(overlay, dict) or
+            set(previous) != set(APPEARANCE_MODULES) or set(overlay) != set(APPEARANCE_MODULES) or
+            previous[APPEARANCE_MODULES[0]] is not None or
+            not all(isinstance(previous[name], str) and re.fullmatch('[0-9a-f]{64}', previous[name])
+                    for name in APPEARANCE_MODULES[1:]) or
+            not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value) for value in overlay.values())):
+        raise ValueError('Invalid fixed appearance image overlay')
+    if (APPEARANCE_MODULES[0] in baseline or
+            any(baseline.get(name) != value for name, value in previous.items()) or
+            candidate != dict(baseline, **overlay)):
+        raise ValueError('Appearance image API file set, content or prestate differs')
+    return unchanged_api_digest({name: value for name, value in baseline.items() if name not in overlay},
+                                {name: value for name, value in candidate.items() if name not in overlay})
 
 
 def image_api_snapshot(image_id, probe):
@@ -98,7 +120,7 @@ def main():
         ['docker', 'image', 'inspect', image], text=True))[0], revision)
     source = stage / 'source'
     preservation = {}
-    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui'):
+    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance'):
         # Read the fixed literal without importing staged Python: imports can
         # write unarchived __pycache__ files and invalidate the bundle binding.
         tree = ast.parse((source / 'deploy/upgrade-review/publish.py').read_text())
@@ -112,8 +134,10 @@ def main():
             raise ValueError('Invalid fixed API file probe')
         baseline_api = image_api_snapshot(baseline_id, probe)
         candidate_api = image_api_snapshot(image_id, probe)
-        preservation = {'baseline_image_id': baseline_id,
-                        'unchanged_api_tree_sha256': unchanged_api_digest(baseline_api, candidate_api)}
+        tree_digest = (appearance_api_digest(baseline_api, candidate_api,
+            manifest.get('previous_api_sha256'), manifest.get('api_sha256'))
+            if manifest.get('profile') == 'site-appearance' else unchanged_api_digest(baseline_api, candidate_api))
+        preservation = {'baseline_image_id': baseline_id, 'unchanged_api_tree_sha256': tree_digest}
     subprocess.run(['docker', 'run', '--rm', '--network', 'none', '--read-only', '--memory', '128m',
         '--pids-limit', '32', '-e', 'PYTHONDONTWRITEBYTECODE=1', '-v', str(stage) + ':/release:ro',
         '--entrypoint', 'python3', image_id, '/release/source/deploy/upgrade-review/check_image.py',
@@ -123,7 +147,8 @@ def main():
         '-e', 'PYTHONUNBUFFERED=1', '-v', str(source / 'spug_api') + ':/source/spug_api:ro',
         '--workdir', '/source/spug_api', '--entrypoint', 'python3', image_id]
     modules = ['apps.baota.' + path.stem for path in sorted((source / 'spug_api/apps/baota').glob('test*.py'))]
-    subprocess.run(command + ['manage.py', 'test', *modules, 'apps.setting.test_health', 'apps.setting.test_reminder_preferences', 'apps.ops.tests',
+    subprocess.run(command + ['manage.py', 'test', *modules, 'apps.setting.test_health', 'apps.setting.test_reminder_preferences',
+        'apps.setting.test_appearance', 'spug.test_urls', 'apps.ops.tests',
         'apps.ops.test_result_counts', 'apps.ops.expiry.tests', 'apps.baota.inventory.tests',
         '--settings=spug.test_settings', '--noinput'], check=True, timeout=300)
     for folder in ('upgrade-review', 'expiry'):

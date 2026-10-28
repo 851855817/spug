@@ -12,6 +12,8 @@ on:
       - 'spug_api/spug/urls.py'
       - 'spug_api/apps/setting/health*.py'
       - 'spug_api/apps/setting/test_health.py'
+      - 'spug_api/apps/setting/appearance.py'
+      - 'spug_api/apps/setting/test_appearance.py'
       - 'spug_api/apps/setting/urls.py'
       - 'spug_api/spug/test_*.py'
       - 'spug_web/src/pages/baota/**'
@@ -24,7 +26,11 @@ on:
       - 'spug_web/src/layout/**'
       - 'spug_web/src/branding/**'
       - 'spug_web/src/pages/login/**'
-      - 'spug_web/src/pages/system/setting/About.js'
+      - 'spug_web/src/pages/system/setting/**'
+      - 'spug_web/src/appearance/**'
+      - 'spug_web/src/index.js'
+      - 'spug_web/src/**/*.less'
+      - 'spug_web/src/**/*.css'
       - 'spug_web/src/pages/system/role/**'
       - 'spug_web/public/**'
       - 'spug_web/src/pages/host/Table.js'
@@ -80,7 +86,7 @@ jobs:
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api \
             --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test "${baota_test_modules[@]}" apps.setting.test_health apps.setting.test_reminder_preferences apps.ops.tests apps.ops.test_result_counts apps.ops.expiry.tests apps.baota.inventory.tests --settings=spug.test_settings --noinput
+            manage.py test "${baota_test_modules[@]}" apps.setting.test_health apps.setting.test_reminder_preferences apps.setting.test_appearance spug.test_urls apps.ops.tests apps.ops.test_result_counts apps.ops.expiry.tests apps.baota.inventory.tests --settings=spug.test_settings --noinput
       - name: Test independent host diagnostics
         run: python3 -m unittest discover -s deploy/platform-health/tests
       - name: Test release backup failure handling

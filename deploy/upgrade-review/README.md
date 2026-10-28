@@ -88,3 +88,15 @@
 `ssl-renew-diagnostics` 配置仅接受既有 `apps/baota/operations/certificates.py` 和 `spug_web/src/pages/exec/panel/TaskItem.js` 的运行变更。保留 PHP 更新及平台健康模块的基线摘要，验证证书模块的旧摘要及全部 API 文件树；不包含模型、迁移或权限修改。准备、配对备份、API/UI 原始收据、业务空闲门和兼容回退均沿用现有发布流程。测试：`python -m unittest discover -s deploy/upgrade-review -p 'test_*.py'`。
 
 发布空闲检查保留完整的 SSL 续签失败预览：仅当任务及目标均为 prepared、全部冻结子项与结果均为 failed、执行意图／人工判定为空、审计为空或只有唯一完整创建预检事件，且无远程结果或待核验请求时视为无待执行业务。所有任务仍纳入保全摘要；存在 ready 子项、缺失历史或其他非终态任务仍拒绝发布，任何并发提交均由阶段间摘要一致性检查阻止。
+
+## 全站外观首次发布
+
+`site-appearance` 是独立的固定范围配置。API 只允许新增 `apps/setting/appearance.py`，以及修改既有 `apps/setting/urls.py` 和 `spug/settings.py`；前端只接受 `package.py` 中 `APPEARANCE_UI` 逐项列出的文件，依赖、模型、迁移、权限及任务模块的变更均拒绝。原有 profile 保持各自范围。
+
+基准必须没有外观模块，原路由及设置模块必须存在并符合旧摘要。新模块的 `previous_api_sha256` 明确记录为 `null`；不接受已经包含该模块的基准，后续外观补丁需要单独审阅发布范围。PHP 更新及平台健康模块保留原摘要。准备阶段以不可变镜像 ID 比较全部 API 文件，除了这三个覆盖文件以外，文件集合及每个文件摘要均须与基准一致，并在完成全部隔离检查后再次核对基准 ID。`unchanged_api_tree_sha256` 在此配置中是排除三个固定覆盖路径后的完整保全树摘要。
+
+隔离回归显式运行 `apps.setting.test_appearance` 和 `spug.test_urls`；外观或鉴权测试失败不得写出成功收据。增量 Dockerfile 只 COPY 三个固定 API 模块；完整镜像沿用 `deploy/baota/Dockerfile` 对 `apps/setting` 和 `spug/settings.py` 的现有 COPY，因此新增外观模块也会进入不可变镜像。
+
+发布仍需本次新建的数据库／数据卷配对备份、API 与 UI 两份原始覆盖收据、原业务空闲及进程身份检查。两份实际 API 根各自保留完整发布前快照，发布后只允许这三个 API 文件变化。部分失败恢复原路由及设置文件，并从两份 API 根删除先前不存在的外观模块；原始收据不完整则保持维护关闭，不恢复入口。回退只还原运行文件和 Compose，不恢复整个业务数据库，也不删除已保存的外观配置记录；旧版本忽略该附加记录。入口开放后产生任何新业务或配置变化都会重新触发回退窗口检查。
+
+专项保护测试：`python -m unittest discover -s deploy/upgrade-review -p 'test_appearance_release.py'`，完整旧 profile 回归仍运行本目录全部 `test_*.py`。这些本地测试不代替 Linux 准备、镜像构建与实际发布验收。

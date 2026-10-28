@@ -30,6 +30,33 @@ TASK_RESULTS_UI = {
 LOGIN_FILE = 'apps/baota/login_views.py'
 LOGIN_MODULES = (LOGIN_FILE, 'apps/baota/urls.py')
 LOGIN_UI = {'spug_web/src/pages/baota/index.js', 'spug_web/src/pages/system/role/codes.js'}
+APPEARANCE_FILE = 'apps/setting/appearance.py'
+APPEARANCE_MODULES = (APPEARANCE_FILE, 'apps/setting/urls.py', 'spug/settings.py')
+APPEARANCE_API_TESTS = {'spug_api/apps/setting/test_appearance.py', 'spug_api/spug/test_urls.py'}
+APPEARANCE_UI = {
+    'spug_web/config-overrides.js',
+    'spug_web/src/index.js', 'spug_web/src/index.less', 'spug_web/src/pages/system/setting/index.js',
+    'spug_web/src/appearance/presets.js', 'spug_web/src/appearance/store.js',
+    'spug_web/src/appearance/Provider.js', 'spug_web/src/appearance/AppearanceSetting.js',
+    'spug_web/src/appearance/appearance.module.css', 'spug_web/src/appearance/theme.less',
+    'spug_web/src/branding/branding.module.css',
+    'spug_web/src/components/ResizableTable.less', 'spug_web/src/components/index.module.less',
+    'spug_web/src/components/reminderDismiss.module.css', 'spug_web/src/layout/layout.module.less',
+    'spug_web/src/libs/libs.module.css', 'spug_web/src/pages/config/setting/index.module.less',
+    'spug_web/src/pages/dashboard/index.module.css', 'spug_web/src/pages/deploy/app/index.module.css',
+    'spug_web/src/pages/deploy/repository/index.module.less', 'spug_web/src/pages/deploy/request/console.module.less',
+    'spug_web/src/pages/exec/panel/TaskDetail.module.css', 'spug_web/src/pages/exec/task/index.module.less',
+    'spug_web/src/pages/exec/transfer/index.module.less', 'spug_web/src/pages/home/index.module.less',
+    'spug_web/src/pages/host/index.module.less', 'spug_web/src/pages/host/selector.module.less',
+    'spug_web/src/pages/login/login.module.css', 'spug_web/src/pages/monitor/index.module.less',
+    'spug_web/src/pages/pipeline/console/body.module.less', 'spug_web/src/pages/pipeline/console/node.module.less',
+    'spug_web/src/pages/pipeline/editor.module.less', 'spug_web/src/pages/pipeline/modules/index.module.less',
+    'spug_web/src/pages/pipeline/node.module.less', 'spug_web/src/pages/pipeline/nodeConfig.module.less',
+    'spug_web/src/pages/schedule/index.module.less', 'spug_web/src/pages/server-monitor/index.module.less',
+    'spug_web/src/pages/ssh/index.module.less', 'spug_web/src/pages/ssh/setting.module.less',
+    'spug_web/src/pages/system/health/index.module.css', 'spug_web/src/pages/system/role/index.module.css',
+    'spug_web/src/pages/system/setting/index.module.css', 'spug_web/src/pages/welcome/info/index.module.css',
+}
 WORKBENCH_UI = {
     'spug_web/src/pages/home/index.js', 'spug_web/src/pages/home/Todo.js',
     'spug_web/src/pages/home/index.module.less', 'spug_web/src/pages/server-monitor/index.js',
@@ -56,7 +83,7 @@ INVENTORY_ROLE_PRESETS_UI = {INVENTORY_UI, 'spug_web/src/pages/system/role/PageP
                              'spug_web/src/pages/system/role/presets.js'}
 PROFILES = {'php-update': API_FILE, 'host-report': HEALTH_FILE, 'operations-ui': None, 'task-results-ui': None,
             'panel-login': LOGIN_MODULES, 'inventory-filters': INVENTORY_FILE, 'workbench-ui': None, 'branding-ui': None, 'personal-reminders-ui': None, 'inventory-role-presets-ui': None,
-            'ssl-renew-diagnostics': SSL_FILE}
+            'ssl-renew-diagnostics': SSL_FILE, 'site-appearance': APPEARANCE_MODULES}
 HELPERS = ('apply-expiry.py', 'deploy-compact-ui.py', 'fingerprint.py', 'release_safety.py')
 
 
@@ -76,7 +103,12 @@ def validate_runtime_changes(names, profile='php-update'):
     module = profile_module(profile)
     runtime = {name for name in names if name.startswith('spug_api/')
                and not Path(name).name.startswith('test')}
-    if profile == 'panel-login':
+    if profile == 'site-appearance':
+        runtime = {name for name in names if name.startswith('spug_api/')} - APPEARANCE_API_TESTS
+        ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
+        if runtime != {'spug_api/' + name for name in APPEARANCE_MODULES} or ui != APPEARANCE_UI:
+            raise ValueError('Appearance release only accepts the fixed appearance API and UI changes')
+    elif profile == 'panel-login':
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
         if runtime != {'spug_api/' + name for name in LOGIN_MODULES} or ui != LOGIN_UI:
             raise ValueError('Login release only accepts the fixed login API and UI changes')
@@ -102,7 +134,15 @@ def write_manifests(stage, revision, previous_revision, previous_content,
     module = profile_module(profile)
     if not all(re.fullmatch(r'[0-9a-f]{40}', value) for value in (revision, previous_revision)):
         raise ValueError('Invalid release revision')
-    if profile == 'panel-login':
+    if profile == 'site-appearance':
+        if (not isinstance(previous_content, dict) or set(previous_content) != set(APPEARANCE_MODULES) or
+                previous_content[APPEARANCE_FILE] is not None or
+                not all(isinstance(previous_content[name], bytes) for name in APPEARANCE_MODULES[1:])):
+            raise ValueError('Appearance baseline must have URLs/settings and no appearance module')
+        api_hashes = {name: sha256(stage / 'source/spug_api' / name) for name in APPEARANCE_MODULES}
+        previous_hashes = {name: hashlib.sha256(content).hexdigest() if content is not None else None
+                           for name, content in previous_content.items()}
+    elif profile == 'panel-login':
         if (not isinstance(previous_content, dict) or set(previous_content) != set(LOGIN_MODULES) or
                 previous_content[LOGIN_FILE] is not None or
                 not isinstance(previous_content['apps/baota/urls.py'], bytes)):
@@ -116,7 +156,7 @@ def write_manifests(stage, revision, previous_revision, previous_content,
         api_hashes = {module: sha256(stage / 'source/spug_api' / module)} if module else {}
         previous_hashes = {module: hashlib.sha256(previous_content).hexdigest()} if module else {}
     preserved_hashes = {}
-    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics'):
+    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance'):
         if ((profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui') and previous_content is not None) or not isinstance(preserved_content, dict) or
                 set(preserved_content) != {API_FILE, HEALTH_FILE} or
                 not all(isinstance(value, bytes) for value in preserved_content.values())):
@@ -196,21 +236,27 @@ def main():
         'release_safety.py': repo / 'deploy/inventory/release_safety.py',
     }.items():
         (stage / name).write_bytes(source.read_bytes().replace(b'\r\n', b'\n'))
-    if args.profile == 'panel-login':
+    if args.profile == 'site-appearance':
+        if git('ls-tree', '--name-only', previous, '--', 'spug_api/' + APPEARANCE_FILE).strip():
+            raise ValueError('Appearance module already exists in baseline; design a new reviewed profile')
+        old_content = {APPEARANCE_FILE: None, **{name:
+            git('show', previous + ':spug_api/' + name).replace(b'\r\n', b'\n')
+            for name in APPEARANCE_MODULES[1:]}}
+    elif args.profile == 'panel-login':
         if git('ls-tree', '--name-only', previous, '--', 'spug_api/' + LOGIN_FILE).strip():
             raise ValueError('Login module already exists in baseline; design a new reviewed profile')
         old_content = {LOGIN_FILE: None, 'apps/baota/urls.py':
                        git('show', previous + ':spug_api/apps/baota/urls.py').replace(b'\r\n', b'\n')}
     else:
         old_content = git('show', previous + ':spug_api/' + module).replace(b'\r\n', b'\n') if module else None
-    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics'):
+    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance'):
         preserved_content = {name: git('show', previous + ':spug_api/' + name).replace(b'\r\n', b'\n')
                              for name in (API_FILE, HEALTH_FILE)}
     else:
         preserved_content = (git('show', previous + ':spug_api/' + API_FILE).replace(b'\r\n', b'\n')
                              if args.profile == 'host-report' else None)
     write_manifests(stage, revision, previous, old_content, args.profile, preserved_content)
-    modules = LOGIN_MODULES if args.profile == 'panel-login' else (module,) if module else ()
+    modules = APPEARANCE_MODULES if args.profile == 'site-appearance' else LOGIN_MODULES if args.profile == 'panel-login' else (module,) if module else ()
     (stage / 'Dockerfile').write_text(
         'FROM spug-baota:' + previous[:7] + '\nARG SOURCE_REVISION\n'
         'LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"\n'
