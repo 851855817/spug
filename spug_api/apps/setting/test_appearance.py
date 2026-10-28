@@ -5,11 +5,12 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
-from django.db import DatabaseError, close_old_connections
+from django.db import DatabaseError, close_old_connections, connection
 from django.db.models.query import QuerySet
-from django.test import Client, TestCase, TransactionTestCase
+from django.test import Client, RequestFactory, TestCase, TransactionTestCase
 
 from apps.account.models import User
+from apps.setting.appearance import AppearanceView
 from apps.setting.models import KEYS_DEFAULT, Setting
 from apps.setting.utils import AppSetting
 
@@ -203,9 +204,19 @@ class AppearanceConcurrencyTests(TransactionTestCase):
         def write(user, preset):
             close_old_connections()
             try:
-                response = save(Client(), user, preset, revision)
+                if connection.vendor == 'sqlite':
+                    # SQLite's table locks can race middleware users.save() before
+                    # either request reaches the appearance CAS barrier. Auth is
+                    # covered through Client separately; isolate the write race.
+                    request = RequestFactory().post(
+                        ADMIN_URL, json.dumps({'preset': preset, 'revision': revision}),
+                        content_type='application/json')
+                    request.user = user
+                    response = AppearanceView.as_view()(request)
+                else:
+                    response = save(Client(), user, preset, revision)
                 self.assertIn(response.status_code, (200, 409), response.content[:250])
-                return response.status_code, response.json()
+                return response.status_code, json.loads(response.content)
             finally:
                 close_old_connections()
 
