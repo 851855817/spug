@@ -15,17 +15,13 @@ jest.mock('antd',()=>({Form:{Item:({children,extra,label})=><div>{label}{childre
 let container;
 beforeEach(()=>{container=document.createElement('div');document.body.appendChild(container);http.post.mockResolvedValue({});});
 afterEach(()=>{act(()=>{ReactDOM.unmountComponentAtNode(container);});container.remove();jest.clearAllMocks();});
-test('provider is shown on request while the existing service token and save protocol stay intact',async()=>{
+test('self-use settings keep the existing token protocol without provider promotion',async()=>{
   act(()=>{ReactDOM.render(<BasicSetting/>,container);});
   expect(container.textContent).not.toMatch(/spug/i);
   expect(container.querySelector('img')).toBeNull();
   expect(container.querySelector('input').value).toBe('fixture-provider-token');
-  const toggle=container.querySelector('[aria-expanded]');expect(toggle.getAttribute('aria-expanded')).toBe('false');
-  act(()=>toggle.click());
-  expect(toggle.getAttribute('aria-expanded')).toBe('true');
-  expect(container.textContent).toContain('Spug');
+  expect(container.querySelector('[aria-expanded],a')).toBeNull();
   expect(http.post).not.toHaveBeenCalled();
-  act(()=>toggle.click());expect(container.textContent).not.toMatch(/spug/i);
   await act(async()=>{[...container.querySelectorAll('button')].find(e=>e.textContent==='保存设置').click();for(let i=0;i<8;i++)await Promise.resolve();});
   expect(http.post).toHaveBeenCalledWith('/api/setting/',{data:[{key:'spug_key',value:'fixture-provider-token'}]});
   expect(store.fetchSettings).toHaveBeenCalledTimes(1);

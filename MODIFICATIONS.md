@@ -13,3 +13,5 @@ KOps · 云枢由 K 开发维护，是 [Spug](https://github.com/openspug/spug) 
 标准增量发布工具 `deploy/upgrade-review/package.py` 会将当前干净提交注入 `REACT_APP_RELEASE_REVISION`。自行构建时应将该环境变量设置为本次源码的完整 40 位 Git 提交，并确保该提交已在公开仓库提供。未绑定提交的本地构建会明确显示“开发构建”，不应作为正式发布。构建与恢复步骤见 [发布工具说明](deploy/upgrade-review/README.md)，依赖分别见 `spug_web/package-lock.json` 和 `spug_api/requirements.txt`。
 
 本软件按许可证规定不提供任何担保；用户可按 AGPL v3 使用、修改和再分发。若再发布修改版本，仍需提供对应源码、版权及许可说明。商标不因软件许可而转让。
+
+2026-10-29：按使用者明确的个人自用要求，移除界面的开源说明入口、弹窗和上游服务推广说明；保持 KOps · 云枢品牌。源码版权、AGPL 许可证、修改记录和已有对应源码文件保留，原调用凭据协议、技术变量、权限及数据库不变。此变更不声明全部原创，也不将个人自用说明等同于任何对外使用形式的许可豁免。

@@ -47,24 +47,28 @@ def load(name):
 
 
 class BrandingCleanupReleaseTests(unittest.TestCase):
+    profile = PROFILE
+    ui = UI
+    ui_count = 16
+
     def make_stage(self, folder):
         return load('test_appearance_release').AppearanceReleaseTests().make_stage(folder)
 
     def manifest(self, stage):
-        return load('package').write_manifests(stage, REVISION, PREVIOUS, None, PROFILE,
+        return load('package').write_manifests(stage, REVISION, PREVIOUS, None, self.profile,
             {PHP: b'php', HEALTH: b'health'})
 
     def receipt(self, stage, release, **changes):
         load('test_appearance_release').AppearanceReleaseTests().receipt(stage, release, **changes)
 
-    def test_exact_sixteen_ui_files_reject_every_api_path_and_extra_runtime_or_dependency(self):
+    def test_exact_ui_scope_rejects_every_api_path_and_extra_runtime_or_dependency(self):
         package = load('package')
-        self.assertEqual(len(UI), 16)
-        package.validate_runtime_changes(sorted(UI) + ['docs/guide.md',
-            'spug_web/src/branding/branding.test.js'], PROFILE)
-        invalid = [[], sorted(UI)[1:], sorted(UI) + ['spug_web/src/routes.js'],
-                   sorted(UI) + ['spug_web/package.json'], sorted(UI) + ['spug_web/package-lock.json']]
-        invalid.extend(sorted(UI) + [name] for name in (
+        self.assertEqual(len(self.ui), self.ui_count)
+        package.validate_runtime_changes(sorted(self.ui) + ['docs/guide.md',
+            'spug_web/src/branding/branding.test.js'], self.profile)
+        invalid = [[], sorted(self.ui)[1:], sorted(self.ui) + ['spug_web/src/routes.js'],
+                   sorted(self.ui) + ['spug_web/package.json'], sorted(self.ui) + ['spug_web/package-lock.json']]
+        invalid.extend(sorted(self.ui) + [name] for name in (
             'spug_api/apps/setting/appearance.py', 'spug_api/apps/setting/urls.py',
             'spug_api/spug/settings.py', 'spug_api/apps/account/models.py',
             'spug_api/apps/setting/test_appearance.py', 'spug_api/spug/test_urls.py',
@@ -72,10 +76,10 @@ class BrandingCleanupReleaseTests(unittest.TestCase):
             'spug_api/apps/setting/migrations/test_hidden.py', 'spug_api/test_anything.py'))
         for names in invalid:
             with self.subTest(names=names), self.assertRaises(ValueError):
-                package.validate_runtime_changes(names, PROFILE)
+                package.validate_runtime_changes(names, self.profile)
         for old_profile in ('branding-ui', 'refined-palettes', 'site-appearance'):
             with self.subTest(profile=old_profile), self.assertRaises(ValueError):
-                package.validate_runtime_changes(sorted(UI), old_profile)
+                package.validate_runtime_changes(sorted(self.ui), old_profile)
 
     def test_empty_overlay_manifest_and_image_require_preserved_php_and_health(self):
         package, checker = load('package'), load('check_image')
@@ -87,12 +91,12 @@ class BrandingCleanupReleaseTests(unittest.TestCase):
             self.assertEqual(set(release['preserved_api_sha256']), {PHP, HEALTH})
             for previous in (b'old module', {}, {PHP: b'php'}):
                 with self.subTest(previous=previous), self.assertRaises(ValueError):
-                    package.write_manifests(stage, REVISION, PREVIOUS, previous, PROFILE,
+                    package.write_manifests(stage, REVISION, PREVIOUS, previous, self.profile,
                         {PHP: b'php', HEALTH: b'health'})
             for preserved in (None, {}, {PHP: b'php'}, {PHP: b'php', HEALTH: b'drift'},
                               {PHP: b'php', HEALTH: b'health', 'extra.py': b'extra'}):
                 with self.subTest(preserved=preserved), self.assertRaises(ValueError):
-                    package.write_manifests(stage, REVISION, PREVIOUS, None, PROFILE, preserved)
+                    package.write_manifests(stage, REVISION, PREVIOUS, None, self.profile, preserved)
             runtime = Path(folder) / 'runtime'
             shutil.copytree(stage / 'source/spug_api', runtime / 'spug_api')
             shutil.copytree(stage / 'build', runtime / 'spug_web/build')
@@ -136,14 +140,14 @@ class BrandingCleanupReleaseTests(unittest.TestCase):
                 if values[0] == 'status':
                     return b''
                 if values[0] == 'diff':
-                    return '\n'.join(sorted(UI)).encode()
+                    return '\n'.join(sorted(self.ui)).encode()
                 if values[0] == 'ls-files':
                     return '\0'.join('spug_api/' + name for name in (PHP, HEALTH)).encode()
                 if values[0] == 'show':
                     return {PHP: b'php', HEALTH: b'health'}[values[1].split(':spug_api/')[1]]
                 self.fail('unexpected Git command')
             with mock.patch.object(package, '__file__', str(repo / 'deploy/upgrade-review/package.py')), \
-                    mock.patch.object(sys, 'argv', ['package.py', PREVIOUS, '--node', 'node', '--profile', PROFILE]), \
+                    mock.patch.object(sys, 'argv', ['package.py', PREVIOUS, '--node', 'node', '--profile', self.profile]), \
                     mock.patch.object(package.subprocess, 'check_output', side_effect=git), \
                     mock.patch.object(package.subprocess, 'run'), mock.patch('builtins.print'):
                 package.main()
@@ -291,7 +295,7 @@ class BrandingCleanupReleaseTests(unittest.TestCase):
         case = fixture.ControllerTests()
         case.setUp()
         case.operations_ui_profile()
-        case.host.release['profile'] = PROFILE
+        case.host.release['profile'] = self.profile
         return case.host, fixture
 
     def test_ui_only_publication_and_partial_failure_preserve_all_api_and_business(self):

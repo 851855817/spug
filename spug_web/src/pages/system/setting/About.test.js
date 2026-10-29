@@ -7,7 +7,6 @@ import {http} from 'libs';
 jest.mock('libs',()=>({http:{get:jest.fn()},VERSION:'4.0.0',t:text=>text,docsUrl:path=>'https://ops.spug.cc/docs/'+path}));
 jest.mock('../../../branding/source',()=>({RELEASE_REVISION:'0123456789abcdef0123456789abcdef01234567'}));
 jest.mock('../../../branding/Brand',()=>()=> <b>KOps · 云枢</b>);
-jest.mock('../../../branding/LegalNotice',()=>({LegalNotice:()=> <button>开源许可与源码</button>}));
 jest.mock('mobx-react',()=>({observer:component=>component}));
 jest.mock('antd',()=>{
   const Descriptions=({children})=><dl>{children}</dl>;
@@ -25,7 +24,8 @@ test('about shows the KOps release and local runtime without contacting or adver
   expect(http.get.mock.calls).toEqual([['/api/setting/about/']]);
   expect(container.textContent).toContain('KOps · 云枢');
   expect(container.textContent).toContain('0123456');
-  expect(container.textContent).toContain('开源许可与源码');
+  expect(container.textContent).not.toContain('开源许可与源码');
+  expect(container.querySelector('button,a')).toBeNull();
   expect(container.textContent).not.toMatch(/spug|上游官网|如何升级/i);
   expect(container.querySelector('a[href*="spug.cc"]')).toBeNull();
 });

@@ -22,7 +22,6 @@ import styles from './layout.module.less';
 import http from '../libs/http';
 import history from '../libs/history';
 import { t, langMode, setLanguage } from '../libs/i18n';
-import { LegalLink } from '../branding/LegalNotice';
 
 export default function (props) {
 
@@ -82,7 +81,6 @@ export default function (props) {
         </div>
       </div>
       <Notification/>
-      <LegalLink className={styles.terminal}/>
       <AuthDiv className={styles.terminal} auth="host.console.view|host.console.list" onClick={openTerminal}>
         <CodeOutlined style={{fontSize: 16}}/>
       </AuthDiv>

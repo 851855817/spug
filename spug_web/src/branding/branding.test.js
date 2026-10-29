@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import { act } from 'react-dom/test-utils';
 import Brand from './Brand';
-import { LegalLink, LegalNotice } from './LegalNotice';
+import { LegalNotice } from './LegalNotice';
 import { sourceLinks } from './source';
 
 jest.mock('antd', () => ({Modal: ({visible, children, onCancel}) => visible ?
@@ -20,25 +20,11 @@ test('the compact brand keeps its accessible name without overflowing the collap
   expect(container.textContent).toBe('KOps · 云枢');
 });
 
-test('legal and source notices are usable without authentication, permission checks or API calls', () => {
+test('the self-use footer only shows KOps branding with no legal entry or dialog', () => {
   localStorage.clear();
   act(() => {ReactDOM.render(<LegalNotice/>, container);});
-  expect(container.textContent).toContain('KOps · 云枢');
-  expect(container.textContent).not.toMatch(/spug/i);
-  act(() => {container.querySelector('button').click();});
-  const dialog = container.querySelector('[role="dialog"]');
-  expect(dialog.textContent).toContain('基于 Spug 二次开发');
-  expect(dialog.textContent).toContain('OpenSpug');
-  expect(dialog.textContent).toContain('AGPL');
-  expect(dialog.textContent).toContain('不提供任何担保');
-  expect(dialog.textContent).toContain('再分发');
-  expect(dialog.textContent).toContain('2026-10-28');
-  expect(dialog.querySelector('a[href$="/kops-20261027/LICENSE.txt"]')).not.toBeNull();
-  act(() => {dialog.querySelector('button').click();});
-  expect(container.querySelector('[role="dialog"]')).toBeNull();
-  act(() => {ReactDOM.render(<LegalLink/>, container);});
-  act(() => {container.querySelector('button').click();});
-  expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  expect(container.textContent).toBe('KOps · 云枢 · 由 K 开发维护');
+  expect(container.querySelector('button, a, [role="dialog"]')).toBeNull();
 });
 
 test('corresponding source links pin the full released commit and never accept an arbitrary URL', () => {

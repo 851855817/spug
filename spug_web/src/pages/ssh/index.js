@@ -29,7 +29,6 @@ import { http, hasPermission, includes, t } from 'libs';
 import gStore from 'gStore';
 import styles from './index.module.less';
 import Brand from '../../branding/Brand';
-import { LegalLink } from '../../branding/LegalNotice';
 import lds from 'lodash';
 
 let posX = 0
@@ -252,7 +251,7 @@ function WebSSH(props) {
           onTabClick={key => setActiveId(key)}
           onEdit={(key, action) => action === 'remove' ? handleRemove(key, 'self') : null}
           style={{background: 'var(--kops-surface)', width: `calc(100vw - ${width}px)`}}
-          tabBarExtraContent={<><LegalLink/>{hosts.length === 0 ? (
+          tabBarExtraContent={hosts.length === 0 ? (
             <div className={styles.tips}>{t('小提示：双击标签快速复制窗口，右击标签展开更多操作。')}</div>
           ) : sshMode ? (
             <React.Fragment>
@@ -264,7 +263,7 @@ function WebSSH(props) {
                 icon={<LeftOutlined/>}>{t('文件管理器')}</AuthButton>
               <SkinFilled className={styles.setting} onClick={() => setVisible2(true)}/>
             </React.Fragment>
-          ) : null}</>}
+          ) : null}
           items={hosts.map(item => ({
             key: item.vId,
             label: <TabRender host={item}/>,
