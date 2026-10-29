@@ -1,0 +1,15 @@
+{
+  "revision": "85fbb57cb404b5d1e612a6ab4d6664d44cea8a92",
+  "real_headless_browser": true,
+  "ordinary_login_footer_about_neutral": true,
+  "all_legal_entries_and_dialog_removed": true,
+  "actual_release_version": true,
+  "no_upstream_update_request": true,
+  "provider_promotion_removed": true,
+  "existing_mock_credential_preserved": true,
+  "ldap_key_hints_neutral": true,
+  "mobile_no_overflow": true,
+  "customer_requests": "mocked",
+  "mock_writes": 1,
+  "runtime_exceptions": []
+}
