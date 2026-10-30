@@ -2,6 +2,7 @@
 import copy
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -91,6 +92,9 @@ def recover_interrupted():
     for target_id in ids:
         with transaction.atomic():
             task, target = locked_target(target_id)
+            if task.execution_policy.get('deployment'):
+                task.execution_policy = {key: value for key, value in task.execution_policy.items() if key != 'deployment'}
+                task.save(update_fields=['execution_policy', 'updated_at'])
             if target.state == 'preflighting':
                 target.state = 'cancelled' if task.cancel_requested else 'preflight_queued'
                 target.save(update_fields=['state', 'updated_at'])
@@ -137,9 +141,18 @@ class PanelWorker:
                         continue
                     target.state = 'preflighting'
                 elif target.state in ('queued', 'remote', 'uncertain'):
+                    if task.execution_policy:
+                        # Remote/uncertain targets can only enter an explicitly
+                        # requested read-only reconciliation, even while held.
+                        if target.state in ('remote', 'uncertain'):
+                            authorized = any(s.deployment_authorized(task, target, child) for child in target.children)
+                            if not target.reconcile_requested and not authorized:
+                                continue
+                        elif not s.batch_allows(task, target):
+                            continue
                     if target.state == 'uncertain' and not target.reconcile_requested:
                         continue
-                    if target.state == 'remote' and not target.reconcile_requested:
+                    if target.state == 'remote' and not target.reconcile_requested and not task.execution_policy:
                         pending = next((c for c in target.children if c['state'] == 'remote'), None)
                         if not pending or pending.get('next_poll_at', '') > s.now():
                             continue
@@ -188,7 +201,8 @@ class PanelWorker:
             remote = child.get('result', {}).get('remote', {})
             if (child['state'] == 'remote' and remote.get('next_action') == 'deploy'
                     and not remote.get('ambiguous') and not child.get('uncertain_provenance')
-                    and not target.task.cancel_requested):
+                    and not target.task.cancel_requested and (not target.task.execution_policy
+                        or s.deployment_authorized(target.task, target, child))):
                 self.dispatch(target_id, index, 'deploy')
             else:
                 self.readback(target_id, index)
@@ -265,6 +279,20 @@ class PanelWorker:
                 s.refresh_task(task)
                 return None
             child = target.children[index]
+            if task.execution_policy:
+                if phase == 'deploy':
+                    allowed = s.deployment_authorized(task, target, child)
+                    task.execution_policy.pop('deployment', None)
+                    task.save(update_fields=['execution_policy', 'updated_at'])
+                    if not allowed:
+                        child.pop('deploy_verification', None)
+                        s.settle_target(target)
+                        s.refresh_task(task)
+                        return None
+                elif not s.batch_allows(task, target):
+                    s.settle_target(target)
+                    s.refresh_task(task)
+                    return None
             if task.cancel_requested:
                 if not child['intents']:
                     child['state'] = 'cancelled'
@@ -334,6 +362,9 @@ class PanelWorker:
             if target.state != 'running':
                 return
             child = target.children[index]
+            if task.execution_policy.get('deployment', {}).get('target_id') == target.pk:
+                task.execution_policy.pop('deployment')
+                task.save(update_fields=['execution_policy', 'updated_at'])
             target.state = 'reconciling'
             target.reconcile_requested = False
             target.save(update_fields=['state', 'reconcile_requested', 'updated_at'])
@@ -365,6 +396,9 @@ class PanelWorker:
                           'remote': {**previous_remote, **result.get('remote', {}), 'ambiguous': True}}
                 result['remote'].pop('next_action', None)
             child['state'], child['result'] = result['state'], result
+            child.pop('deploy_verification', None)
+            if not dispatched and child['state'] == 'remote' and result.get('remote', {}).get('next_action') == 'deploy':
+                child['deploy_verification'] = {'token': uuid.uuid4().hex, 'remote': copy.deepcopy(result['remote']), 'at': s.now()}
             if child['state'] == 'remote':
                 child.setdefault('poll_started_at', s.now())
                 child['polls'] = child.get('polls', 0) + (0 if dispatched else 1)

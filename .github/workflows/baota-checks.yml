@@ -2,22 +2,57 @@ name: Baota module checks
 
 on:
   push:
-    branches: [feature/baota-panel-tasks, feature/server-resource-monitor]
+    branches: [feature/baota-panel-tasks, feature/server-resource-monitor, feature/operations-reliability]
   pull_request:
     paths:
       - 'spug_api/apps/baota/**'
+      - 'spug_api/apps/ops/**'
+      - 'spug_api/apps/schedule/scheduler.py'
+      - 'spug_api/spug/settings.py'
+      - 'spug_api/spug/urls.py'
+      - 'spug_api/apps/setting/health*.py'
+      - 'spug_api/apps/setting/test_health.py'
+      - 'spug_api/apps/setting/appearance.py'
+      - 'spug_api/apps/setting/test_appearance.py'
+      - 'spug_api/apps/setting/urls.py'
       - 'spug_api/spug/test_*.py'
+      - 'spug_web/src/**'
       - 'spug_web/src/pages/baota/**'
       - 'spug_web/src/pages/exec/panel/**'
+      - 'spug_web/src/pages/exec/operations/**'
+      - 'spug_web/src/pages/panel-inventory/**'
+      - 'spug_web/src/pages/server-expiry/**'
       - 'spug_web/src/pages/server-monitor/**'
+      - 'spug_web/src/pages/home/**'
+      - 'spug_web/src/layout/**'
+      - 'spug_web/src/branding/**'
+      - 'spug_web/src/pages/login/**'
+      - 'spug_web/src/pages/system/setting/**'
+      - 'spug_web/src/appearance/**'
+      - 'spug_web/src/index.js'
+      - 'spug_web/src/**/*.less'
+      - 'spug_web/src/**/*.css'
+      - 'spug_web/src/pages/system/role/**'
+      - 'spug_web/public/**'
       - 'spug_web/src/pages/host/Table.js'
+      - 'spug_web/src/pages/host/index.js'
       - 'spug_web/src/components/ResourceMonitor*'
       - 'spug_web/src/components/ResizableTable*'
+      - 'spug_web/src/components/ReminderDismiss*'
+      - 'spug_web/src/components/personalReminders*'
+      - 'spug_web/src/components/reminderDismiss*'
+      - 'spug_api/apps/setting/test_reminder_preferences.py'
       - 'spug_web/src/components/TableCard.js'
       - 'spug_web/src/components/useResourceMonitorSources.js'
       - 'spug_web/src/routes.js'
+      - 'spug_web/src/pages/system/health/**'
       - 'deploy/baota/**'
       - 'deploy/resource-monitor/**'
+      - 'deploy/platform-health/**'
+      - 'deploy/operations/**'
+      - 'deploy/inventory/**'
+      - 'deploy/expiry/**'
+      - 'deploy/upgrade-review/**'
       - '.github/workflows/baota-checks.yml'
   workflow_dispatch:
 
@@ -52,7 +87,15 @@ jobs:
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api \
             --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test "${baota_test_modules[@]}" --settings=spug.test_settings --noinput
+            manage.py test "${baota_test_modules[@]}" apps.setting.test_health apps.setting.test_reminder_preferences apps.setting.test_appearance spug.test_urls apps.ops.tests apps.ops.test_result_counts apps.ops.expiry.tests apps.baota.inventory.tests --settings=spug.test_settings --noinput
+      - name: Test independent host diagnostics
+        run: python3 -m unittest discover -s deploy/platform-health/tests
+      - name: Test release backup failure handling
+        run: python3 -m unittest discover -s deploy/inventory -p 'test_*.py'
+      - name: Test expiry release failure handling
+        run: python3 -m unittest discover -s deploy/expiry -p 'test_*.py'
+      - name: Test upgrade review release failure handling
+        run: python3 -m unittest discover -s deploy/upgrade-review -p 'test_*.py'
       - name: Check whitespace
         run: git diff --check HEAD^ HEAD
       - name: Build worker image with disposable static assets
@@ -60,6 +103,10 @@ jobs:
           baota_context="$RUNNER_TEMP/baota-image-context"
           mkdir -p "$baota_context/spug_api/apps" "$baota_context/spug_api/spug" "$baota_context/spug_web/build"
           cp -a spug_api/apps/baota "$baota_context/spug_api/apps/"
+          cp -a spug_api/apps/setting "$baota_context/spug_api/apps/"
+          cp -a spug_api/apps/ops "$baota_context/spug_api/apps/"
+          mkdir -p "$baota_context/spug_api/apps/schedule"
+          cp spug_api/apps/schedule/scheduler.py "$baota_context/spug_api/apps/schedule/"
           cp spug_api/spug/settings.py spug_api/spug/urls.py "$baota_context/spug_api/spug/"
           cp -a deploy "$baota_context/"
           printf '<html>CI image wiring check only</html>\n' > "$baota_context/spug_web/build/index.html"
@@ -67,7 +114,7 @@ jobs:
             -f "$baota_context/deploy/baota/Dockerfile" -t baota-worker-ci "$baota_context"
           docker run --rm --network none --read-only --memory 128m --pids-limit 32 \
             -v "$GITHUB_WORKSPACE/deploy/baota/test_image.py:/test_image.py:ro" \
-            --entrypoint python3 baota-worker-ci /test_image.py worker
+            --entrypoint python3 baota-worker-ci /test_image.py expiry
           docker build --network none --build-arg ROLLBACK_IMAGE=baota-worker-ci \
             -f "$baota_context/deploy/baota/upload-rollback.Dockerfile" -t baota-upload-rollback-ci "$baota_context"
           docker run --rm --network none --read-only --memory 128m --pids-limit 32 \
@@ -130,7 +177,7 @@ jobs:
             -e BAOTA_CI_DB_HOST=baota-ci-db -e BAOTA_CI_DB_PASSWORD=disposable-ci-password \
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test apps.baota.test_tasks apps.baota.test_upload_store apps.baota.test_upload_tasks apps.baota.test_resource_monitor --settings=spug.baota_ci_settings --noinput
+            manage.py test apps.baota.test_tasks apps.baota.test_batches apps.baota.test_upload_store apps.baota.test_upload_tasks apps.baota.test_resource_monitor apps.setting.test_appearance apps.ops.tests apps.ops.test_result_counts apps.ops.expiry.tests apps.baota.inventory.tests --settings=spug.baota_ci_settings --noinput
       - name: Remove disposable database
         if: always()
         run: |
@@ -161,4 +208,5 @@ jobs:
           CI: 'false'
           NODE_OPTIONS: --openssl-legacy-provider
           GENERATE_SOURCEMAP: 'false'
+          REACT_APP_RELEASE_REVISION: ${{ github.sha }}
         run: node node_modules/react-app-rewired/bin/index.js build

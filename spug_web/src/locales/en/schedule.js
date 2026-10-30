@@ -70,7 +70,7 @@ const dict = {
   '执行对象': 'Targets',
   '本机': 'Localhost',
   '告警关联主机': 'Alert-related host',
-  '本机即Spug服务运行所在的容器或主机。': 'Localhost is the container or host where the Spug service runs.',
+  '本机即平台服务运行所在的容器或主机。': 'Localhost is the container or host where the platform service runs.',
   '添加执行对象': 'Add Target',
 
   // Info / Record

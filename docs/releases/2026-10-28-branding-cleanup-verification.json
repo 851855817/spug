@@ -1,0 +1,31 @@
+{
+  "revision": "6428ddc0b118fa618bcbdbe2557587cb68fa1d9e",
+  "published": true,
+  "paired_backup_valid": true,
+  "backup": "/opt/spug/backups/20261028-175042-before-upgrade-6428ddc-1b837d9c",
+  "preservation_objects": 63,
+  "business_schema_keys_unchanged": true,
+  "original_process_identity": true,
+  "zero_api_overlay": true,
+  "complete_api_trees_unchanged": true,
+  "appearance": {
+    "version": 1,
+    "preset": "porcelain",
+    "revision": "dc05bdafef43616dc75444531403aa3e"
+  },
+  "api_files_before": [
+    234,
+    274
+  ],
+  "api_files_after": [
+    234,
+    274
+  ],
+  "ui_receipt_valid": true,
+  "services_running": 9,
+  "health_checks_ok": 15,
+  "health_timer": "active",
+  "server_public_revision": true,
+  "source_commit_binding": true,
+  "original_license": true
+}

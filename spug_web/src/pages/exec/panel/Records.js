@@ -17,7 +17,7 @@ export default function Records({revision, onOpen}) {
       .finally(() => {if (valid) setLoading(false);});
     return () => {valid = false;};
   }, [query, revision, refresh]);
-  const states = ['preflight_queued', 'prepared', 'running', 'remote', 'uncertain', 'cancelled', 'completed'];
+  const states = ['preflight_queued', 'prepared', 'running', 'paused', 'remote', 'uncertain', 'cancelled', 'completed'];
   return <div>
     <Space wrap style={{marginBottom: 16}}>
       <Select allowClear placeholder="操作筛选" style={{width: 180}} value={query.operation} onChange={operation => setQuery({...query, operation, page: 1})}

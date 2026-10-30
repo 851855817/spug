@@ -457,6 +457,52 @@ class OperationTests(TestCase):
         self.assertNotEqual(op.reconcile(self.client, item, result['remote'])['state'], 'success')
         self.assertEqual(self.mutations()[0][2], {'index': 'a' * 32})
 
+    def test_ssl_renew_dns_preflight_explains_block_without_dispatch_or_secrets(self):
+        self.client.ssl.update(status=True, csr=pem(days=5), index='a' * 32, auth_type='dns', type=1)
+        op, item = self.item('ssl_renew', {'sites': [1]})
+        self.assertEqual(item['state'], 'failed')
+        self.assertEqual(item['message'], '原证书使用 DNS 验证，当前同订单续签仅支持 HTTP 验证')
+        self.assertEqual(item['before']['ssl']['auth_type'], 'dns')
+        self.assertEqual(op.execute(self.client, item)['state'], 'failed')
+        self.assertEqual(self.mutations(), [])
+        self.assertNotIn('PRIVATE_SECRET', json.dumps(item))
+        self.assertNotIn('BEGIN CERTIFICATE', json.dumps(item))
+
+    def test_ssl_renew_unknown_or_tls_auth_explains_http_requirement(self):
+        for auth in ('tls', ''):
+            with self.subTest(auth=auth):
+                self.client.ssl.update(status=True, csr=pem(days=5), index='a' * 32, auth_type=auth, type=1)
+                op, item = self.item('ssl_renew', {'sites': [1]})
+                self.assertEqual(item['state'], 'failed')
+                self.assertEqual(item['message'], '未核实原证书使用 HTTP 验证，无法同订单续签')
+                self.assertEqual(op.execute(self.client, item)['state'], 'failed')
+        self.assertEqual(self.mutations(), [])
+
+    def test_ssl_renew_unlinked_order_is_actionable_and_never_submitted(self):
+        certificate = pem(days=5)
+        for index, enabled, cert, kind in (('a' * 32, True, certificate, 1), ('', True, certificate, 1),
+                                          ('a' * 32, False, '', 1), ('a' * 32, True, certificate, 2)):
+            with self.subTest(index=index, enabled=enabled, kind=kind):
+                self.client.ssl.update(status=enabled, csr=cert, index=index, auth_type='http', type=kind)
+                op, item = self.item('ssl_renew', {'sites': [1]})
+                self.assertEqual(item['state'], 'failed')
+                self.assertEqual(item['message'], '未找到唯一匹配的 HTTP 免费证书订单，无法同订单续签')
+                self.assertEqual(op.execute(self.client, item)['state'], 'failed')
+        self.assertEqual(self.mutations(), [])
+
+    def test_ssl_renew_unknown_read_error_stays_masked(self):
+        original = self.client.request
+        def failing_read(path, action=None, *args, **kwargs):
+            if action == 'GetSSL':
+                raise PanelAPIError('PRIVATE_SECRET raw panel body')
+            return original(path, action, *args, **kwargs)
+        self.client.request = failing_read
+        _, item = self.item('ssl_renew', {'sites': [1]})
+        self.assertEqual(item['state'], 'failed')
+        self.assertEqual(item['message'], '无法核对该网站的目标配置')
+        self.assertNotIn('PRIVATE_SECRET', json.dumps(item))
+        self.assertEqual(self.mutations(), [])
+
     def test_uncertain_mutation_is_never_automatically_reissued(self):
         op, item = self.item('site_rewrite', {'sites': [1], 'mode': 'custom', 'webserver': 'nginx', 'rules': '# desired\n'})
         self.client.mutation_error = PanelAPIError('timeout', uncertain=True)

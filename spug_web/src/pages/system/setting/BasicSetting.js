@@ -3,9 +3,9 @@
  * Copyright (c) <spug.dev@gmail.com>
  * Released under the AGPL-3.0 License.
  */
-import React  from 'react';
+import React from 'react';
 import { observer } from 'mobx-react';
-import { Form, Popover, Input, Button, message } from 'antd';
+import { Form, Input, Button, message } from 'antd';
 import styles from './index.module.css';
 import { http, t } from 'libs';
 import store from './store';
@@ -23,7 +23,6 @@ export default observer(function () {
       .finally(() => store.loading = false)
   }
 
-  const spugWx = <img src="https://cdn.spug.cc/img/spug-weixin.jpeg" alt='spug'/>;
   return (
     <React.Fragment>
       <div className={styles.title}>{t('基本设置')}</div>
@@ -31,17 +30,11 @@ export default observer(function () {
         <Form.Item
           label={t('调用凭据')}
           labelCol={{span: 24}}
-          extra={<span>{t('如需要使用Spug的邮件、微信和MFA等内置服务，请关注公众号')}
-              <span style={{color: '#008dff', cursor: 'pointer'}}>
-                  <Popover content={spugWx}>
-                    <span>Spug</span>
-                  </Popover>
-              </span>
-              {t('在【我的】页面获取调用凭据，否则请留空。')}</span>}>
+          extra={t('仅使用外部邮件、微信和 MFA 服务时填写，无需使用请留空。')}>
           <Input
             value={store.settings.spug_key}
             onChange={e => store.update('spug_key', e.target.value)}
-            placeholder={t('请输入Spug微信公众号获取到的Token')}/>
+            placeholder={t('请输入服务商提供的调用凭据')}/>
         </Form.Item>
         <Form.Item style={{marginTop: 24}}>
           <Button type="primary" loading={store.loading} onClick={handleSubmit}>{t('保存设置')}</Button>

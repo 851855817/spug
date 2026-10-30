@@ -1,0 +1,34 @@
+{
+  "revision": "df34e1a68535937f47ad7256f6914dd0897e1a54",
+  "published": true,
+  "paired_backup_valid": true,
+  "preservation_objects": 63,
+  "business_schema_keys_unchanged": true,
+  "original_process_identity": true,
+  "only_reviewed_api_overlay": true,
+  "api_files_before": [
+    233,
+    273
+  ],
+  "api_files_after": [
+    234,
+    274
+  ],
+  "ui_files_before": [
+    115,
+    115
+  ],
+  "ui_files_after": [
+    120,
+    120
+  ],
+  "api_ui_receipts_valid": true,
+  "services_running": 9,
+  "health_checks_ok": 15,
+  "health_timer": "active",
+  "server_public_revision": true,
+  "default_palette_classic_blue": true,
+  "generic_setting_still_protected": true,
+  "source_commit_binding": true,
+  "original_license": true
+}

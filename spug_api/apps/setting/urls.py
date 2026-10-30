@@ -5,8 +5,13 @@
 from django.urls import path
 from apps.setting.views import *
 from apps.setting.user import UserSettingView
+from apps.setting.health_views import PlatformHealthView
+from apps.setting.appearance import AppearanceView, PublicAppearanceView
 
 urlpatterns = [
+    path('appearance/public/', PublicAppearanceView.as_view()),
+    path('appearance/', AppearanceView.as_view()),
+    path('health/', PlatformHealthView.as_view()),
     path('', SettingView.as_view()),
     path('user/', UserSettingView.as_view()),
     path('ldap/', LDAPUserView.as_view()),

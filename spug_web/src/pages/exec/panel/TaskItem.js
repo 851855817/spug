@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Alert, Descriptions, Space, Typography } from 'antd';
+import { Alert, Space, Typography } from 'antd';
 import Evidence, { Status } from './TaskEvidence';
+import UpgradeReview from './UpgradeReview';
 import { phpLabel } from './helpers';
 import styles from './TaskDetail.module.css';
 
@@ -11,6 +12,19 @@ export default function TaskItem({operation, child}) {
   const plan = snapshot.plan || {};
   const result = child.result || {};
   const observed = result.evidence || {};
+  const preflight = {};
+  if (plan.blockers?.length) preflight.blockers = plan.blockers.map(value => ({cpu: 'CPU 核数不足', memory: '内存不足',
+    disk: '磁盘空间不足', os: '操作系统不支持', dependencies: '缺少依赖', mutex: '软件冲突',
+    license: '授权未核实', protocol: '安装协议不支持'})[value] || value);
+  if (plan.requirements) preflight.requirements = plan.requirements;
+  if (plan.dependencies) preflight.dependencies = plan.dependencies;
+  if (plan.impact && !['php_update', 'panel_upgrade'].includes(operation)) preflight.impact = plan.impact;
+  if (plan.domains?.length > 3) preflight.domains = plan.domains;
+  if (typeof plan.rules === 'string') preflight.rules = plan.rules;
+  if (operation.startsWith('ssl_')) {
+    if (before.ssl_sync_inventory) preflight.ssl_sync_inventory = before.ssl_sync_inventory;
+    if (before.ssl) preflight.certificate = before.ssl;
+  }
   const upgrade = operation === 'panel_upgrade';
   const legacy = plan.mode === 'legacy_stable' || plan.channel === 'stable';
   const fields = [];
@@ -27,13 +41,6 @@ export default function TaskItem({operation, child}) {
     fields.push(['预计新增', `${Number(before.new_files) || 0} 个`]);
     fields.push(['预计覆盖', `${Number(before.overwrite_files) || 0} 个`]);
   } else {
-    if (operation === 'php_update') {
-      const destination = observed.version || plan.target_version;
-      if (before.runtime?.version && destination) fields.push([
-        observed.version ? '版本读回' : '预计更新', `${before.runtime.version} → ${destination}`,
-      ]);
-      if (Array.isArray(plan.impact?.website_refs)) fields.push(['影响网站', `${plan.impact.website_refs.length} 个`]);
-    }
     if (plan.path) fields.push(['目录', plan.path]);
     if (Array.isArray(plan.domains) && plan.domains.length) fields.push(['域名',
       plan.domains.length <= 3 ? plan.domains.join('、') : `${plan.domains.slice(0, 2).join('、')} 等 ${plan.domains.length} 个`]);
@@ -45,11 +52,26 @@ export default function TaskItem({operation, child}) {
     if (operation === 'software_install' && plan.m_version && plan.min_version) fields.push(['版本', `${plan.m_version} / ${plan.min_version}`]);
   }
   let message = result.message || snapshot.message;
+  let suggestion;
+  const renewalPreflightFailure = operation === 'ssl_renew' && child.state === 'failed' &&
+    snapshot.state === 'failed' && result.state === 'failed' &&
+    Array.isArray(child.intents) && child.intents.length === 0 && !('remote' in result);
+  const dnsMessage = '原证书使用 DNS 验证，当前同订单续签仅支持 HTTP 验证';
+  // Diagnose saved preflight failures from frozen evidence only. Do not replace
+  // errors after dispatch, infer missing history, or rewrite task records.
+  if (renewalPreflightFailure && before.ssl?.auth_type === 'dns' &&
+    snapshot.message === '无法核对该网站的目标配置' && message === snapshot.message) message = dnsMessage;
+  if (renewalPreflightFailure) {
+    if (message === dnsMessage) suggestion = '请到原宝塔面板按 DNS 方式续签。若改用 HTTP 申请，请先确认域名解析与 80 端口可访问，再新建申请任务并预检。';
+    if (message === '未核实原证书使用 HTTP 验证，无法同订单续签') suggestion = '请在原宝塔面板核实证书验证方式，并按原方式续签。';
+    if (message === '未找到唯一匹配的 HTTP 免费证书订单，无法同订单续签') suggestion = '请在原宝塔面板核实证书及其申请订单；导入证书或订单不匹配时，请按原签发方式续签。';
+  }
   if (upgrade && child.state === 'ready') message = legacy ?
     '升级时面板会短暂断连，实际版本由官方稳定通道决定。' : '升级时面板会短暂断连。';
   if (upgrade && child.state === 'success' && observed.version) message = '升级完成，已核验实际版本。';
   if (message === '预检通过') message = '';
-  const important = ['failed', 'uncertain', 'remote'].includes(child.state);
+  const important = ['failed', 'uncertain', 'remote', 'skipped'].includes(child.state) ||
+    (operation.startsWith('ssl_') && child.state === 'already');
   return <div>
     <Space wrap className={styles.heading}>
       <Typography.Text strong>{title}</Typography.Text>
@@ -58,19 +80,15 @@ export default function TaskItem({operation, child}) {
     {fields.length > 0 && <div className={styles.fields}>{fields.map(([label, value]) => <span key={label}>
       <Typography.Text type="secondary">{label}：</Typography.Text>{value}
     </span>)}</div>}
-    {message && (important ? <Alert showIcon type={child.state === 'failed' ? 'error' : 'warning'} message={message}/> :
-      <Typography.Paragraph className={styles.message} type="secondary">{message}</Typography.Paragraph>)}
+    {message && important && <Alert showIcon type={child.state === 'failed' ? 'error' : 'warning'} message={message} description={suggestion}/>}
+    {message && child.state === 'ready' && upgrade && <Typography.Paragraph className={styles.message} type="secondary">{message}</Typography.Paragraph>}
+    <UpgradeReview operation={operation} snapshot={snapshot} evidence={observed}/>
     <details className={styles.details} onToggle={event => setExpanded(event.currentTarget.open)}>
-      <summary>详细记录</summary>
-      {expanded && <Descriptions bordered size="small" column={1}>
-        <Descriptions.Item label="预检说明"><Evidence value={snapshot.message}/></Descriptions.Item>
-        <Descriptions.Item label="目标"><Evidence value={snapshot.target}/></Descriptions.Item>
-        <Descriptions.Item label="预检时状态"><Evidence value={before}/></Descriptions.Item>
-        <Descriptions.Item label="执行计划与影响"><Evidence value={plan}/></Descriptions.Item>
-        <Descriptions.Item label="结果与核验"><Evidence value={result}/></Descriptions.Item>
-        <Descriptions.Item label="下发记录"><Evidence value={child.intents}/></Descriptions.Item>
-        <Descriptions.Item label="人工判定"><Evidence value={child.resolutions}/></Descriptions.Item>
-      </Descriptions>}
+      <summary>核验数据</summary>
+      {expanded && <>
+        {Object.keys(preflight).length > 0 && <><Typography.Text strong>预检数据</Typography.Text><Evidence value={preflight}/></>}
+        {Object.keys(observed).length ? <><Typography.Text strong>核验结果</Typography.Text><Evidence value={observed}/></> : <Typography.Text type="secondary">暂无核验数据</Typography.Text>}
+      </>}
     </details>
   </div>;
 }

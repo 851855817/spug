@@ -25,7 +25,7 @@ export default observer(function () {
       <span>
         {t('文件过滤规则')} &nbsp;
         <Tooltip title={t('请输入相对于项目根目录的文件路径，根据包含或排除规则进行打包。')}>
-          <QuestionCircleOutlined style={{color: 'rgba(0, 0, 0, 0.45)'}}/>
+          <QuestionCircleOutlined style={{color: 'var(--kops-muted)'}}/>
         </Tooltip>
       </span>
       <Radio.Group
@@ -58,7 +58,7 @@ export default observer(function () {
       </Form.Item>
       <Form.Item
         label={t('代码检出前执行')}
-        tooltip={t('在运行 Spug 的服务器(或容器)上执行，当前目录为仓库源代码目录，可以执行任意自定义命令。')}
+        tooltip={t('在运行平台的服务器(或容器)上执行，当前目录为仓库源代码目录，可以执行任意自定义命令。')}
         extra={<span>{Tips}{t('，请避免在此修改已跟踪的文件，防止在检出代码时失败。')}</span>}>
         <ACEditor
           readOnly={store.isReadOnly}
@@ -74,7 +74,7 @@ export default observer(function () {
       <Form.Item
         label={t('代码检出后执行')}
         style={{marginTop: 12, marginBottom: 24}}
-        tooltip={t('在运行 Spug 的服务器(或容器)上执行，当前目录为检出后的源代码目录，可执行任意自定义命令。')}
+        tooltip={t('在运行平台的服务器(或容器)上执行，当前目录为检出后的源代码目录，可执行任意自定义命令。')}
         extra={<span>{Tips}{t('，大多数情况下在此进行构建操作。')}</span>}>
         <ACEditor
           readOnly={store.isReadOnly}

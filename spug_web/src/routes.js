@@ -26,6 +26,8 @@ import ExecTask from './pages/exec/task';
 import ExecTemplate from './pages/exec/template';
 import ExecTransfer from './pages/exec/transfer';
 import ExecPanel from './pages/exec/panel';
+import ExecOperations from './pages/exec/operations';
+import { SiteInventory, BackupInventory } from './pages/panel-inventory';
 import DeployApp from './pages/deploy/app';
 import DeployRepository from './pages/deploy/repository';
 import DeployRequest from './pages/deploy/request';
@@ -36,12 +38,14 @@ import ConfigApp from './pages/config/app';
 import ConfigSetting from './pages/config/setting';
 import MonitorIndex from './pages/monitor';
 import ServerMonitor from './pages/server-monitor';
+import ServerExpiry from './pages/server-expiry';
 import AlarmIndex from './pages/alarm/alarm';
 import AlarmGroup from './pages/alarm/group';
 import AlarmContact from './pages/alarm/contact';
 import SystemAccount from './pages/system/account';
 import SystemRole from './pages/system/role';
 import SystemSetting from './pages/system/setting';
+import SystemHealth from './pages/system/health';
 import SystemLogin from './pages/system/login';
 import SystemCredential from './pages/system/credential';
 import WelcomeIndex from './pages/welcome/index';
@@ -59,13 +63,17 @@ export default [
     component: DashboardIndex
   },
   {icon: <CloudServerOutlined/>, title: t('主机管理'), auth: 'host.host.view', path: '/host', component: HostIndex},
+  {path: '/host/expiry', auth: 'admin', component: ServerExpiry},
   {icon: <CloudServerOutlined/>, title: t('宝塔面板管理'), auth: 'baota.panel.view', path: '/baota', component: BaotaIndex},
   {
-    icon: <CodeOutlined/>, title: t('批量执行'), auth: 'exec.task.do|exec.template.view|exec.panel.view', child: [
+    icon: <CodeOutlined/>, title: t('批量执行'), auth: 'exec.task.do|exec.template.view|exec.panel.view|admin', child: [
       {title: t('执行任务'), auth: 'exec.task.do', path: '/exec/task', component: ExecTask},
       {title: t('模板管理'), auth: 'exec.template.view', path: '/exec/template', component: ExecTemplate},
       {title: t('文件分发'), auth: 'exec.transfer.do', path: '/exec/transfer', component: ExecTransfer},
       {title: t('面板任务'), auth: 'exec.panel.view', path: '/exec/panel', component: ExecPanel},
+      {title: t('运维作业'), auth: 'admin', path: '/exec/operations', component: ExecOperations},
+      {title: t('网站与证书'), auth: 'admin', path: '/exec/sites', component: SiteInventory},
+      {title: t('备份检查台'), auth: 'admin', path: '/exec/backups', component: BackupInventory},
     ]
   },
   {
@@ -110,6 +118,7 @@ export default [
       {title: t('账户管理'), auth: 'system.account.view', path: '/system/account', component: SystemAccount},
       {title: t('角色管理'), auth: 'system.role.view', path: '/system/role', component: SystemRole},
       {title: t('系统设置'), auth: 'system.setting.view', path: '/system/setting', component: SystemSetting},
+      {title: t('平台健康'), auth: 'admin', path: '/system/health', component: SystemHealth},
     ]
   },
   {path: '/welcome/index', component: WelcomeIndex},

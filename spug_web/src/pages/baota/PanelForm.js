@@ -136,7 +136,7 @@ export default function PanelForm({record, groups, selectedGroup, onCancel, onSa
         </Form.Item>
         <Divider orientation="left">API 连接（选填）</Divider>
         <Typography.Paragraph type="secondary">
-          API 密钥与登录密码不同。请先在宝塔设置中开启 API，并将 Spug 实际出口 IP 加入 API 白名单。
+          API 密钥与登录密码不同。请先在宝塔设置中开启 API，并将本平台实际出口 IP 加入 API 白名单。
         </Typography.Paragraph>
         <Form.Item name="api_base_url" label="API 基础地址" extra="默认从面板地址自动提取，去掉登录安全入口；已有或手动填写的地址保留，反向代理可包含路径前缀。"
                    rules={[{validator: validateAPIURL}]}>

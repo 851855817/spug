@@ -1,0 +1,216 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Button, Card, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
+import Table from 'components/ResizableTable';
+import { hasPermission, http } from 'libs';
+import { ACTIVE_STATES, CATEGORY_LABELS, RUN_LABELS, displayValue, downloadReport, hostName } from './helpers';
+
+const POLL_INTERVAL = 5000;
+const MAX_POLLS = 60;
+const stateColor = state => ['success', 'ok', 'same'].includes(state) ? 'green' : ['failed', 'tripped', 'changed', 'different'].includes(state) ? 'red' : ['warning', 'unknown', 'missing'].includes(state) ? 'orange' : 'default';
+function State({value, labels}) {return <Tag color={stateColor(value)}>{labels[value] || '未知'}</Tag>;}
+const RESULT_LABELS = {normal: '正常', abnormal: '异常', unverified: '待核实', pending: '待执行', running: '采集中', cancelled: '已取消'};
+const RESULT_COLORS = {normal: 'green', abnormal: 'red', unverified: 'orange'};
+// Interpret only the fixed v1 probe contract; historical snapshots need no new probe.
+const CHECK_KEYS = {
+  php_environment: ['display_errors', 'expose_php', 'allow_url_include', 'extension_curl', 'extension_openssl', 'extension_mbstring', 'extension_pdo_mysql'],
+  linux_inspection: ['memory_available_percent', 'root_used_percent'],
+  web_environment: ['port_80_listening', 'port_443_listening'],
+};
+const SWITCH_LABELS = {display_errors: 'PHP 错误显示开关', expose_php: 'PHP 版本公开开关', allow_url_include: '远程文件包含开关'};
+function knownCheck(check, run) {return String(run?.version) === '1' && CHECK_KEYS[run?.job]?.includes?.(check.key);}
+function validPercent(value) {return Number.isFinite(value) && value >= 0 && value <= 100;}
+function checkLabel(check, run) {return (knownCheck(check, run) && SWITCH_LABELS[check.key]) || check.label || check.key;}
+function checkValue(check, run) {
+  if (knownCheck(check, run)) {
+    if (typeof check.value === 'boolean') {
+      if (SWITCH_LABELS[check.key]) return check.value ? 'On（已开启）' : 'Off（已关闭）';
+      if (check.key.startsWith('extension_')) return check.value ? '已加载' : '未加载';
+      if (['port_80_listening', 'port_443_listening'].includes(check.key)) return check.value ? '已监听' : '未监听';
+    }
+    if (check.key.endsWith('_percent') && validPercent(check.value)) return `${check.value}%`;
+  }
+  return displayValue(check.value);
+}
+function checkDescription(check, run) {
+  const generic = !check.summary || ['需要关注', '已采集', '指标异常'].includes(check.summary);
+  if (check.status !== 'warning') return generic ? '—' : check.summary;
+  let reason;
+  if (knownCheck(check, run)) {
+    if (check.value === true) reason = {
+      display_errors: 'display_errors=On，可能输出错误详情；生产环境建议 Off。仅 CLI 配置，非实际报错记录。',
+      expose_php: 'expose_php=On，可能公开 PHP 版本；生产环境建议 Off。仅 CLI 配置。',
+      allow_url_include: 'allow_url_include=On，允许远程文件包含；生产环境建议 Off。仅 CLI 配置。',
+    }[check.key];
+    if (check.value === false) {
+      const extension = {extension_curl: 'cURL', extension_openssl: 'OpenSSL', extension_mbstring: 'mbstring'}[check.key];
+      if (extension) reason = `${extension} 扩展未加载；按业务需要核对目标 PHP CLI 的扩展配置，网站 PHP-FPM 需另行核实。`;
+      if (check.key === 'port_80_listening' || check.key === 'port_443_listening') reason =
+        `本机 TCP ${check.key === 'port_80_listening' ? 80 : 443} 未监听；按业务需要核对 Web 服务及监听配置，不代表公网连通性。`;
+    }
+    if (validPercent(check.value)) {
+      if (check.key === 'memory_available_percent' && check.value < 10) reason = `可用内存 ${check.value}%（低于 10% 告警线）；检查进程内存占用。`;
+      if (check.key === 'root_used_percent' && check.value >= 90) reason = `根分区使用率 ${check.value}%（达到 90% 告警线）；检查大文件和日志占用。`;
+    }
+  }
+  if (reason) return generic ? reason : `${reason} ${check.summary}`;
+  return generic ? `当前值：${checkValue(check, run)}；本条记录未提供具体判定依据。` : check.summary;
+}
+function resultState(target) {
+  if (target.state === 'failed') return 'abnormal';
+  if (['pending', 'running', 'cancelled'].includes(target.state)) return target.state;
+  if (target.state !== 'success') return 'unverified';
+  const checks = Array.isArray(target.checks) ? target.checks : [];
+  if (checks.some(check => check.status === 'warning')) return 'abnormal';
+  return checks.length && checks.every(check => check.status === 'ok' && check.value !== null && check.value !== undefined &&
+    ['string', 'number', 'boolean'].includes(typeof check.value)) ? 'normal' : 'unverified';
+}
+function resultReason(target, run) {
+  if (target.state === 'failed') return `采集失败：${target.message || CATEGORY_LABELS[target.category] || '原因未返回'}`;
+  if (target.state === 'unknown') return target.message || '采集中断，结果待核实';
+  if (target.state !== 'success') return '—';
+  const checks = Array.isArray(target.checks) ? target.checks : [];
+  const issues = checks.filter(check => check.status !== 'ok' || check.value === null || check.value === undefined ||
+    !['string', 'number', 'boolean'].includes(typeof check.value));
+  return issues.map(check => `${checkLabel(check, run)}：${check.status === 'warning' ? checkDescription(check, run) : check.summary || '数据未核实'}`).join('；') ||
+    (checks.length ? '—' : '未取得检查数据');
+}
+function Checks({checks, run}) {
+  return <Table resizeKey="operations-checks" rowKey="key" size="small" dataSource={checks || []} pagination={false} scroll={{x: 680}} columns={[
+    {title: '检查项', dataIndex: 'label', width: 180, render: (_, check) => checkLabel(check, run)},
+    {title: '状态', dataIndex: 'status', width: 100, render: (status, check) => {
+      const state = resultState({state: 'success', checks: [check]});
+      return <Tag color={RESULT_COLORS[state]}>{RESULT_LABELS[state]}</Tag>;
+    }},
+    {title: '具体数据', dataIndex: 'value', width: 180, render: (_, check) => checkValue(check, run)},
+    {title: '说明', dataIndex: 'summary', width: 400, render: (_, check) => checkDescription(check, run)},
+  ]}/>;
+}
+
+export default function RunDetail({runId}) {
+  const allowed = hasPermission('admin');
+  const [run, setRun] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const [action, setAction] = useState('');
+  const [notice, setNotice] = useState('');
+  const [pollRevision, setPollRevision] = useState(0);
+  const [pollStopped, setPollStopped] = useState(false);
+  const [stateFilter, setStateFilter] = useState();
+  const [expandedIds, setExpandedIds] = useState([]);
+  const mounted = useRef(false);
+  const revision = useRef(0);
+  const readPending = useRef(false);
+  const actionPending = useRef(false);
+  const dialog = useRef();
+  const pollCount = useRef(0);
+  const latest = useRef();
+  latest.current = {run, error, allowed};
+
+  const refresh = useCallback(async () => {
+    if (!allowed || !mounted.current || readPending.current) return null;
+    const request = ++revision.current;
+    readPending.current = true; setLoading(true);
+    try {
+      const result = await http.get(`/api/ops/runs/${runId}/`);
+      if (mounted.current && request === revision.current) {setRun(result); setError(false); return result;}
+    } catch (_) {
+      if (mounted.current && request === revision.current) setError(true);
+    } finally {
+      if (request === revision.current) {readPending.current = false; if (mounted.current) setLoading(false);}
+    }
+    return null;
+  }, [allowed, runId]);
+
+  const runState = run?.state;
+  useEffect(() => {
+    mounted.current = true;
+    if (allowed) refresh();
+    return () => {mounted.current = false; revision.current += 1; readPending.current = false; if (dialog.current) dialog.current.destroy();};
+  }, [allowed, refresh]);
+
+  useEffect(() => {
+    if (!allowed || error || !ACTIVE_STATES.includes(runState)) return;
+    let valid = true; let timer;
+    if (pollCount.current >= MAX_POLLS) {setPollStopped(true); return;}
+    const schedule = () => {timer = setTimeout(async () => {
+      if (!valid) return;
+      if (actionPending.current || readPending.current) {schedule(); return;}
+      pollCount.current += 1;
+      const result = await refresh();
+      if (!valid) return;
+      if (!result || pollCount.current >= MAX_POLLS) {setPollStopped(true); return;}
+      if (ACTIVE_STATES.includes(result.state)) schedule();
+    }, POLL_INTERVAL);};
+    schedule();
+    return () => {valid = false; clearTimeout(timer);};
+  }, [allowed, error, runState, refresh, pollRevision]);
+
+  async function performAction(kind, expectedState) {
+    const current = latest.current;
+    if (!mounted.current || !hasPermission('admin') || actionPending.current || !current.allowed) return;
+    if (current.error || current.run?.state !== expectedState) {setNotice('作业状态已变化，请刷新后重新确认。'); return;}
+    actionPending.current = true; revision.current += 1; readPending.current = false;
+    setLoading(false); setAction(kind); setNotice('');
+    try {
+      const payload = kind === 'continue' && expectedState === 'tripped' ? {acknowledge: true} : {};
+      const result = await http.post(`/api/ops/runs/${runId}/${kind}/`, payload);
+      if (mounted.current) {
+        if (result?.state && result?.id === runId) {setRun(result); setError(false);}
+        else await refresh();
+      }
+    } catch (_) {
+      if (mounted.current) {setNotice('操作结果待核实，请刷新状态后再决定下一步。'); await refresh();}
+    } finally {actionPending.current = false; if (mounted.current) {pollCount.current = 0; setAction(''); setPollRevision(value => value + 1); setPollStopped(false);}}
+  }
+
+  function confirmAction(kind) {
+    if (!run || error || actionPending.current) return;
+    const tripped = run.state === 'tripped';
+    dialog.current = Modal.confirm({
+      title: kind === 'cancel' ? '取消尚未执行的主机？' : tripped ? '确认处理熔断并继续？' : '确认继续下一批？',
+      content: kind === 'cancel' ? '取消只阻止未下发的检查；已下发的远程检查可能继续完成，请以逐台结果为准。' :
+        tripped ? '本批已达到失败或待核实阈值并熔断。请先核对失败原因与中断项；确认后仅继续后续未执行主机，中断待核实项不会自动重发。' :
+          '请核对本批检查结果。确认后按冻结目标执行下一批，只读 SSH 探测会占用连接与系统资源。',
+      okText: kind === 'cancel' ? '确认取消未执行项' : '确认继续', cancelText: '返回检查',
+      onOk: () => performAction(kind, run.state),
+    });
+  }
+
+  if (!allowed) return <Alert type="warning" message="仅超级管理员可访问运维作业。"/>;
+  if (!run) return <Card title={`作业 #${runId}`}>{error ? <Alert type="error" message="作业读取失败。"/> : <Spin/>}<Button onClick={refresh} loading={loading}>刷新详情</Button></Card>;
+  const targets = run.targets || [];
+  const counts = targets.reduce((result, target) => {
+    const state = resultState(target); result[state] = (result[state] || 0) + 1; return result;
+  }, {});
+  const visibleTargets = targets.filter(target => !stateFilter || resultState(target) === stateFilter);
+  const busy = Boolean(action);
+  return <Card title={`作业 #${run.id} · ${run.job_name || run.job}`}>
+    <Space wrap style={{marginBottom: 16}}>
+      <State value={run.state} labels={RUN_LABELS}/>
+      <Button loading={loading} disabled={busy} onClick={() => {pollCount.current = 0; setPollStopped(false); setPollRevision(value => value + 1); refresh();}}>刷新详情</Button>
+      <Button disabled={loading || busy} onClick={() => downloadReport(run, null, error)}>下载 JSON 报告</Button>
+      {['paused', 'tripped'].includes(run.state) && <Button type="primary" disabled={error || busy || loading} loading={action === 'continue'} onClick={() => confirmAction('continue')}>继续下一批</Button>}
+      {['queued', 'running', 'paused', 'tripped'].includes(run.state) && <Button danger disabled={error || busy} loading={action === 'cancel'} onClick={() => confirmAction('cancel')}>取消未执行项</Button>}
+    </Space>
+    {error && <Alert showIcon type="error" message="最新读取失败，当前显示上次快照；请刷新后操作。"/>}
+    {notice && <Alert showIcon type="info" message={notice}/>}
+    {run.state === 'tripped' && <Alert showIcon type="error" message="本批失败或待核实达到阈值，已熔断。核对原因后明确确认才能继续。"/>}
+    {pollStopped && ACTIVE_STATES.includes(run.state) && <Typography.Paragraph type="secondary">自动刷新已结束，请手动刷新。</Typography.Paragraph>}
+    <Space wrap style={{marginBottom: 16}}>
+      <strong>共 {targets.length} 台</strong>
+      {Object.entries(RESULT_LABELS).filter(([state]) => counts[state]).map(([state, label]) => <span key={state}>{label} {counts[state]}</span>)}
+      <Select allowClear placeholder="结果状态" style={{width: 150}} value={stateFilter} onChange={setStateFilter}
+        options={Object.entries(RESULT_LABELS).map(([value, label]) => ({value, label}))}/>
+    </Space>
+    <Table resizeKey="operations-results-v2" rowKey="id" dataSource={visibleTargets} pagination={false} scroll={{x: 900}} columns={[
+      {title: '主机', dataIndex: 'host', width: 260, render: hostName},
+      {title: '结果状态', key: 'state', width: 110, render: (_, target) => <Tag color={RESULT_COLORS[resultState(target)]}>{RESULT_LABELS[resultState(target)]}</Tag>},
+      {title: '异常原因', key: 'reason', width: 400, render: (_, target) => <span style={{whiteSpace: 'pre-wrap', overflowWrap: 'anywhere'}}>{resultReason(target, run)}</span>},
+      {title: '检查数据', key: 'data', width: 150, render: (_, target) => target.checks?.length ?
+        <Button type="link" size="small" onClick={() => setExpandedIds(ids => ids.includes(target.id) ? ids.filter(id => id !== target.id) : [...ids, target.id])}>
+          {expandedIds.includes(target.id) ? '收起数据' : `查看数据（${target.checks.length} 项）`}</Button> : '暂无数据'},
+    ]} expandable={{expandedRowKeys: expandedIds, onExpandedRowsChange: setExpandedIds,
+      rowExpandable: target => Boolean(target.checks?.length), expandedRowRender: target => <Checks checks={target.checks} run={run}/>}}/>
+
+  </Card>;
+}

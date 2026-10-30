@@ -55,13 +55,13 @@ function ComTable() {
     let value = moment(props.value)
     const days = value.diff(moment(), 'days')
     if (days > 30) {
-      return <span>{t('剩余')} <b style={{color: '#389e0d'}}>{days}</b> {t('天')}</span>
+      return <span>{t('剩余')} <b style={{color: 'var(--kops-success)'}}>{days}</b> {t('天')}</span>
     } else if (days > 7) {
-      return <span>{t('剩余')} <b style={{color: '#faad14'}}>{days}</b> {t('天')}</span>
+      return <span>{t('剩余')} <b style={{color: 'var(--kops-warning)'}}>{days}</b> {t('天')}</span>
     } else if (days >= 0) {
-      return <span>{t('剩余')} <b style={{color: '#d9363e'}}>{days}</b> {t('天')}</span>
+      return <span>{t('剩余')} <b style={{color: 'var(--kops-error)'}}>{days}</b> {t('天')}</span>
     } else {
-      return <span>{t('过期')} <b style={{color: '#d9363e'}}>{Math.abs(days)}</b> {t('天')}</span>
+      return <span>{t('过期')} <b style={{color: 'var(--kops-error)'}}>{Math.abs(days)}</b> {t('天')}</span>
     }
   }
 
@@ -84,7 +84,7 @@ function ComTable() {
                 key: 'form',
                 label: (
                   <Space>
-                    <FormOutlined style={{fontSize: 16, marginRight: 4, color: '#1890ff'}}/>
+                    <FormOutlined style={{fontSize: 16, marginRight: 4, color: 'var(--kops-primary)'}}/>
                     <span>{t('新建主机')}</span>
                   </Space>
                 )

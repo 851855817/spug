@@ -60,7 +60,7 @@ function ComTable() {
       <Table.Column width={260} title={t('最近执行')} render={info => info.latest_at ? (
         <Space>
           <Tag color={STATUS_COLORS[info.latest_status]}>{info.latest_status_alias}</Tag>
-          <span style={{color: '#999'}}>{info.latest_at}</span>
+          <span style={{color: 'var(--kops-muted)'}}>{info.latest_at}</span>
         </Space>
       ) : '-'}/>
       <Table.Column width={260} title={t('操作')} render={info => (

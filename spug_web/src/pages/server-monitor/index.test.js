@@ -400,3 +400,52 @@ test('a global list read failure ends loading without starting a sampling round'
   expect(button('全部采集').disabled).toBe(false);
   expect(container.textContent).toContain('监控列表加载失败');
 });
+
+const renderEmbedded = async () => act(async () => {ReactDOM.render(<ServerMonitor embedded/>, container); await flush();});
+
+test('home embeds existing metrics but only refreshes local cache until collection is requested', async () => {
+  cards = [{...card(1), snapshot}]; await renderEmbedded();
+  expect(container.textContent).toContain('CPU');
+  expect(container.textContent).not.toContain('首页');
+  expect(container.textContent).toContain('每 60 秒刷新缓存');
+  expect(http.post).not.toHaveBeenCalled();
+  await advance(60000);
+  expect(http.get.mock.calls.filter(([path]) => path.endsWith('cards/'))).toHaveLength(2);
+  expect(http.post).not.toHaveBeenCalled();
+  await act(async () => {button('刷新缓存').click(); await flush();});
+  expect(http.get.mock.calls.filter(([path]) => path.endsWith('cards/'))).toHaveLength(3);
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('home cache polling pauses while hidden and stops on unmount', async () => {
+  await renderEmbedded();
+  await act(async () => {Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'hidden'});
+    document.dispatchEvent(new Event('visibilitychange')); await flush();});
+  await advance(180000); expect(http.get).toHaveBeenCalledTimes(1);
+  await act(async () => {Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'visible'});
+    document.dispatchEvent(new Event('visibilitychange')); await flush();});
+  await advance(60000); expect(http.get).toHaveBeenCalledTimes(2);
+  act(() => {ReactDOM.unmountComponentAtNode(container);});
+  await advance(120000); expect(http.get).toHaveBeenCalledTimes(2);
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('home single collection targets one server and cache polling does not interrupt it', async () => {
+  await renderEmbedded(); let finish;
+  http.post.mockReturnValue(new Promise(resolve => {finish = resolve;}));
+  await act(async () => {collectButton('panel:2').click(); await flush();});
+  await advance(60000);
+  expect(http.get).toHaveBeenCalledTimes(1);
+  expect(http.post.mock.calls.map(([, body]) => body.key)).toEqual(['panel:2']);
+  await act(async () => {finish({key: 'panel:2', snapshot, retry_after: 30, retry_reason: 'collected'}); await flush();});
+  expect(container.querySelector('[data-monitor-key="panel:2"]').textContent).toContain('采集完成');
+});
+
+test('home global collection remains explicit and never turns on automatic sampling', async () => {
+  await renderEmbedded();
+  await act(async () => {button('全部采集').click(); await flush();});
+  await advance(200); await advance(200);
+  expect(http.post.mock.calls.map(([, body]) => body.key)).toEqual(['panel:1', 'panel:2']);
+  expect(container.querySelector('[aria-label="自动刷新"]').getAttribute('aria-checked')).toBe('false');
+  await advance(60000); expect(http.post).toHaveBeenCalledTimes(2);
+});

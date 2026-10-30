@@ -8,11 +8,11 @@ import LinkSettings from './LinkSettings';
 import useServerMonitor, { usePageVisibility } from './useServerMonitor';
 import styles from './index.module.less';
 
-export default function ServerMonitor() {
+export default function ServerMonitor({embedded = false}) {
   const allowed = hasPermission('monitor.monitor.view');
   const monitor = useServerMonitor(allowed);
   const visible = usePageVisibility();
-  const [automatic, setAutomatic] = useState(true);
+  const [automatic, setAutomatic] = useState(!embedded);
   const [interval, setInterval] = useState(60);
   const [hideIP, setHideIP] = useState(false);
   const [group, setGroup] = useState('');
@@ -28,11 +28,21 @@ export default function ServerMonitor() {
   const batchPending = useRef(false);
   const manualRequest = useRef(0);
   const controls = useRef();
-  controls.current = {automatic, visible};
+  controls.current = {automatic, visible, cacheBusy: monitor.loading || !!batchRound || manualRound || Object.values(monitor.collecting).some(Boolean)};
   useEffect(() => () => {manualRequest.current++;}, []);
   useEffect(() => {
     if (!visible) {manualRequest.current++; batchPending.current = false; setManualRound(false); setBatchRound(null); setBatchStatus('');}
   }, [visible]);
+  useEffect(() => {
+    if (!embedded || !allowed || !visible || automatic) return;
+    let pending = false;
+    const timer = window.setInterval(async () => {
+      if (pending || controls.current.cacheBusy) return;
+      pending = true;
+      try {await monitor.refresh(false);} finally {pending = false;}
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [embedded, allowed, visible, automatic, monitor.refresh]);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!visible) return;
@@ -95,13 +105,14 @@ export default function ServerMonitor() {
     if (success && version === manualRequest.current && controls.current.visible) setManualRound(true);
   }
   if (!allowed) return null;
+  const Container = embedded ? 'section' : 'main';
   return <AuthDiv auth="monitor.monitor.view">
-    <Breadcrumb><Breadcrumb.Item>首页</Breadcrumb.Item><Breadcrumb.Item>监控中心</Breadcrumb.Item><Breadcrumb.Item>服务器监控</Breadcrumb.Item></Breadcrumb>
-    <main className={styles.layout}>
-      <div className={styles.heading}><div><h2>服务器监控</h2><span>当前页 {shown.length} 台 / 共 {rows.length} 台 · {visible && automatic ? '自动采集' : '采集已暂停'}</span></div>
+    {!embedded && <Breadcrumb><Breadcrumb.Item>首页</Breadcrumb.Item><Breadcrumb.Item>监控中心</Breadcrumb.Item><Breadcrumb.Item>服务器监控</Breadcrumb.Item></Breadcrumb>}
+    <Container className={styles.layout} aria-label="服务器监控">
+      <div className={styles.heading}><div><h2>服务器监控</h2><span>当前页 {shown.length} 台 / 共 {rows.length} 台 · {visible && automatic ? '自动采集' : embedded && visible ? '每 60 秒刷新缓存' : '采集已暂停'}</span></div>
         <div className={styles.controls}>
           <label>隐藏 IP <Switch size="small" aria-label="隐藏 IP" checked={hideIP} onChange={value => filter(setHideIP, value)}/></label>
-          <label>自动刷新 <Switch size="small" aria-label="自动刷新" checked={automatic} onChange={toggleAutomatic}/></label>
+          <label>{embedded ? '自动采集' : '自动刷新'} <Switch size="small" aria-label="自动刷新" checked={automatic} onChange={toggleAutomatic}/></label>
           <Select aria-label="采集间隔" value={String(interval)} disabled={batchActive} onChange={value => setInterval(Number(value))}
             options={[30, 60, 300].map(value => ({value: String(value), label: value === 300 ? '5 分钟' : `${value} 秒`}))}/>
           <Button type="primary" icon={<ReloadOutlined/>} loading={batchActive}
@@ -109,7 +120,9 @@ export default function ServerMonitor() {
             title="采集所有已开启监控的服务器，包含其他分页；保留缓存和重试限制" onClick={collectAll}>全部采集</Button>
           {(batchActive || batchStatus) && <span role="status">{batchRound?.preparing ? '读取列表…'
             : batchRound ? `${batchRound.completed} / ${batchRound.keys.length}` : batchStatus}</span>}
-          <Button icon={<ReloadOutlined/>} loading={monitor.loading && !batchActive} disabled={batchActive} onClick={manualRefresh}>刷新</Button>
+          <Button icon={<ReloadOutlined/>} loading={monitor.loading && !batchActive} disabled={batchActive}
+            onClick={embedded ? () => monitor.refresh() : manualRefresh}>{embedded ? '刷新缓存' : '刷新'}</Button>
+          {embedded && <a href="/monitor/servers">监控中心</a>}
         </div>
       </div>
       <div className={styles.filters}>
@@ -136,7 +149,7 @@ export default function ServerMonitor() {
       {!!rows.length && <div className={styles.pagination}><Pagination current={currentPage} pageSize={pageSize} total={rows.length}
         showSizeChanger pageSizeOptions={['12', '24', '48']} showTotal={total => `共 ${total} 台服务器`}
         onChange={(value, size) => {cancelManual(); setPage(value); setPageSize(size);}}/></div>}
-    </main>
+    </Container>
     {linkCard && <LinkSettings card={linkCard} hideIP={hideIP} onCancel={() => setLinkCard(null)}
       onSaved={() => {cancelManual(); setLinkCard(null); monitor.refresh();}}/>}
   </AuthDiv>;

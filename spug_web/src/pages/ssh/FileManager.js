@@ -56,8 +56,8 @@ class FileManager extends React.Component {
     key: 'name',
     render: info => info.kind === 'd' ? (
       <div onClick={() => this.handleChdir(info.name, '1')} style={{cursor: 'pointer'}}>
-        <FolderOutlined style={{color: info.is_link ? '#008b8b' : '#2563fc'}}/>
-        <span style={{color: info.is_link ? '#008b8b' : '#2563fc', paddingLeft: 5}}>{info.name}</span>
+        <FolderOutlined style={{color: info.is_link ? 'var(--kops-primary-hover)' : 'var(--kops-primary)'}}/>
+        <span style={{color: info.is_link ? 'var(--kops-primary-hover)' : 'var(--kops-primary)', paddingLeft: 5}}>{info.name}</span>
       </div>
     ) : (
       <React.Fragment>
@@ -226,7 +226,7 @@ class FileManager extends React.Component {
         <div className={styles.drawerHeader}>
           {this.state.inputPath !== null ? (
             <Input size="small" className={styles.input}
-                   suffix={<div style={{color: '#999', fontSize: 12}}>{t('回车确认')}</div>}
+                   suffix={<div style={{color: 'var(--kops-muted)', fontSize: 12}}>{t('回车确认')}</div>}
                    value={this.state.inputPath} onChange={e => this.setState({inputPath: e.target.value})}
                    onBlur={this.handleInputEnter}
                    onPressEnter={this.handleInputEnter}/>

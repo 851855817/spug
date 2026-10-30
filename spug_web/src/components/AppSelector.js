@@ -69,7 +69,7 @@ export default observer(function AppSelector(props) {
                 allowClear
                 style={{width: 200}}
                 placeholder={t('请输入快速检索应用')}
-                prefix={<SearchOutlined style={{color: 'rgba(0, 0, 0, 0.25)'}}/>}
+                prefix={<SearchOutlined style={{color: 'var(--kops-muted)'}}/>}
                 onChange={e => setSearch(e.target.value)}/>
             </div>
             <div style={{height: 540, overflow: 'auto'}}>
@@ -77,7 +77,7 @@ export default observer(function AppSelector(props) {
                 <div key={item.id} className={styles.appItem} onClick={() => props.onSelect(item)}>
                   {item.extend === '1' ? <OrderedListOutlined/> : <BuildOutlined/>}
                   <div className={styles.body}>{item.app_name}</div>
-                  <div style={{color: '#999'}}>{item.app_key}</div>
+                  <div style={{color: 'var(--kops-muted)'}}>{item.app_key}</div>
                 </div>
               ))}
               {records.length === 0 &&

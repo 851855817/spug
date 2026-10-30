@@ -5,7 +5,7 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { observer } from 'mobx-react';
-import { PageHeader } from 'antd';
+import { PageHeader, Tag } from 'antd';
 import {
   LoadingOutlined,
   CheckCircleOutlined,
@@ -110,6 +110,7 @@ function OutView(props) {
   }
 
   const {tag, items, counter} = store
+  const currentItem = store.outputs[current] || {}
   return (
     <div className={style.output}>
       <div className={style.side}>
@@ -140,9 +141,9 @@ function OutView(props) {
             <div key={key} className={[style.item, key === current ? style.active : ''].join(' ')}
                  onClick={() => handleSwitch(key)}>
               {item.status === -2 ? (
-                <LoadingOutlined style={{color: '#1890ff'}}/>
+                <LoadingOutlined style={{color: 'var(--kops-primary)'}}/>
               ) : item.status === 0 ? (
-                <CheckCircleOutlined style={{color: '#52c41a'}}/>
+                <CheckCircleOutlined style={{color: 'var(--kops-success)'}}/>
               ) : (
                 <ExclamationCircleOutlined style={{color: 'red'}}/>
               )}
@@ -153,7 +154,10 @@ function OutView(props) {
       </div>
       <div className={style.body}>
         <div className={style.header}>
-          <div className={style.title}>{store.outputs[current].title}</div>
+          <div className={style.title}>{currentItem.title}</div>
+          <Tag color={currentItem.status === 0 ? 'green' : currentItem.status === -2 ? 'blue' : currentItem.status > 0 ? 'red' : 'orange'}>
+            {currentItem.status === 0 ? t('分发成功') : currentItem.status === -2 ? t('分发中') : currentItem.status === -1 ? t('结果待核实') : Number.isInteger(currentItem.status) ? `${t('分发失败')} (${currentItem.status})` : t('待核实')}
+          </Tag>
           <CodeOutlined className={style.icon} onClick={() => openTerminal(current)}/>
         </div>
         <div className={style.termContainer}>

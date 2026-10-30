@@ -3,8 +3,8 @@
     background-repeat: no-repeat;
     background-position: center 110px;
     background-size: 100%;
-    background-color: #f0f2f5;
-    height: 100vh;
+    background-color: var(--kops-page);
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
 }
@@ -13,7 +13,7 @@
     position: absolute;
     top: 12px;
     right: 24px;
-    color: rgba(0, 0, 0, 0.65);
+    color: var(--kops-text);
 }
 
 .titleContainer {
@@ -31,14 +31,14 @@
 .titleContainer .desc {
     margin-top: 12px;
     margin-bottom: 40px;
-    color: rgba(0, 0, 0, .45);
+    color: var(--kops-muted);
     font-size: 14px;
     font-weight: 400;
 
 }
 
 .formContainer {
-    width: 368px;
+    width: min(368px, calc(100% - 40px));
     margin: 0 auto;
     flex: 1;
 }
@@ -52,7 +52,7 @@
 }
 
 .formContainer .icon {
-    color: rgba(0, 0, 0, .25);
+    color: var(--kops-muted);
     font-size: 14px;
     margin-right: 4px;
 }
@@ -82,3 +82,5 @@
 .tips {
     top: 230px
 }
+
+:global(html[data-kops-mode='dark']) .container { background-image: none; }

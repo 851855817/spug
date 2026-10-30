@@ -163,7 +163,7 @@ export default observer(function () {
       <Form.Item wrapperCol={{span: 14, offset: 6}} style={{marginTop: 12}}>
         <Button disabled={!canNext()} type="primary" onClick={toNext}>{t('下一步')}</Button>
         <Button disabled={!canNext()} type="link" loading={loading} onClick={handleTest}>{t('执行测试')}</Button>
-        <span style={{color: '#888', fontSize: 12}}>{t('Tips: 仅测试第一个监控地址')}</span>
+        <span style={{color: 'var(--kops-muted)', fontSize: 12}}>{t('Tips: 仅测试第一个监控地址')}</span>
       </Form.Item>
       {showTmp && <TemplateSelector onOk={({body}) => store.record.extra = body} onCancel={() => setShowTmp(false)}/>}
     </Form>

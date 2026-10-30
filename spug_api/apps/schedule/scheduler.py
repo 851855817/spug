@@ -74,8 +74,13 @@ class Scheduler:
         connections.close_all()
 
     def _init_builtin_jobs(self):
+        from apps.ops.expiry.reminders import scheduled_check_expiry
         self.scheduler.add_job(auto_run_by_day, 'cron', hour=1, minute=20)
         self.scheduler.add_job(auto_run_by_minute, 'interval', minutes=1)
+        self.scheduler.add_job(scheduled_check_expiry, 'cron', id='server-expiry-daily',
+                               hour=9, minute=0, timezone=self.timezone,
+                               max_instances=1, coalesce=True, misfire_grace_time=86400,
+                               replace_existing=True)
 
     def _init(self):
         self.scheduler.start()

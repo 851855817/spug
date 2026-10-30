@@ -1,0 +1,54 @@
+{
+  "browser": {
+    "revision": "9f749a877703aa593b9e95718f2520c775571057",
+    "real_headless_browser": true,
+    "inventory_dismiss_preserves_row": true,
+    "inventory_home_sync": true,
+    "inventory_inline_restore": true,
+    "role_five_presets": true,
+    "role_risk_preview": true,
+    "template_changes_only_draft": true,
+    "cancel_leaves_server_permissions_unchanged": true,
+    "apply_updates_real_checkboxes": true,
+    "save_uses_existing_role_api": true,
+    "customer_requests": "mocked",
+    "runtime_exceptions": []
+  },
+  "source": {
+    "revision": "9f749a877703aa593b9e95718f2520c775571057",
+    "public": true,
+    "anonymous_exact_commit": true,
+    "anonymous_source_archive": true,
+    "license_and_changed_sources_match": true,
+    "archive_bytes": 4471416
+  },
+  "publication": {
+    "revision": "9f749a877703aa593b9e95718f2520c775571057",
+    "published": true,
+    "paired_backup_valid": true,
+    "preservation_objects": 63,
+    "business_schema_keys_unchanged": true,
+    "original_process_identity": true,
+    "full_api_unchanged": true,
+    "api_files": [
+      233,
+      273
+    ],
+    "ui_files_before": [
+      111,
+      111
+    ],
+    "ui_files_after": [
+      115,
+      115
+    ],
+    "ui_receipt_valid": true,
+    "services_running": 9,
+    "health_checks_ok": 15,
+    "health_timer": "active",
+    "server_and_public_revision": true,
+    "public_brand_title": true,
+    "public_license_exact_original": true,
+    "source_commit_binding_in_bundle": true
+  }
+}

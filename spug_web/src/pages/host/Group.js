@@ -187,7 +187,7 @@ export default observer(function () {
             checkedChildren={t('排版')}
             unCheckedChildren={t('浏览')}/>
           <Tooltip title={t('排版模式下，可通过拖拽分组实现快速排序，右键点击分组进行分组管理。')}>
-            <QuestionCircleOutlined style={{marginLeft: 8, color: '#999'}}/>
+            <QuestionCircleOutlined style={{marginLeft: 8, color: 'var(--kops-muted)'}}/>
           </Tooltip>
         </AuthFragment>)}>
       <Spin spinning={store.grpFetching}>
@@ -213,10 +213,10 @@ export default observer(function () {
         </Dropdown>
       </Spin>
       {treeData.length === 1 && treeData[0].children.length === 0 && (
-        <div style={{color: '#999', marginTop: 20, textAlign: 'center'}}>{t('右键点击分组进行分组管理哦~')}</div>
+        <div style={{color: 'var(--kops-muted)', marginTop: 20, textAlign: 'center'}}>{t('右键点击分组进行分组管理哦~')}</div>
       )}
       {store.records && treeData.length === 0 && (
-        <div style={{color: '#999'}}>{t('你还没有可访问的主机分组，请联系管理员分配主机权限。')}</div>
+        <div style={{color: 'var(--kops-muted)'}}>{t('你还没有可访问的主机分组，请联系管理员分配主机权限。')}</div>
       )}
     </Card>
   )

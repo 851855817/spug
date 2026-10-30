@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'apps.account',
     'apps.host',
     'apps.baota',
+    'apps.ops',
     'apps.setting',
     'apps.exec',
     'apps.schedule',
@@ -137,6 +138,7 @@ USE_TZ = False
 AUTHENTICATION_EXCLUDES = (
     '/account/login/',
     '/setting/basic/',
+    '/setting/appearance/public/',
     re.compile('/apis/.*'),
 )
 

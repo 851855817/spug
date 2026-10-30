@@ -17,6 +17,7 @@ import SecuritySetting from './SecuritySetting';
 import About from './About';
 import styles from './index.module.css';
 import store from './store';
+import AppearanceSetting from '../../../appearance/AppearanceSetting';
 
 
 class Index extends React.Component {
@@ -49,6 +50,7 @@ class Index extends React.Component {
               onSelect={({selectedKeys}) => this.setState({selectedKeys})}
               items={[
                 {key: 'basic', label: t('基本设置')},
+                {key: 'appearance', label: '外观配色'},
                 {key: 'security', label: t('安全设置')},
                 {key: 'ldap', label: t('LDAP设置')},
                 {key: 'key', label: t('密钥设置')},
@@ -60,6 +62,7 @@ class Index extends React.Component {
           </div>
           <div className={styles.right}>
             {selectedKeys[0] === 'basic' && <BasicSetting/>}
+            {selectedKeys[0] === 'appearance' && <AppearanceSetting/>}
             {selectedKeys[0] === 'security' && <SecuritySetting/>}
             {selectedKeys[0] === 'ldap' && <LDAPSetting/>}
             {selectedKeys[0] === 'alarm' && <AlarmSetting/>}

@@ -18,7 +18,7 @@ export default function ResourceMonitorButton({id, name}) {
   return <>
     <Tooltip title={source?.enabled ? '查看监控' : '未开启监控'}>
       <Button type="text" size="small" aria-label={`查看${name || ''}监控`} icon={<LineChartOutlined/>}
-        style={{color: source?.enabled ? '#2563fc' : '#98a2b3'}} disabled={!monitor?.enabled || !!monitor?.saving[id]}
+        style={{color: source?.enabled ? 'var(--kops-primary)' : 'var(--kops-muted)'}} disabled={!monitor?.enabled || !!monitor?.saving[id]}
         onClick={open}/>
     </Tooltip>
     {opened && <ResourceMonitorDetail kind={monitor.kind} id={id} name={name} onCancel={() => setOpened(false)}/>}

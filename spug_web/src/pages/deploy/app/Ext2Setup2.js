@@ -78,7 +78,7 @@ class Ext2Setup2 extends React.Component {
             message={t('小提示')}
             style={{margin: '0 80px 20px'}}
             description={[
-              <p key={1}>{t('Spug 将遵循先本地后目标主机的原则，按照顺序依次执行添加的动作，例如：本地动作1 -> 本地动作2 -> 目标主机动作1 -> 目标主机动作2 ...')}</p>,
+              <p key={1}>{t('平台将遵循先本地后目标主机的原则，按照顺序依次执行添加的动作，例如：本地动作1 -> 本地动作2 -> 目标主机动作1 -> 目标主机动作2 ...')}</p>,
               <p key={2}>{t('执行的命令内可以使用发布申请中设置的环境变量 SPUG_RELEASE，一般可用于标记一次发布的版本号或提交ID等，在执行的脚本内通过使用 $SPUG_RELEASE 获取其值来执行相应操作。')}</p>,
               <p key={3}>{Tips}{t('。')}</p>
             ]}/>
@@ -133,7 +133,7 @@ class Ext2Setup2 extends React.Component {
                 <Input
                   spellCheck={false}
                   disabled={store.isReadOnly || item['src_mode'] === '1'}
-                  placeholder={t('请输入本地（部署spug的容器或主机）路径')}
+                  placeholder={t('请输入本地（平台所在容器或主机）路径')}
                   value={item['src_mode'] === '1' ? 'N/A' : item['src']}
                   onChange={e => item['src'] = e.target.value}
                   addonBefore={(

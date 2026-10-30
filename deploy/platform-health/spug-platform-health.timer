@@ -1,0 +1,12 @@
+[Unit]
+Description=Collect Spug host health every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=15s
+RandomizedDelaySec=10s
+Unit=spug-platform-health.service
+
+[Install]
+WantedBy=timers.target

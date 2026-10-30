@@ -112,7 +112,7 @@ function TaskIndex() {
           <div className={style.title}>
             {t('执行记录')}
             <Tooltip title={t('多次相同的执行记录将会合并展示，每天自动清理，每个账户保留最近10条记录。')}>
-              <QuestionCircleOutlined style={{color: '#999', marginLeft: 8}}/>
+              <QuestionCircleOutlined style={{color: 'var(--kops-muted)', marginLeft: 8}}/>
             </Tooltip>
           </div>
           <div className={style.inner}>

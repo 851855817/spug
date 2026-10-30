@@ -1,12 +1,12 @@
 .container {
     display: flex;
-    background-color: #fff;
+    background-color: var(--kops-surface);
     padding: 16px 0;
 }
 
 .left {
     flex: 2;
-    border-right: 1px solid #e8e8e8;
+    border-right: 1px solid var(--kops-border);
 }
 
 .right {
@@ -16,7 +16,7 @@
 
 .title {
     margin-bottom: 24px;
-    color: rgba(0, 0, 0, .85);
+    color: var(--kops-text);
     font-weight: 500;
     font-size: 20px;
     line-height: 28px;
