@@ -1,0 +1,15 @@
+{
+  "revision": "b1b674a9bff434cff7f024e0c79210fa5cc9aac6",
+  "real_headless_browser": true,
+  "active_system_group_arrow_collapse": true,
+  "title_toggle": true,
+  "manual_choice_survives_other_renders": true,
+  "whole_sidebar_expand": true,
+  "route_navigation_and_back": true,
+  "other_group_collapse": true,
+  "existing_keyboard_sort": true,
+  "narrow_640": true,
+  "customer_requests": "mocked",
+  "writes": 0,
+  "runtime_exceptions": []
+}
