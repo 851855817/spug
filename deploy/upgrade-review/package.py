@@ -161,7 +161,7 @@ INVENTORY_ROLE_PRESETS_UI = {INVENTORY_UI, 'spug_web/src/pages/system/role/PageP
 PROFILES = {'php-update': API_FILE, 'host-report': HEALTH_FILE, 'operations-ui': None, 'task-results-ui': None,
             'panel-login': LOGIN_MODULES, 'inventory-filters': INVENTORY_FILE, 'workbench-ui': None, 'branding-ui': None, 'personal-reminders-ui': None, 'inventory-role-presets-ui': None,
             'ssl-renew-diagnostics': SSL_FILE, 'site-appearance': APPEARANCE_MODULES,
-            'refined-palettes': APPEARANCE_FILE, 'branding-cleanup-ui': None, 'self-use-branding-ui': None}
+            'refined-palettes': APPEARANCE_FILE, 'branding-cleanup-ui': None, 'self-use-branding-ui': None, 'sidebar-collapse-ui': None}
 HELPERS = ('apply-expiry.py', 'deploy-compact-ui.py', 'fingerprint.py', 'release_safety.py')
 
 
@@ -181,12 +181,13 @@ def validate_runtime_changes(names, profile='php-update'):
     module = profile_module(profile)
     runtime = {name for name in names if name.startswith('spug_api/')
                and not Path(name).name.startswith('test')}
-    if profile in ('branding-cleanup-ui', 'self-use-branding-ui'):
+    if profile in ('branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui'):
         api = {name for name in names if name.startswith('spug_api/')}
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
-        expected = BRANDING_CLEANUP_UI if profile == 'branding-cleanup-ui' else SELF_USE_BRANDING_UI
+        expected = ({'spug_web/src/layout/Sider.js'} if profile == 'sidebar-collapse-ui' else
+                    BRANDING_CLEANUP_UI if profile == 'branding-cleanup-ui' else SELF_USE_BRANDING_UI)
         if api or ui != expected:
-            raise ValueError('Branding UI release only accepts its exact reviewed UI files and no API files')
+            raise ValueError('UI release only accepts its exact reviewed UI files and no API files')
     elif profile == 'refined-palettes':
         runtime = {name for name in names if name.startswith('spug_api/')} - {'spug_api/apps/setting/test_appearance.py'}
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
@@ -245,8 +246,8 @@ def write_manifests(stage, revision, previous_revision, previous_content,
         api_hashes = {module: sha256(stage / 'source/spug_api' / module)} if module else {}
         previous_hashes = {module: hashlib.sha256(previous_content).hexdigest()} if module else {}
     preserved_hashes = {}
-    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui'):
-        if ((profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'branding-cleanup-ui', 'self-use-branding-ui') and previous_content is not None) or not isinstance(preserved_content, dict) or
+    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui'):
+        if ((profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui') and previous_content is not None) or not isinstance(preserved_content, dict) or
                 set(preserved_content) != {API_FILE, HEALTH_FILE} or
                 not all(isinstance(value, bytes) for value in preserved_content.values())):
             raise ValueError('Missing fixed UI baseline module contents')
@@ -338,7 +339,7 @@ def main():
                        git('show', previous + ':spug_api/apps/baota/urls.py').replace(b'\r\n', b'\n')}
     else:
         old_content = git('show', previous + ':spug_api/' + module).replace(b'\r\n', b'\n') if module else None
-    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui'):
+    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui'):
         preserved_content = {name: git('show', previous + ':spug_api/' + name).replace(b'\r\n', b'\n')
                              for name in (API_FILE, HEALTH_FILE)}
     else:

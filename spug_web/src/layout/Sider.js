@@ -1,5 +1,6 @@
 // Modified by K on 2026-10-27 for KOps · 云枢 branding and legal notices.
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Button, Layout, Menu } from 'antd';
 import { HolderOutlined } from '@ant-design/icons';
 import { hasPermission, history } from 'libs';
@@ -8,7 +9,6 @@ import routes from '../routes';
 import Brand from '../branding/Brand';
 import { moveChild, navigationOrderKey, orderChildren, readNavigationOrder } from './navigationOrder';
 
-let selectedKey = window.location.pathname;
 const OpenKeysMap = {};
 for (let item of routes) {
   if (item.child) {
@@ -21,6 +21,9 @@ for (let item of routes) {
 }
 
 export default function Sider(props) {
+  const {pathname} = useLocation();
+  const openKey = OpenKeysMap[pathname];
+  const [selectedKey, setSelectedKey] = useState(() => openKey ? pathname : undefined);
   const [openKeys, setOpenKeys] = useState([]);
   const [storageKey] = useState(navigationOrderKey);
   const [orders, setOrders] = useState(() => readNavigationOrder(storageKey));
@@ -77,14 +80,15 @@ export default function Sider(props) {
   }
   const menus = routes.map(item => handleRoute(item)).filter(Boolean);
 
-  const tmp = window.location.pathname;
-  const openKey = OpenKeysMap[tmp];
-  if (openKey) {
-    selectedKey = tmp;
-    if (openKey !== 1 && !props.collapsed && !openKeys.includes(openKey)) {
-      setOpenKeys([...openKeys, openKey])
+  // Reveal the active page only when navigating or expanding the whole sidebar.
+  // A manual group toggle must not be undone by the next render.
+  useEffect(() => {
+    if (!openKey) return;
+    setSelectedKey(pathname);
+    if (openKey !== 1 && !props.collapsed) {
+      setOpenKeys(keys => keys.includes(openKey) ? keys : [...keys, openKey]);
     }
-  }
+  }, [pathname, openKey, props.collapsed]);
   return (
     <Layout.Sider width={208} collapsed={props.collapsed} className={styles.sider}>
       <div className={styles.logo}>
