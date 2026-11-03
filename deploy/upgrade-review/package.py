@@ -341,7 +341,8 @@ def main():
     stage.mkdir(exist_ok=False)
     shutil.copytree(repo / 'spug_web/build', stage / 'build')
     # NUL delimiters preserve Git paths containing Chinese characters, spaces or newlines.
-    for name in filter(None, git('ls-files', '-z', 'spug_api', 'deploy', 'spug_web/public', 'LICENSE').decode().split('\0')):
+    for name in filter(None, git('ls-files', '-z', 'spug_api', 'deploy', 'spug_web/public', 'LICENSE',
+                                 '.github/workflows/baota-checks.yml').decode().split('\0')):
         source = repo / name
         if source.is_symlink():
             raise ValueError('Linked source file')

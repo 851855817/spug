@@ -171,6 +171,10 @@ class ScheduledPanelTasksReleaseTests(unittest.TestCase):
                 repo = root / 'repo'
                 shutil.copytree(stage / 'source/spug_api', repo / 'spug_api')
                 shutil.copytree(stage / 'build', repo / 'spug_web/build')
+                workflow_name = '.github/workflows/baota-checks.yml'
+                workflow = repo / workflow_name
+                workflow.parent.mkdir(parents=True)
+                workflow.write_bytes(b'# archived CI contract\n')
                 for name in ('expiry/apply-expiry.py', 'upgrade-review/publish-ui.py',
                              'upgrade-review/fingerprint.py', 'inventory/release_safety.py'):
                     target = repo / 'deploy' / name
@@ -191,7 +195,9 @@ class ScheduledPanelTasksReleaseTests(unittest.TestCase):
                     if values[0] == 'diff':
                         return '\n'.join(['spug_api/' + name for name in MODULES] + sorted(UI)).encode()
                     if values[0] == 'ls-files':
-                        return '\0'.join('spug_api/' + name for name in (*MODULES, PHP, HEALTH)).encode()
+                        tracked = ['spug_api/' + name for name in (*MODULES, PHP, HEALTH)] + [workflow_name]
+                        return '\0'.join(name for name in tracked if any(
+                            name == prefix or name.startswith(prefix + '/') for prefix in values[2:])).encode()
                     if values[0] == 'show':
                         return {**self.previous(), PHP: b'php', HEALTH: b'health'}[values[1].split(':spug_api/')[1]]
                     self.fail('unexpected Git command')
@@ -207,6 +213,10 @@ class ScheduledPanelTasksReleaseTests(unittest.TestCase):
                 if existing:
                     continue
                 packaged = root / ('upgrade-' + REVISION[:7])
+                self.assertEqual((packaged / 'source' / workflow_name).read_bytes(), workflow.read_bytes())
+                with tarfile.open(packaged.with_suffix('.tar.gz')) as archive:
+                    self.assertEqual(archive.extractfile(packaged.name + '/source/' + workflow_name).read(),
+                                     workflow.read_bytes())
                 release = json.loads((packaged / 'release.json').read_text())
                 self.assertIsNone(release['previous_api_sha256'][NEW_MODULE])
                 self.assertIn(['ls-tree', '--name-only', PREVIOUS, '--', 'spug_api/' + NEW_MODULE], calls)
