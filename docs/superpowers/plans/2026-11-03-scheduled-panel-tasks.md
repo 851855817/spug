@@ -16,7 +16,7 @@
 - [x] 2. 新建 `spug_api/apps/schedule/panel_tasks.py`：定义/模板/授权/运行协调；修改 schedule views/models/scheduler/executors/urls 接入；修改 baota worker/upload_runner 的发送授权和 upload_store 的引用保留。逐项运行上面的隔离测试和 apps.baota 现有回归。
 - [x] 3. 新建前端 `pages/schedule/PanelPlan.js` 与测试；修改 Step1/Step2/Step3/Form/store/Table/Info 接入面板任务配置、激活确认、重新预检、详情。Jest 验证固定范围、禁止缺失确认、不会把面板结果渲染成 SSH 成功。
 - [x] 4. 独立规格与代码审查，修复后跑前后端完整相关回归；使用模拟接口浏览器验收，不访问客户接口。
-- [ ] 5. 新增精确发布 profile 与其测试，构建并核验 source/image，更新使用文档、Git 和 PR #4。线上检查和配对备份完成后安全发布并验证；不合并主分支。
+- [x] 5. 新增精确发布 profile 与其测试，构建并核验 source/image，更新使用文档、Git 和 PR #4。线上检查和配对备份完成后安全发布并验证；不合并主分支。
 
 ## 执行记录
 
@@ -32,3 +32,5 @@
 浏览器验收已完成并记录在 `docs/releases/2026-11-03-scheduled-panel-tasks-browser.json`：真实隔离 Chrome、17 项断言、18 个模拟 API 请求，无真实客户调用或执行入口调用。功能提交 35fb559 与发布文档提交 f62d1dd 的 push/PR 前端、后端、MariaDB CI 全部通过。f62d1dd 的 1062 个公开源码文件逐字节一致。
 
 首次服务器准备未通过，尚未发布：镜像及 581 项隔离后端回归通过（10 项条件跳过），但 185 项 Linux 发布保护有一项读取 CI 配置失败。根因是新增的发布测试依赖 `.github/workflows/baota-checks.yml`，打包源文件清单尚未包含它。已补充按真实 pathspec 过滤的 CLI/归档字节回归，在旧代码重现缺失，再精确加入该文件；不修改已校验暂存包，不跳过测试，重新提交、归档和完整隔离准备。
+
+最终发布：48c305d，push/PR CI 三项均绿，公开 1062 文件一致，17 项最终构建浏览器断言通过。服务器新归档完整运行 581 后端（10 跳过）、185 Linux 发布保护、10 旧发布保护及 6 镜像测试通过。重新核实 567eb5a 空闲后，配对备份并受控上线。独立确认 63 保全对象、原进程、11 精确 API 覆盖及两份完整树、API/UI 收据、9 服务与 15 健康项；公网、回环、本机隧道均为 48c305d，JS/CSS 与发布构建一致。未激活或执行客户计划。详见 `docs/releases/2026-11-03-scheduled-panel-tasks.md` 及相邻验证 JSON。

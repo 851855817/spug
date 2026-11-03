@@ -1,5 +1,5 @@
 {
-  "fixture": "http://127.0.0.1:60621",
+  "fixture": "http://127.0.0.1:63528",
   "real_headless_browser": true,
   "fresh_temporary_profile": true,
   "resolver_blocks_non_loopback": true,
@@ -27,107 +27,107 @@
   "console_errors": [],
   "network_requests": [
     {
-      "url": "http://127.0.0.1:60621/schedule",
+      "url": "http://127.0.0.1:63528/schedule",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/static/css/2.88ef4cd8.chunk.css",
+      "url": "http://127.0.0.1:63528/static/css/2.88ef4cd8.chunk.css",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/static/css/main.fac602b3.chunk.css",
+      "url": "http://127.0.0.1:63528/static/css/main.fac602b3.chunk.css",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/static/js/2.41ba309c.chunk.js",
+      "url": "http://127.0.0.1:63528/static/js/2.9d063fb9.chunk.js",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/static/js/main.f2d8a0e7.chunk.js",
+      "url": "http://127.0.0.1:63528/static/js/main.e1438f64.chunk.js",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/kops-20261027/manifest.json",
+      "url": "http://127.0.0.1:63528/kops-20261027/manifest.json",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/setting/appearance/public/",
+      "url": "http://127.0.0.1:63528/api/setting/appearance/public/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/notify/",
+      "url": "http://127.0.0.1:63528/api/notify/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/schedule/",
+      "url": "http://127.0.0.1:63528/api/schedule/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/setting/user/",
+      "url": "http://127.0.0.1:63528/api/setting/user/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/kops-20261027/favicon.svg",
+      "url": "http://127.0.0.1:63528/kops-20261027/favicon.svg",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/kops-20261027/favicon.svg",
+      "url": "http://127.0.0.1:63528/kops-20261027/favicon.svg",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/host/",
+      "url": "http://127.0.0.1:63528/api/host/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/host/group/",
+      "url": "http://127.0.0.1:63528/api/host/group/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/schedule/panel_templates/",
+      "url": "http://127.0.0.1:63528/api/schedule/panel_templates/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/schedule/panel_templates/?id=17",
+      "url": "http://127.0.0.1:63528/api/schedule/panel_templates/?id=17",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/schedule/",
+      "url": "http://127.0.0.1:63528/api/schedule/",
       "method": "POST"
     },
     {
-      "url": "http://127.0.0.1:60621/api/schedule/",
+      "url": "http://127.0.0.1:63528/api/schedule/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/schedule/",
+      "url": "http://127.0.0.1:63528/api/schedule/",
       "method": "PATCH"
     },
     {
-      "url": "http://127.0.0.1:60621/api/schedule/",
+      "url": "http://127.0.0.1:63528/api/schedule/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/schedule/5/",
+      "url": "http://127.0.0.1:63528/api/schedule/5/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/schedule/5/?id=90",
+      "url": "http://127.0.0.1:63528/api/schedule/5/?id=90",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/baota/tasks/402/",
+      "url": "http://127.0.0.1:63528/api/baota/tasks/402/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/schedule/5/",
+      "url": "http://127.0.0.1:63528/api/schedule/5/",
       "method": "POST"
     },
     {
-      "url": "http://127.0.0.1:60621/api/baota/tasks/401/",
+      "url": "http://127.0.0.1:63528/api/baota/tasks/401/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:60621/api/baota/tasks/401/",
+      "url": "http://127.0.0.1:63528/api/baota/tasks/401/",
       "method": "GET"
     }
   ],
@@ -140,7 +140,7 @@
     "docs/releases/scheduled-panel-shots/05-history-readonly-preview.png",
     "docs/releases/scheduled-panel-shots/06-repreflight-readonly.png"
   ],
-  "revision": "35fb55911cfacab4e181e7a5a339aa6450255d58",
+  "revision": "48c305dbbd656fa9cc2ecbbf9be749fb390bf3fc",
   "mock_requests": [
     {
       "method": "GET",
@@ -279,6 +279,6 @@
   ],
   "passed": true,
   "mock_writes": 3,
-  "build_asset": "/static/js/main.f2d8a0e7.chunk.js",
-  "build_asset_sha256": "80bcfe9299d7b1709fb15a53080d6c6f2fa18fbd69974c8a6f1f0352776c089e"
+  "build_asset": "/static/js/main.e1438f64.chunk.js",
+  "build_asset_sha256": "b521417a8a8c4708e31c46f3f66fe5832bcdb2fd4c8ef85be5fd72365959a30b"
 }

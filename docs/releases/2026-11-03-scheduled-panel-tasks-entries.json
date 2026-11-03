@@ -1,0 +1,36 @@
+{
+  "external_entries": [
+    {
+      "entry": "https://47.104.88.147",
+      "revision": "48c305dbbd656fa9cc2ecbbf9be749fb390bf3fc",
+      "exact_built_assets": [
+        {
+          "asset": "main.js",
+          "sha256": "b521417a8a8c4708e31c46f3f66fe5832bcdb2fd4c8ef85be5fd72365959a30b"
+        },
+        {
+          "asset": "main.css",
+          "sha256": "2afdabbda990be9d0dd52e39546fb7eb582130491c573922e7d2def7712edf32"
+        }
+      ],
+      "schedule_route_available": true,
+      "anonymous_api_protected": true
+    },
+    {
+      "entry": "http://127.0.0.1:18080",
+      "revision": "48c305dbbd656fa9cc2ecbbf9be749fb390bf3fc",
+      "exact_built_assets": [
+        {
+          "asset": "main.js",
+          "sha256": "b521417a8a8c4708e31c46f3f66fe5832bcdb2fd4c8ef85be5fd72365959a30b"
+        },
+        {
+          "asset": "main.css",
+          "sha256": "2afdabbda990be9d0dd52e39546fb7eb582130491c573922e7d2def7712edf32"
+        }
+      ],
+      "schedule_route_available": true,
+      "anonymous_api_protected": true
+    }
+  ]
+}
