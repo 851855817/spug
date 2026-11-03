@@ -18,6 +18,8 @@ const makeHistory = (pathname = '/home') => {
 jest.mock('libs', () => ({hasPermission: jest.fn(), history: {push: jest.fn()}}));
 jest.mock('../routes', () => [
   {title: '首页', path: '/home'},
+  {title: 'Dashboard', path: '/dashboard', hidden: true},
+  {title: '应用发布', hidden: true, child: [{title: '发布配置', path: '/deploy/app'}]},
   {title: '批量执行', child: [{title: '命令', path: '/exec/task'}, {title: '模板', path: '/exec/template'},
     {title: '网站', path: '/exec/sites'}, {title: '无权项', path: '/exec/secret', auth: 'denied'}, {path: '/exec/internal'}]},
   {title: '系统管理', child: [{title: '系统设置', path: '/system/setting'}, {title: '角色管理', path: '/system/role'}]},
@@ -103,6 +105,19 @@ test('storage failures retain the session order and show a useful saving message
   jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {throw new Error('unavailable');});
   await drag('/exec/sites', '/exec/task'); expect(paths('批量执行')[0]).toBe('/exec/sites');
   expect(container.textContent).toContain('未能保存');
+});
+
+test('hidden menus stay absent for authorized users without affecting core navigation', async () => {
+  hasPermission.mockReturnValue(true);
+  await render();
+  expect(container.textContent).not.toContain('Dashboard');
+  expect(container.textContent).not.toContain('应用发布');
+  expect(container.textContent).not.toContain('发布配置');
+  expect(container.textContent).toContain('系统设置');
+  await click('调整导航'); await click('恢复默认'); await click('完成');
+  expect(container.textContent).not.toContain('应用发布');
+  await act(async () => {path('/exec/task').click(); await flush();});
+  expect(history.push).toHaveBeenCalledWith('/exec/task');
 });
 
 

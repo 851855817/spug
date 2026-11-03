@@ -4,6 +4,7 @@
 
 | 配置 | 允许覆盖 | 额外要求 |
 | --- | --- | --- |
+| `hide-first-batch-ui` | 路由配置、侧栏、系统设置入口、面板任务标签，共四个固定 UI 文件 | 恰好 `routes.js`、`layout/Sider.js`、`pages/system/setting/index.js`、`pages/exec/panel/index.js`（均相对 `spug_web/src/`）；拒绝全部 API 文件。完整 API 树、配对备份、空闲门、原进程与仅 UI 回退保护保持 |
 | `php-update`（默认） | `apps/baota/operations/php_update.py` | 保持原 PHP 发布合同；历史清单缺少配置时按此解释 |
 | `host-report` | `apps/setting/health.py` | 基准 Git、暂存源码、准备镜像和实际两份 API 根目录的 PHP 模块摘要一致 |
 | `operations-ui` | 仅运维比较页面的 UI 构建 | 前端运行差异仅允许 `RunDetail.js`；不覆盖任何 API。固定保全 PHP 策略与健康模块，新旧镜像完整 API 文件摘要一致，实际两份 API 根在发布前后保持 |

@@ -39,12 +39,13 @@ export default function Sider(props) {
   }
 
   function handleRoute(item, group, siblings) {
+    if (item.hidden) return;
     if (item.auth && !hasPermission(item.auth)) return
     if (!item.title) return;
     const menu = {label: item.title, key: item.path || item.title, icon: item.icon}
     if (item.child) {
       const childGroup = item.child.find(child => child.path)?.path.split('/')[1];
-      const children = orderChildren(item.child.filter(child => child.title && (!child.auth || hasPermission(child.auth))), orders[childGroup]);
+      const children = orderChildren(item.child.filter(child => !child.hidden && child.title && (!child.auth || hasPermission(child.auth))), orders[childGroup]);
       menu.children = children.map(child => handleRoute(child, childGroup, children.map(child => child.path)));
     } else if (group) {
       const enabled = editing && !props.collapsed;

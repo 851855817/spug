@@ -66,7 +66,9 @@ class BrandingCleanupReleaseTests(unittest.TestCase):
         self.assertEqual(len(self.ui), self.ui_count)
         package.validate_runtime_changes(sorted(self.ui) + ['docs/guide.md',
             'spug_web/src/branding/branding.test.js'], self.profile)
-        invalid = [[], sorted(self.ui)[1:], sorted(self.ui) + ['spug_web/src/routes.js'],
+        extra_ui = next(name for name in ('spug_web/src/routes.js', 'spug_web/src/pages/home/index.js')
+                        if name not in self.ui)
+        invalid = [[], sorted(self.ui)[1:], sorted(self.ui) + [extra_ui],
                    sorted(self.ui) + ['spug_web/package.json'], sorted(self.ui) + ['spug_web/package-lock.json']]
         invalid.extend(sorted(self.ui) + [name] for name in (
             'spug_api/apps/setting/appearance.py', 'spug_api/apps/setting/urls.py',

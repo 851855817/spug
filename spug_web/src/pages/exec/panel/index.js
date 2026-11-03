@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Button, Card, Empty, Space, Spin, Tabs } from 'antd';
 import { AuthDiv, Breadcrumb } from 'components';
 import { hasPermission, http } from 'libs';
-import Catalog from './Catalog';
 import Records from './Records';
 import TaskDetail from './TaskDetail';
 import TaskForm from './TaskForm';
@@ -32,7 +31,6 @@ export default function PanelTasks({location}) {
             options ? <TaskForm key={location?.search || ''} options={options} initialSearch={location?.search || ''} onPrepared={open}/> : <Spin/>}
         </Tabs.TabPane>}
         <Tabs.TabPane key="records" tab="执行记录"><Records revision={revision} onOpen={open}/></Tabs.TabPane>
-        <Tabs.TabPane key="catalog" tab="官方接口目录（只读）"><Catalog/></Tabs.TabPane>
       </Tabs>
     </Card>
     <div style={{marginTop: 16}}>{taskId ? <TaskDetail key={taskId} taskId={taskId} acknowledgements={options?.acknowledgements} onRetry={open}/> :

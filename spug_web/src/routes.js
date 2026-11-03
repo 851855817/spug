@@ -58,6 +58,7 @@ export default [
   {
     icon: <DashboardOutlined/>,
     title: 'Dashboard',
+    hidden: true,
     auth: 'dashboard.dashboard.view',
     path: '/dashboard',
     component: DashboardIndex
@@ -77,14 +78,14 @@ export default [
     ]
   },
   {
-    icon: <FlagOutlined/>, title: t('应用发布'), auth: 'deploy.app.view|deploy.repository.view|deploy.request.view', child: [
+    icon: <FlagOutlined/>, title: t('应用发布'), hidden: true, auth: 'deploy.app.view|deploy.repository.view|deploy.request.view', child: [
       {title: t('发布配置'), auth: 'deploy.app.view', path: '/deploy/app', component: DeployApp},
       {title: t('构建仓库'), auth: 'deploy.repository.view', path: '/deploy/repository', component: DeployRepository},
       {title: t('发布申请'), auth: 'deploy.request.view', path: '/deploy/request', component: DeployRequest},
     ]
   },
   {path: '/pipeline/:id', component: PipelineEditor},
-  {icon: <FlagOutlined/>, title: t('流水线'), auth: 'pipeline.pipeline.view', path: '/pipeline', component: PipelineIndex},
+  {icon: <FlagOutlined/>, title: t('流水线'), hidden: true, auth: 'pipeline.pipeline.view', path: '/pipeline', component: PipelineIndex},
   {
     icon: <ScheduleOutlined/>,
     title: t('任务计划'),
@@ -93,7 +94,7 @@ export default [
     component: ScheduleIndex
   },
   {
-    icon: <DeploymentUnitOutlined/>, title: t('配置中心'), auth: 'config.env.view|config.src.view|config.app.view', child: [
+    icon: <DeploymentUnitOutlined/>, title: t('配置中心'), hidden: true, auth: 'config.env.view|config.src.view|config.app.view', child: [
       {title: t('环境管理'), auth: 'config.env.view', path: '/config/environment', component: ConfigEnvironment},
       {title: t('服务配置'), auth: 'config.src.view', path: '/config/service', component: ConfigService},
       {title: t('应用配置'), auth: 'config.app.view', path: '/config/app', component: ConfigApp},
