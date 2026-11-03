@@ -39,6 +39,8 @@ def host_executor(host, command):
 
 
 def dispatch_job(host_id, interpreter, command):
+    if interpreter not in ('sh', 'python'):
+        return 1, 0, '非脚本任务不能交给 Shell 执行器'
     if interpreter == 'python':
         command = wrap_python_command(command)
     if host_id == 'local':
@@ -54,6 +56,10 @@ def dispatch_job(host_id, interpreter, command):
 
 def schedule_worker_handler(job):
     history_id, host_id, interpreter, command = json.loads(job)
+    record = History.objects.filter(pk=history_id).first()
+    current = Task.objects.filter(pk=record.task_id).first() if record else None
+    if not current or current.interpreter != interpreter or current.interpreter == 'baota':
+        return
     code, duration, out = dispatch_job(host_id, interpreter, command)
 
     close_old_connections()

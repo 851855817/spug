@@ -12,12 +12,10 @@ import Step2 from './Step2';
 import Step3 from './Step3';
 import store from './store';
 import styles from './index.module.less';
-import hostStore from '../host/store';
 
 export default observer(function () {
   useEffect(() => {
-    hostStore.initial()
-    store.targets = store.record.id ? store.record['targets'] : [undefined];
+    store.targets = store.record.interpreter === 'baota' ? [] : store.record.id ? store.record['targets'] : [undefined];
   }, [])
   return (
     <Modal
@@ -33,7 +31,7 @@ export default observer(function () {
         items={[
           {title: t('创建任务')},
           {title: t('设置触发器')},
-          {title: t('选择执行对象')}
+          {title: store.record.interpreter === 'baota' ? '核对固定范围' : t('选择执行对象')}
         ]}/>
       <Step1 visible={store.page === 0}/>
       <Step2 visible={store.page === 1}/>

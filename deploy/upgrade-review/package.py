@@ -33,6 +33,17 @@ LOGIN_UI = {'spug_web/src/pages/baota/index.js', 'spug_web/src/pages/system/role
 APPEARANCE_FILE = 'apps/setting/appearance.py'
 APPEARANCE_MODULES = (APPEARANCE_FILE, 'apps/setting/urls.py', 'spug/settings.py')
 APPEARANCE_API_TESTS = {'spug_api/apps/setting/test_appearance.py', 'spug_api/spug/test_urls.py'}
+SCHEDULED_PANEL_FILE = 'apps/schedule/panel_tasks.py'
+SCHEDULED_PANEL_MODULES = (
+    SCHEDULED_PANEL_FILE, 'apps/schedule/views.py', 'apps/schedule/urls.py',
+    'apps/schedule/models.py', 'apps/schedule/executors.py', 'apps/schedule/scheduler.py',
+    'apps/schedule/builtin.py', 'apps/baota/task_service.py', 'apps/baota/worker.py',
+    'apps/baota/upload_store.py', 'apps/baota/upload_runner.py',
+)
+SCHEDULED_PANEL_API_TESTS = {'spug_api/apps/schedule/test_panel_tasks.py', 'spug_api/apps/schedule/test_urls.py'}
+SCHEDULED_PANEL_UI = {'spug_web/src/pages/schedule/' + name for name in (
+    'Form.js', 'Info.js', 'Record.js', 'Step1.js', 'Step2.js', 'Step3.js', 'Table.js',
+    'index.js', 'store.js', 'PanelPlanSelector.js', 'PanelPlanSummary.js', 'PanelPreview.js', 'panelPlan.js')}
 REFINED_PALETTES_UI = {
     'spug_web/src/appearance/presets.js', 'spug_web/config-overrides.js',
     'spug_web/src/appearance/theme.less', 'spug_web/src/appearance/AppearanceSetting.js',
@@ -167,6 +178,7 @@ INVENTORY_ROLE_PRESETS_UI = {INVENTORY_UI, 'spug_web/src/pages/system/role/PageP
 PROFILES = {'php-update': API_FILE, 'host-report': HEALTH_FILE, 'operations-ui': None, 'task-results-ui': None,
             'panel-login': LOGIN_MODULES, 'inventory-filters': INVENTORY_FILE, 'workbench-ui': None, 'branding-ui': None, 'personal-reminders-ui': None, 'inventory-role-presets-ui': None,
             'ssl-renew-diagnostics': SSL_FILE, 'site-appearance': APPEARANCE_MODULES,
+            'scheduled-panel-tasks': SCHEDULED_PANEL_MODULES,
             'refined-palettes': APPEARANCE_FILE, 'branding-cleanup-ui': None, 'self-use-branding-ui': None, 'sidebar-collapse-ui': None, 'hide-first-batch-ui': None}
 HELPERS = ('apply-expiry.py', 'deploy-compact-ui.py', 'fingerprint.py', 'release_safety.py')
 
@@ -200,6 +212,11 @@ def validate_runtime_changes(names, profile='php-update'):
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
         if runtime != {'spug_api/' + APPEARANCE_FILE} or ui != REFINED_PALETTES_UI:
             raise ValueError('Refined palettes only accepts the existing appearance module and fixed five UI changes')
+    elif profile == 'scheduled-panel-tasks':
+        runtime = {name for name in names if name.startswith('spug_api/')} - SCHEDULED_PANEL_API_TESTS
+        ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
+        if runtime != {'spug_api/' + name for name in SCHEDULED_PANEL_MODULES} or ui != SCHEDULED_PANEL_UI:
+            raise ValueError('Scheduled panel tasks only accepts the fixed eleven API and thirteen UI changes')
     elif profile == 'site-appearance':
         runtime = {name for name in names if name.startswith('spug_api/')} - APPEARANCE_API_TESTS
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
@@ -231,7 +248,15 @@ def write_manifests(stage, revision, previous_revision, previous_content,
     module = profile_module(profile)
     if not all(re.fullmatch(r'[0-9a-f]{40}', value) for value in (revision, previous_revision)):
         raise ValueError('Invalid release revision')
-    if profile == 'site-appearance':
+    if profile == 'scheduled-panel-tasks':
+        if (not isinstance(previous_content, dict) or set(previous_content) != set(SCHEDULED_PANEL_MODULES) or
+                previous_content[SCHEDULED_PANEL_FILE] is not None or
+                not all(isinstance(previous_content[name], bytes) for name in SCHEDULED_PANEL_MODULES[1:])):
+            raise ValueError('Scheduled panel baseline requires ten existing modules and no panel tasks module')
+        api_hashes = {name: sha256(stage / 'source/spug_api' / name) for name in SCHEDULED_PANEL_MODULES}
+        previous_hashes = {name: hashlib.sha256(content).hexdigest() if content is not None else None
+                           for name, content in previous_content.items()}
+    elif profile == 'site-appearance':
         if (not isinstance(previous_content, dict) or set(previous_content) != set(APPEARANCE_MODULES) or
                 previous_content[APPEARANCE_FILE] is not None or
                 not all(isinstance(previous_content[name], bytes) for name in APPEARANCE_MODULES[1:])):
@@ -253,7 +278,7 @@ def write_manifests(stage, revision, previous_revision, previous_content,
         api_hashes = {module: sha256(stage / 'source/spug_api' / module)} if module else {}
         previous_hashes = {module: hashlib.sha256(previous_content).hexdigest()} if module else {}
     preserved_hashes = {}
-    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui'):
+    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui'):
         if ((profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui') and previous_content is not None) or not isinstance(preserved_content, dict) or
                 set(preserved_content) != {API_FILE, HEALTH_FILE} or
                 not all(isinstance(value, bytes) for value in preserved_content.values())):
@@ -333,7 +358,13 @@ def main():
         'release_safety.py': repo / 'deploy/inventory/release_safety.py',
     }.items():
         (stage / name).write_bytes(source.read_bytes().replace(b'\r\n', b'\n'))
-    if args.profile == 'site-appearance':
+    if args.profile == 'scheduled-panel-tasks':
+        if git('ls-tree', '--name-only', previous, '--', 'spug_api/' + SCHEDULED_PANEL_FILE).strip():
+            raise ValueError('Panel tasks module already exists in baseline; design a new reviewed profile')
+        old_content = {SCHEDULED_PANEL_FILE: None, **{name:
+            git('show', previous + ':spug_api/' + name).replace(b'\r\n', b'\n')
+            for name in SCHEDULED_PANEL_MODULES[1:]}}
+    elif args.profile == 'site-appearance':
         if git('ls-tree', '--name-only', previous, '--', 'spug_api/' + APPEARANCE_FILE).strip():
             raise ValueError('Appearance module already exists in baseline; design a new reviewed profile')
         old_content = {APPEARANCE_FILE: None, **{name:
@@ -346,14 +377,14 @@ def main():
                        git('show', previous + ':spug_api/apps/baota/urls.py').replace(b'\r\n', b'\n')}
     else:
         old_content = git('show', previous + ':spug_api/' + module).replace(b'\r\n', b'\n') if module else None
-    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui'):
+    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui'):
         preserved_content = {name: git('show', previous + ':spug_api/' + name).replace(b'\r\n', b'\n')
                              for name in (API_FILE, HEALTH_FILE)}
     else:
         preserved_content = (git('show', previous + ':spug_api/' + API_FILE).replace(b'\r\n', b'\n')
                              if args.profile == 'host-report' else None)
     write_manifests(stage, revision, previous, old_content, args.profile, preserved_content)
-    modules = APPEARANCE_MODULES if args.profile == 'site-appearance' else LOGIN_MODULES if args.profile == 'panel-login' else (module,) if module else ()
+    modules = SCHEDULED_PANEL_MODULES if args.profile == 'scheduled-panel-tasks' else APPEARANCE_MODULES if args.profile == 'site-appearance' else LOGIN_MODULES if args.profile == 'panel-login' else (module,) if module else ()
     (stage / 'Dockerfile').write_text(
         'FROM spug-baota:' + previous[:7] + '\nARG SOURCE_REVISION\n'
         'LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"\n'

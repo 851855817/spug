@@ -59,12 +59,13 @@ class Store {
   showForm = (info) => {
     this.page = 0;
     if (info) {
-      this.record = info
+      this.record = {...info, rst_notify: {...info.rst_notify}, panel_plan: info.panel_plan ? {
+        ...info.panel_plan, acknowledgements: [...(info.panel_plan.acknowledgements || [])]} : undefined}
       this.trigger = info.trigger
       if (info.trigger === 'date') {
         this.trigger_args = {date: moment(info.trigger_args)}
       } else if (info.trigger === 'cron') {
-        const args = info.trigger_args
+        const args = {...info.trigger_args}
         if (args.start) args.start = moment(args.start)
         if (args.stop) args.stop = moment(args.stop)
         this.trigger_args = {cron: args}

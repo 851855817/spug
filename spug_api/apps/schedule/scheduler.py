@@ -38,6 +38,30 @@ class Scheduler:
 
     def __init__(self):
         self.scheduler = BackgroundScheduler(timezone=self.timezone, executors={'default': ThreadPoolExecutor(30)})
+        self.panel_specs = {}
+
+    def _sync_panel_jobs(self):
+        """DB reconciliation is the durable activation outbox for panel plans."""
+        active = set()
+        try:
+            for task in Task.objects.filter(interpreter='baota', is_active=True):
+                job_id = 'panel-schedule-' + str(task.pk)
+                active.add(job_id)
+                signature = (task.trigger, task.trigger_args, task.command)
+                if self.panel_specs.get(job_id) == signature:
+                    continue
+                trigger = self.parse_trigger(task.trigger, task.trigger_args)
+                self.scheduler.add_job(self.dispatch, trigger, id=job_id,
+                                       args=(task.pk, 'baota', '', []), replace_existing=True,
+                                       max_instances=1, coalesce=True, misfire_grace_time=1)
+                self.panel_specs[job_id] = signature
+            for job_id in set(self.panel_specs) - active:
+                job = self.scheduler.get_job(job_id)
+                if job:
+                    job.remove()
+                del self.panel_specs[job_id]
+        finally:
+            connections.close_all()
 
     @classmethod
     def covert_week(cls, week_str):
@@ -60,6 +84,27 @@ class Scheduler:
 
     @classmethod
     def dispatch(cls, task_id, interpreter, command, targets):
+        # Redis/job arguments may predate an edit or a disable. Re-read the
+        # current definition; a panel payload must never enter the SSH queue.
+        task = Task.objects.filter(pk=task_id, is_active=True).first()
+        if not task:
+            connections.close_all()
+            return
+        if task.interpreter == 'baota':
+            from .panel_tasks import dispatch
+            try:
+                return dispatch(task_id)
+            finally:
+                connections.close_all()
+        saved_targets = json.loads(task.targets)
+        # Monitor events resolve this placeholder to the host that raised the
+        # alarm. Retain that trusted caller resolution for legacy scripts.
+        if task.trigger != 'monitor' or 'monitor' not in saved_targets:
+            targets = saved_targets
+        interpreter, command = task.interpreter, task.command
+        if interpreter not in ('sh', 'python'):
+            connections.close_all()
+            return
         output = {x: None for x in targets}
         history = History.objects.create(
             task_id=task_id,
@@ -75,8 +120,13 @@ class Scheduler:
 
     def _init_builtin_jobs(self):
         from apps.ops.expiry.reminders import scheduled_check_expiry
+        from .panel_tasks import notify_pending
         self.scheduler.add_job(auto_run_by_day, 'cron', hour=1, minute=20)
         self.scheduler.add_job(auto_run_by_minute, 'interval', minutes=1)
+        self.scheduler.add_job(self._sync_panel_jobs, 'interval', seconds=5,
+                               id='panel-schedule-sync', max_instances=1, coalesce=True)
+        self.scheduler.add_job(notify_pending, 'interval', seconds=5,
+                               id='panel-schedule-notifications', max_instances=1, coalesce=True)
         self.scheduler.add_job(scheduled_check_expiry, 'cron', id='server-expiry-daily',
                                hour=9, minute=0, timezone=self.timezone,
                                max_instances=1, coalesce=True, misfire_grace_time=86400,
@@ -86,7 +136,7 @@ class Scheduler:
         self.scheduler.start()
         self._init_builtin_jobs()
         try:
-            for task in Task.objects.filter(is_active=True).exclude(trigger='monitor'):
+            for task in Task.objects.filter(is_active=True).exclude(trigger='monitor').exclude(interpreter='baota'):
                 trigger = self.parse_trigger(task.trigger, task.trigger_args)
                 self.scheduler.add_job(
                     self.dispatch,
@@ -95,6 +145,7 @@ class Scheduler:
                     args=(task.id, task.interpreter, task.command, json.loads(task.targets)),
                 )
             connections.close_all()
+            self._sync_panel_jobs()
         except DatabaseError:
             pass
 
@@ -106,6 +157,9 @@ class Scheduler:
         while True:
             _, data = rds_cli.brpop(settings.SCHEDULE_KEY)
             task = AttrDict(json.loads(data))
+            if Task.objects.filter(pk=task.id, interpreter='baota').exists():
+                self._sync_panel_jobs()
+                continue
             if task.action in ('add', 'modify'):
                 trigger = self.parse_trigger(task.trigger, task.trigger_args)
                 self.scheduler.add_job(

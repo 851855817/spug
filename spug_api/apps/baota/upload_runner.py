@@ -144,7 +144,8 @@ def process(worker, target):
                 stream.seek(0)
                 # No automatic retry, redirect or fallback after this point.
                 try:
-                    client.upload_file(posixpath.dirname(filename), posixpath.basename(filename), stream)
+                    from apps.schedule.panel_tasks import authorized_client
+                    authorized_client(client, target.task).upload_file(posixpath.dirname(filename), posixpath.basename(filename), stream)
                     evidence = verify_content(client, filename, row.source)
                     result = {'state': 'success', 'message': '上传完成，内容校验通过', 'evidence': evidence}
                 except Exception:
@@ -174,6 +175,9 @@ def process(worker, target):
 def begin(worker, target_id, result_id):
     from .worker import locked_target
     with transaction.atomic():
+        from apps.schedule.panel_tasks import lock_for_intent
+        from .models import PanelTaskTarget
+        lock_for_intent(PanelTaskTarget.objects.values_list('task_id', flat=True).get(pk=target_id))
         task, target = locked_target(target_id)
         row = target.upload_files.select_for_update().get(pk=result_id)
         if target.state != 'running' or row.state != 'ready' or row.intent:
@@ -193,6 +197,8 @@ def begin(worker, target_id, result_id):
         s.configured(target.panel, target.panel_snapshot['api_config_revision'])
         if 'upload_overwrite' not in task.acknowledgements:
             raise ValueError('缺少覆盖确认')
+        from apps.schedule.panel_tasks import before_mutation
+        before_mutation(task)
         bundle = target.upload_binding.bundle
         if (bundle.state != 'sealed' or bundle.manifest_sha256 != target.children[0]['snapshot']['plan']['manifest_sha256']):
             raise ValueError('源文件包发生变化')

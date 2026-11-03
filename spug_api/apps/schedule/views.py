@@ -8,21 +8,38 @@ from apscheduler.triggers.cron import CronTrigger
 from apps.schedule.scheduler import Scheduler
 from apps.schedule.models import Task, History
 from apps.schedule.executors import dispatch_job
+from apps.baota.task_views import TaskBaseView
+from . import panel_tasks
 from apps.host.models import Host
 from django.conf import settings
 from libs import json_response, JsonParser, Argument, human_datetime, auth
 import json
 
 
-class Schedule(View):
+class Schedule(TaskBaseView):
     @auth('schedule.schedule.view')
     def get(self, request):
-        tasks = Task.objects.all()
-        types = [x['type'] for x in tasks.order_by('type').values('type').distinct()]
+        tasks = []
+        for task in Task.objects.select_related('latest').all():
+            if task.interpreter == 'baota':
+                try:
+                    panel_tasks.access(request.user, task)
+                except PermissionError:
+                    continue
+            tasks.append(task)
+        types = sorted({x.type for x in tasks})
         return json_response({'types': types, 'tasks': [x.to_dict() for x in tasks]})
 
     @auth('schedule.schedule.add|schedule.schedule.edit')
     def post(self, request):
+        data = self.body(request)
+        if data.get('interpreter') == 'baota':
+            panel_tasks.save(request.user, data)
+            return json_response()
+        if data.get('id') and Task.objects.filter(pk=data['id'], interpreter='baota').exists():
+            return json_response(error='面板计划不能转换为脚本任务')
+        if data.get('interpreter') not in ('sh', 'python'):
+            return json_response(error='请选择有效的任务内容类型')
         form, error = JsonParser(
             Argument('id', type=int, required=False),
             Argument('type', help='请输入任务类型'),
@@ -72,6 +89,12 @@ class Schedule(View):
         ).parse(request.body, True)
         if error is None:
             task = Task.objects.get(pk=form.id)
+            if task.interpreter == 'baota':
+                data = self.body(request)
+                panel_tasks.activate(request.user, task.pk, form.get('is_active'), data.get('confirm_panel', False))
+                # The scheduler reconciles these durable DB definitions every
+                # five seconds; Redis delivery cannot lose an activation.
+                return json_response()
             if form.get('is_active') is not None:
                 task.is_active = form.is_active
                 task.latest_id = None
@@ -93,6 +116,10 @@ class Schedule(View):
         if error is None:
             task = Task.objects.filter(pk=form.id).first()
             if task:
+                if task.interpreter == 'baota':
+                    panel_tasks.access(request.user, task, 'del')
+                    if panel_tasks.unresolved(task):
+                        return json_response(error='运行尚未结束，请先核验面板任务结果')
                 if task.is_active:
                     return json_response(error='该任务在运行中，请先停止任务再尝试删除')
                 task.delete()
@@ -100,17 +127,24 @@ class Schedule(View):
         return json_response(error=error)
 
 
-class HistoryView(View):
+class HistoryView(TaskBaseView):
     @auth('schedule.schedule.view')
     def get(self, request, t_id):
         task = Task.objects.filter(pk=t_id).first()
         if not task:
             return json_response(error='未找到指定任务')
+        if task.interpreter == 'baota':
+            panel_tasks.access(request.user, task)
 
         h_id = request.GET.get('id')
         if h_id:
             h_id = task.latest_id if h_id == 'latest' else h_id
-            return json_response(self._fetch_detail(h_id))
+            record = History.objects.filter(pk=h_id, task_id=task.pk).first()
+            if record is None:
+                return json_response(error='未找到此计划的执行记录')
+            if task.interpreter == 'baota':
+                return json_response(panel_tasks.history_detail(request.user, task, record))
+            return json_response(self._fetch_detail(record))
         histories = History.objects.filter(task_id=t_id)
         return json_response([x.to_list() for x in histories])
 
@@ -119,6 +153,9 @@ class HistoryView(View):
         task = Task.objects.filter(pk=t_id).first()
         if not task:
             return json_response(error='未找到指定任务')
+        if task.interpreter == 'baota':
+            preview = panel_tasks.preview(request.user, task)
+            return json_response({'panel_task_id': preview.pk, 'mode': 'preflight'})
         outputs, status = {}, 1
         for host_id in json.loads(task.targets):
             code, duration, out = dispatch_job(host_id, task.interpreter, task.command)
@@ -134,8 +171,7 @@ class HistoryView(View):
         )
         return json_response(history.id)
 
-    def _fetch_detail(self, h_id):
-        record = History.objects.filter(pk=h_id).first()
+    def _fetch_detail(self, record):
         outputs = json.loads(record.output)
         host_ids = (x for x in outputs.keys() if x != 'local')
         hosts_info = {str(x.id): x.name for x in Host.objects.filter(id__in=host_ids)}
@@ -152,8 +188,15 @@ class HistoryView(View):
                 'code': code,
                 'duration': duration,
                 'output': out})
-        data['duration'] = f"{data['duration'] / len(outputs):.3f}"
+        data['duration'] = f"{data['duration'] / max(len(outputs), 1):.3f}"
         return data
+
+
+class PanelTemplatesView(TaskBaseView):
+    def get(self, request):
+        if request.GET.get('id'):
+            return json_response(panel_tasks.template(request.user, request.GET['id']))
+        return json_response(panel_tasks.templates(request.user))
 
 
 @auth('schedule.schedule.view|schedule.schedule.add|schedule.schedule.edit')

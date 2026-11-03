@@ -9,13 +9,18 @@ import { Form, Input, Select, Modal, Button, Radio } from 'antd';
 import { ExclamationCircleOutlined } from '@ant-design/icons';
 import { LinkButton, ACEditor, Container } from 'components';
 import TemplateSelector from '../exec/task/TemplateSelector';
-import { cleanCommand, t, docsUrl } from 'libs';
+import { cleanCommand, t, docsUrl, hasPermission } from 'libs';
 import store from './store';
+import PanelPlanSelector from './PanelPlanSelector';
+import { panelPlanReady } from './panelPlan';
 
 export default observer(function (props) {
   const [form] = Form.useForm();
   const [showTmp, setShowTmp] = useState(false);
   const [command, setCommand] = useState(store.record.command || '');
+  const [interpreter, setInterpreter] = useState(store.record.interpreter);
+  const [panelPlan, setPanelPlan] = useState(store.record.panel_plan);
+  const canConfigurePanel = hasPermission('exec.panel.view') && hasPermission('exec.panel.create');
 
   function handleAddZone() {
     let type;
@@ -40,17 +45,22 @@ export default observer(function (props) {
 
   function canNext() {
     const formData = form.getFieldsValue()
-    return !(formData.type && formData.name && command)
+    return !(formData.type && formData.name && (interpreter === 'baota' ? canConfigurePanel && panelPlanReady(panelPlan) : command))
   }
 
   function handleNext() {
+    if (canNext()) return;
+    Object.assign(store.record, form.getFieldsValue(), {interpreter,
+      command: interpreter === 'baota' ? '' : cleanCommand(command),
+      panel_plan: interpreter === 'baota' ? panelPlan : undefined});
+    if (interpreter === 'baota' && store.trigger === 'monitor') store.trigger = 'interval';
     store.page += 1;
-    Object.assign(store.record, form.getFieldsValue(), {command: cleanCommand(command)})
   }
 
   function handleSelect(tpl) {
     const {interpreter, body} = tpl;
     setCommand(body)
+    setInterpreter(interpreter)
     form.setFieldsValue({interpreter})
   }
 
@@ -91,19 +101,20 @@ export default observer(function (props) {
           <Input placeholder={t('请输入任务名称')}/>
         </Form.Item>
         <Form.Item required label={t('任务内容')}
-                   extra={<LinkButton onClick={() => setShowTmp(true)}>{t('从模板添加')}</LinkButton>}>
+                   extra={interpreter !== 'baota' && <LinkButton onClick={() => setShowTmp(true)}>{t('从模板添加')}</LinkButton>}>
           <Form.Item noStyle name="interpreter">
-            <Radio.Group buttonStyle="solid" style={{marginBottom: 12}}>
-              <Radio.Button value="sh" style={{width: 80, textAlign: 'center'}}>Shell</Radio.Button>
-              <Radio.Button value="python" style={{width: 80, textAlign: 'center'}}>Python</Radio.Button>
+            <Radio.Group buttonStyle="solid" style={{marginBottom: 12}} onChange={event => setInterpreter(event.target.value)}>
+              <Radio.Button value="sh" disabled={Boolean(store.record.id && store.record.interpreter === 'baota')} style={{width: 80, textAlign: 'center'}}>Shell</Radio.Button>
+              <Radio.Button value="python" disabled={Boolean(store.record.id && store.record.interpreter === 'baota')} style={{width: 80, textAlign: 'center'}}>Python</Radio.Button>
+              {(canConfigurePanel || interpreter === 'baota') && <Radio.Button value="baota" disabled={Boolean(store.record.id && store.record.interpreter !== 'baota')}>宝塔面板任务</Radio.Button>}
             </Radio.Group>
           </Form.Item>
-          <Form.Item noStyle shouldUpdate>
+          {interpreter === 'baota' ? <PanelPlanSelector value={panelPlan} onChange={setPanelPlan}/> : <Form.Item noStyle shouldUpdate>
             {({getFieldValue}) => (
               <ACEditor mode={getFieldValue('interpreter')} value={command} width="100%" height="150px"
                         onChange={setCommand}/>
             )}
-          </Form.Item>
+          </Form.Item>}
         </Form.Item>
         <Form.Item label={t('失败通知')} extra={(
           <span>

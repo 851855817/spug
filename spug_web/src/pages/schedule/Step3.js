@@ -3,10 +3,10 @@
  * Copyright (c) <spug.dev@gmail.com>
  * Released under the AGPL-3.0 License.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { observer } from 'mobx-react';
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
-import { Form, Select, Button, message } from 'antd';
+import { Alert, Form, Select, Button, message } from 'antd';
 import { Container } from 'components';
 import HostSelector from 'pages/host/Selector';
 import hostStore from 'pages/host/store';
@@ -15,20 +15,27 @@ import lds from 'lodash';
 import { http, t } from 'libs';
 import S from './store';
 import styles from './index.module.less';
+import PanelPlanSummary from './PanelPlanSummary';
+import { panelPlanReady, panelPlanPayload, validPanelTrigger } from './panelPlan';
 
 export default observer(function (props) {
   const [loading, setLoading] = useState(false)
+  const isPanel = S.record.interpreter === 'baota';
+  const validPanel = panelPlanReady(S.record.panel_plan) && validPanelTrigger(S.trigger, S.trigger_args);
+  useEffect(() => {if (props.visible && !isPanel) hostStore.initial();}, [props.visible, isPanel]);
 
   function handleSubmit() {
-    const formData = lds.pick(S.record, ['id', 'name', 'type', 'interpreter', 'command', 'desc', 'rst_notify']);
-    formData['targets'] = S.targets.filter(x => x);
+    if (isPanel && !validPanel) return;
+    const formData = lds.pick(S.record, ['id', 'name', 'type', 'interpreter', 'desc', 'rst_notify']);
+    if (isPanel) formData.panel_plan = panelPlanPayload(S.record.panel_plan);
+    else {formData.command = S.record.command; formData.targets = S.targets.filter(x => x);}
     formData['trigger'] = S.trigger;
     formData['trigger_args'] = _parse_args();
-    if (S.trigger === 'monitor') {
+    if (!isPanel && S.trigger === 'monitor') {
       if (formData.targets.length > 1) {
         return message.error(t('监控告警类触发器，只能选择一个执行对象'))
       }
-    } else if (formData.targets.includes('monitor')) {
+    } else if (!isPanel && formData.targets.includes('monitor')) {
       return message.error(t('执行对象选择有误，请重新选择'))
     }
     setLoading(true)
@@ -66,9 +73,12 @@ export default observer(function (props) {
   }
 
   return (
-    <Container visible={props.visible} style={{width: 420, margin: '0 auto'}}>
+    <Container visible={props.visible} style={{width: isPanel ? '100%' : 420, margin: '0 auto'}}>
       <Form layout="vertical" style={{minHeight: 200}}>
-        <Form.Item required label={t('执行对象')}>
+        {isPanel ? <>
+          <Alert showIcon type="info" message="保存后的计划默认未激活" description="请核对固定面板和操作范围。激活后，每次到点重新预检，全量通过后自动执行；失败或结果不确定时自动停用。"/>
+          <div style={{margin: '16px 0'}}><PanelPlanSummary plan={S.record.panel_plan}/></div>
+        </> : <><Form.Item required label={t('执行对象')}>
           {S.targets.map((id, index) => (
             <React.Fragment key={index}>
               <Select
@@ -100,9 +110,9 @@ export default observer(function (props) {
               <PlusOutlined/>{t('添加执行对象')}
             </Button>
           </HostSelector>
-        </Form.Item>
+        </Form.Item></>}
         <Form.Item>
-          <Button loading={loading} disabled={S.targets.filter(x => x).length === 0} type="primary"
+          <Button loading={loading} disabled={isPanel ? !validPanel : S.targets.filter(x => x).length === 0} type="primary"
                   onClick={handleSubmit}>{t('提交')}</Button>
           <Button style={{marginLeft: 20}} onClick={() => S.page -= 1}>{t('上一步')}</Button>
         </Form.Item>

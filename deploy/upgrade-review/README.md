@@ -15,8 +15,9 @@
 | `personal-reminders-ui` | 首页、顶栏通知、到期站内提醒及共享个人设置控件，共七个固定 UI 文件 | 精确校验 `PERSONAL_REMINDERS_UI`，API 覆盖为空，无迁移；完整 API 树保全、新配对备份及四入口 UI 回退。偏好复用现有按账号隔离的用户设置，旧 UI 忽略这些设置 |
 | `inventory-role-presets-ui` | 网站与证书清单、角色功能权限页面及岗位模板数据，共三个固定 UI 文件 | 精确校验 `INVENTORY_ROLE_PRESETS_UI`；API 覆盖为空，无角色或用户授权数据变更；完整 API 树保全、新配对备份、四入口兼容回退。模板只替换草稿，仍由管理员保存 |
 | `panel-login` | `apps/baota/login_views.py`、`apps/baota/urls.py`，及宝塔列表／角色权限 UI | 新登录模块基准必须不存在，URLs 必须有旧摘要；保全 PHP 与健康模块。无迁移和权限数据更新。回退按原始收据删除新增模块并恢复 URLs，两份 API 根恢复完整原态 |
+| `scheduled-panel-tasks` | 任务计划面板执行的 11 个固定 API 模块与 13 个固定 UI 文件 | 仅 `apps/schedule/panel_tasks.py` 的旧摘要为 `null`，其余 10 个模块必须已存在；精确限制两份后端测试，保全 PHP、健康模块及其余完整 API 树。无迁移，沿用新配对备份、空闲门、进程身份及 API/UI 收据恢复 |
 
-配置不能接收任意文件列表。未知配置、混合模块、模型／调度／设置变化会拒绝；纯前端配置也拒绝其他前端运行文件和空的目标改动。后端测试更新只供隔离回归，不进入镜像或覆盖线上文件。若本次修复超出该范围，应另行设计发布方案。
+配置不能接收任意文件列表。未知配置、混合模块及各配置清单之外的模型／调度／设置变化会拒绝；纯前端配置也拒绝其他前端运行文件和空的目标改动。后端测试更新只供隔离回归，不进入镜像或覆盖线上文件。若本次修复超出该范围，应另行设计发布方案。
 
 ## 三个阶段
 
@@ -103,3 +104,17 @@
 发布仍需本次新建的数据库／数据卷配对备份、API 与 UI 两份原始覆盖收据、原业务空闲及进程身份检查。两份实际 API 根各自保留完整发布前快照，发布后只允许这三个 API 文件变化。部分失败恢复原路由及设置文件，并从两份 API 根删除先前不存在的外观模块；原始收据不完整则保持维护关闭，不恢复入口。回退只还原运行文件和 Compose，不恢复整个业务数据库，也不删除已保存的外观配置记录；旧版本忽略该附加记录。入口开放后产生任何新业务或配置变化都会重新触发回退窗口检查。
 
 专项保护测试：`python -m unittest discover -s deploy/upgrade-review -p 'test_appearance_release.py'`，完整旧 profile 回归仍运行本目录全部 `test_*.py`。这些本地测试不代替 Linux 准备、镜像构建与实际发布验收。
+
+## 面板任务计划首次发布
+
+`scheduled-panel-tasks` 只接受以下 11 个 API 覆盖路径，均相对 `spug_api/`：`apps/schedule/{panel_tasks.py,views.py,urls.py,models.py,executors.py,scheduler.py,builtin.py}` 和 `apps/baota/{task_service.py,worker.py,upload_store.py,upload_runner.py}`。仅允许新增 `panel_tasks.py`，基准必须没有该文件；其余 10 个模块必须存在并逐项记录旧摘要。不允许迁移、依赖、权限或其他运行模块变化。各旧 profile 的范围保持原样。
+
+前端精确接受 `spug_web/src/pages/schedule/` 下的 13 个文件：`Form.js`、`Info.js`、`Record.js`、`Step1.js`、`Step2.js`、`Step3.js`、`Table.js`、`index.js`、`store.js`、`PanelPlanSelector.js`、`PanelPlanSummary.js`、`PanelPreview.js` 和 `panelPlan.js`。拒绝子集及额外运行文件；`.test.js` 沿用现有测试排除规则。后端只允许 `apps/schedule/test_panel_tasks.py` 和 `apps/schedule/test_urls.py` 两份测试变更，不接受其他以 `test` 开头的文件来绕过范围检查。
+
+打包时使用 `--profile scheduled-panel-tasks`，从清洁 HEAD 读取真实基准内容；增量 Dockerfile 只 COPY 11 个 API 模块和 UI 构建。完整 worker 镜像也逐项 COPY 上述 7 个 schedule 模块，不覆盖其他 schedule 文件。PHP 策略与健康模块的基准摘要必须与暂存源码、候选镜像及两份实际 API 根一致。
+
+准备阶段使用不可变镜像 ID 比较完整 API 树：核对新增模块不存在及 10 份旧摘要，候选树只能在 11 个覆盖路径发生变化；`unchanged_api_tree_sha256` 记录排除这 11 个路径后的完整保全树摘要。结束前重新核对基准镜像 ID，漂移或隔离回归失败均不写成功收据。隔离测试和 CI 的 SQLite／MariaDB 检查显式运行 `apps.schedule.test_panel_tasks` 与 `apps.schedule.test_urls`。
+
+发布沿用实际版本、业务空闲、完整业务／模式／密钥摘要、原进程身份、新数据库／数据卷配对备份和 API/UI 原始收据检查。两份实际 API 根分别保留完整前态；部分覆盖失败须恢复 10 个既有模块并删除先前不存在的 `panel_tasks.py`。收据不完整、已出现新业务或保全证据漂移时保持维护关闭；不恢复业务数据库或反向迁移。此配置仅补齐工具和离线验证，实际发布仍须按三个阶段执行。
+
+专项保护测试：`python -m unittest discover -s deploy/upgrade-review -p 'test_scheduled_panel_tasks_release.py'`。完整回归：`python -m unittest discover -s deploy/upgrade-review -p 'test_*.py'` 和 `python -m unittest discover -s deploy/expiry -p 'test_*.py'`。

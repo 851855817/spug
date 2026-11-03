@@ -385,6 +385,9 @@ def cleanup_expired():
             bundle = PanelUploadBundle.objects.select_for_update().get(pk=bundle_id)
             if bundle.updated_at >= now - _DAY:
                 continue
+            from apps.schedule.panel_tasks import retained_bundle
+            if retained_bundle(bundle.pk):
+                continue
             bindings = list(bundle.bindings.select_related('target__task'))
             if bindings:
                 cutoff = now - timedelta(days=7)

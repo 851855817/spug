@@ -27,7 +27,7 @@ class Record extends React.Component {
       .finally(() => this.setState({loading: false}))
   }
 
-  colors = ['orange', 'green', 'red'];
+  colors = ['orange', 'green', 'red', 'default'];
 
   columns = [{
     title: t('执行时间'),

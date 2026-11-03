@@ -399,7 +399,7 @@ def audit(task, user, action, **values):
     task.save(update_fields=['audit', 'updated_at'])
 
 
-def start(user, task_id, data):
+def start(user, task_id, data, *, scheduled=False):
     strict(data, ('acknowledgements', 'execution_policy'), ('acknowledgements',))
     policy = validate_execution_policy(data['execution_policy']) if 'execution_policy' in data else {}
     codes = data['acknowledgements']
@@ -407,6 +407,8 @@ def start(user, task_id, data):
         raise ValueError('确认项格式无效')
     with transaction.atomic():
         task = owned(user, task_id, 'execute', lock=True)
+        if not scheduled and any(a.get('action') == 'schedule' for a in task.audit):
+            raise ValueError('此任务由任务计划协调器预检并启动，请到任务计划查看结果')
         if task.state != 'prepared' or task.cancel_requested:
             raise ValueError('任务尚未完成预检或已提交，请刷新')
         targets = list(task.targets.select_for_update().select_related('panel'))

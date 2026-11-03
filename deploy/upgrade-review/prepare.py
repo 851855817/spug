@@ -13,6 +13,12 @@ import tarfile
 
 APPEARANCE_MODULES = ('apps/setting/appearance.py', 'apps/setting/urls.py', 'spug/settings.py')
 REFINED_PALETTES_MODULE = 'apps/setting/appearance.py'
+SCHEDULED_PANEL_MODULES = (
+    'apps/schedule/panel_tasks.py', 'apps/schedule/views.py', 'apps/schedule/urls.py',
+    'apps/schedule/models.py', 'apps/schedule/executors.py', 'apps/schedule/scheduler.py',
+    'apps/schedule/builtin.py', 'apps/baota/task_service.py', 'apps/baota/worker.py',
+    'apps/baota/upload_store.py', 'apps/baota/upload_runner.py',
+)
 
 
 def unchanged_api_digest(baseline, candidate):
@@ -43,6 +49,25 @@ def appearance_api_digest(baseline, candidate, previous, overlay):
             any(baseline.get(name) != value for name, value in previous.items()) or
             candidate != dict(baseline, **overlay)):
         raise ValueError('Appearance image API file set, content or prestate differs')
+    return unchanged_api_digest({name: value for name, value in baseline.items() if name not in overlay},
+                                {name: value for name, value in candidate.items() if name not in overlay})
+
+
+def scheduled_panel_tasks_api_digest(baseline, candidate, previous, overlay):
+    """Permit the eleven reviewed modules and preserve the complete remaining API tree."""
+    unchanged_api_digest(baseline, baseline)
+    unchanged_api_digest(candidate, candidate)
+    if (not isinstance(previous, dict) or not isinstance(overlay, dict) or
+            set(previous) != set(SCHEDULED_PANEL_MODULES) or set(overlay) != set(SCHEDULED_PANEL_MODULES) or
+            previous[SCHEDULED_PANEL_MODULES[0]] is not None or
+            not all(isinstance(previous[name], str) and re.fullmatch('[0-9a-f]{64}', previous[name])
+                    for name in SCHEDULED_PANEL_MODULES[1:]) or
+            not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value) for value in overlay.values())):
+        raise ValueError('Invalid fixed scheduled panel image overlay')
+    if (SCHEDULED_PANEL_MODULES[0] in baseline or
+            any(baseline.get(name) != value for name, value in previous.items()) or
+            candidate != dict(baseline, **overlay)):
+        raise ValueError('Scheduled panel image API file set, content or prestate differs')
     return unchanged_api_digest({name: value for name, value in baseline.items() if name not in overlay},
                                 {name: value for name, value in candidate.items() if name not in overlay})
 
@@ -137,7 +162,7 @@ def main():
         ['docker', 'image', 'inspect', image], text=True))[0], revision)
     source = stage / 'source'
     preservation = {}
-    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui'):
+    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui'):
         # Read the fixed literal without importing staged Python: imports can
         # write unarchived __pycache__ files and invalidate the bundle binding.
         tree = ast.parse((source / 'deploy/upgrade-review/publish.py').read_text())
@@ -151,8 +176,9 @@ def main():
             raise ValueError('Invalid fixed API file probe')
         baseline_api = image_api_snapshot(baseline_id, probe)
         candidate_api = image_api_snapshot(image_id, probe)
-        if manifest.get('profile') in ('site-appearance', 'refined-palettes'):
-            compare = appearance_api_digest if manifest['profile'] == 'site-appearance' else refined_palettes_api_digest
+        if manifest.get('profile') in ('site-appearance', 'scheduled-panel-tasks', 'refined-palettes'):
+            compare = (scheduled_panel_tasks_api_digest if manifest['profile'] == 'scheduled-panel-tasks' else
+                       appearance_api_digest if manifest['profile'] == 'site-appearance' else refined_palettes_api_digest)
             tree_digest = compare(baseline_api, candidate_api,
                 manifest.get('previous_api_sha256'), manifest.get('api_sha256'))
         else:
@@ -168,7 +194,8 @@ def main():
         '--workdir', '/source/spug_api', '--entrypoint', 'python3', image_id]
     modules = ['apps.baota.' + path.stem for path in sorted((source / 'spug_api/apps/baota').glob('test*.py'))]
     subprocess.run(command + ['manage.py', 'test', *modules, 'apps.setting.test_health', 'apps.setting.test_reminder_preferences',
-        'apps.setting.test_appearance', 'spug.test_urls', 'apps.ops.tests',
+        'apps.setting.test_appearance', 'spug.test_urls', 'apps.schedule.test_panel_tasks',
+        'apps.schedule.test_urls', 'apps.ops.tests',
         'apps.ops.test_result_counts', 'apps.ops.expiry.tests', 'apps.baota.inventory.tests',
         '--settings=spug.test_settings', '--noinput'], check=True, timeout=300)
     for folder in ('upgrade-review', 'expiry'):

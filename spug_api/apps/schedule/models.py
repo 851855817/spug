@@ -18,6 +18,11 @@ class History(models.Model, ModelMixin):
     run_time = models.CharField(max_length=20)
     output = models.TextField()
 
+    def get_status_display(self):
+        # Skip is an application result, not a changed model field contract.
+        # Keep updatedb's model state identical to the existing installation.
+        return '跳过' if self.status == 3 else dict(self.STATUS).get(self.status, str(self.status))
+
     def to_list(self):
         tmp = super().to_dict(selects=('id', 'status', 'run_time'))
         tmp['status_alias'] = self.get_status_display()
@@ -62,6 +67,10 @@ class Task(models.Model, ModelMixin):
         tmp['rst_notify'] = json.loads(self.rst_notify) if self.rst_notify else {'mode': '0'}
         if self.trigger in ('cron', 'monitor'):
             tmp['trigger_args'] = json.loads(self.trigger_args)
+        if self.interpreter == 'baota':
+            from .panel_tasks import definition, public_plan
+            tmp['command'] = ''
+            tmp['panel_plan'] = public_plan(definition(self))
         return tmp
 
     def __repr__(self):

@@ -271,6 +271,8 @@ class PanelWorker:
 
     def begin_dispatch(self, target_id, index, phase):
         with transaction.atomic():
+            from apps.schedule.panel_tasks import lock_for_intent
+            lock_for_intent(PanelTaskTarget.objects.values_list('task_id', flat=True).get(pk=target_id))
             task, target = locked_target(target_id)
             if target.state != 'running' or phase not in ('apply', 'deploy'):
                 return None
@@ -302,6 +304,8 @@ class PanelWorker:
                 s.refresh_task(task)
                 return None
             try:
+                from apps.schedule.panel_tasks import before_mutation
+                before_mutation(task)
                 s.configured(target.panel, target.panel_snapshot['api_config_revision'])
                 required = child['snapshot'].get('plan', {}).get('required_acknowledgements', [])
                 if (any(code not in s.ACK_CODES for code in required)
@@ -339,6 +343,8 @@ class PanelWorker:
         child = target.children[index]
         try:
             with self.client(target.panel) as client:
+                from apps.schedule.panel_tasks import authorized_client
+                client = authorized_client(client, target.task)
                 result = get_operation(target.task.operation).dispatch(
                     client, copy.deepcopy(child['snapshot']), phase,
                     copy.deepcopy(child.get('result', {}).get('remote', {})))
@@ -426,11 +432,16 @@ class PanelWorker:
 
     def run(self):
         from .upload_store import cleanup_expired
+        from apps.schedule.panel_tasks import tick
         next_cleanup = 0
+        next_schedule_tick = 0
         # SQLite's in-memory connection cannot be shared safely by this queue's
         # coordinator and worker threads; production uses MariaDB.
         if connection.vendor == 'sqlite':
             while not self.stop_event.is_set():
+                if time.monotonic() >= next_schedule_tick:
+                    tick()
+                    next_schedule_tick = time.monotonic() + 1
                 if time.monotonic() >= next_cleanup:
                     cleanup_expired()
                     next_cleanup = time.monotonic() + 3600
@@ -441,6 +452,9 @@ class PanelWorker:
         failed = False
         with ThreadPoolExecutor(max_workers=self.max_parallel) as pool:
             while not self.stop_event.is_set() or futures:
+                if not self.stop_event.is_set() and time.monotonic() >= next_schedule_tick:
+                    tick()
+                    next_schedule_tick = time.monotonic() + 1
                 if not self.stop_event.is_set() and time.monotonic() >= next_cleanup:
                     cleanup_expired()
                     next_cleanup = time.monotonic() + 3600
