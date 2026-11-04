@@ -10,7 +10,7 @@
 - [x] 前端先失败测试并修改 `RunForm.js`：去掉数值框与 Modal，确认执行直接 POST `{job,host_ids,group_ids,params,execution_mode:'continuous',confirmed:true}`；请求期间 pending 去重。`RunDetail.js` 异常展示现有分类建议与后端具体 message，历史数据兼容。
 - [x] 运行 `python manage.py test apps.ops.tests apps.ops.test_continuous --settings=spug.test_settings --noinput`（隔离环境）；前端目标及完整回归、ESLint、生产 build。不得调用真实客户接口。
 - [x] 追加固定 `continuous-inspections` 发布 profile，仅三处既有 API overlay＋两处 UI。先验证范围／完整树／回退测试，使用已上线 SSL 基线 post-ssl 检查和六表保全、规范化已释放 worker 时间、即将采集门禁。
-- [ ] 独立审查、Git 提交推送、CI、最终制品 Linux 回归和模拟浏览器；重新核实现网与空闲，建立新配对备份，发布后独立核对 API 允许覆盖及完整 UI／业务摘要／9 服务／15 健康。更新指南、发布记录和原草稿 PR，不合并主分支。
+- [x] 独立审查、Git 提交推送、CI、最终制品 Linux 回归和模拟浏览器；重新核实现网与空闲，建立新配对备份，发布后独立核对 API 允许覆盖及完整 UI／业务摘要／9 服务／15 健康。更新指南、发布记录和原草稿 PR，不合并主分支。
 
 ## 实施验证（发布前）
 
@@ -18,4 +18,4 @@
 - 发布回归 203 项、1 项平台条件跳过；SSL 发布回归 34 项通过。连续 profile 精确覆盖三个既有 API 文件和两个 UI 文件，没有模型／schema 变更；前态缺失、范围漂移及部分发布回退已覆盖。
 - 独立代码审查已完成，修正 PHP 退出码 127 和阶段超时的错误建议，回归先失败再通过；未发现未解决的阻断问题。
 - 新鲜只读预检确认线上仍为 e6ee4e3，9 服务正常、69 项摘要可读、SSL 六表非空数据保留、业务空闲且内存／磁盘有余量。正式发布仍会重新检查，不能复用本次空闲结论。
-- 待办：生产制品构建、模拟浏览器、远端隔离验证、重新预检与配对备份、正式发布、独立复核及 PR 记录。未向客户下发巡检。
+- 完成生产制品、8 条模拟浏览器、GitHub 应用／PR CI、远端隔离验证、新鲜预检与配对备份、正式发布及独立复核。应用 6198049，69 项摘要、SSL 六表、完整 API 允许覆盖、9 服务、15 项健康和公网 200 全部通过；结果见 docs/releases/2026-11-04-continuous-inspections.md。未向客户下发巡检。
