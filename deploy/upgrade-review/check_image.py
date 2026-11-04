@@ -24,7 +24,7 @@ PROFILES = {'continuous-inspections': CONTINUOUS_MODULES, 'php-update': PHP_MODU
             'panel-login': LOGIN_MODULES, 'inventory-filters': 'apps/baota/inventory/service.py', 'workbench-ui': None, 'branding-ui': None, 'personal-reminders-ui': None, 'inventory-role-presets-ui': None,
             'ssl-renew-diagnostics': 'apps/baota/operations/certificates.py', 'site-appearance': APPEARANCE_MODULES,
             'scheduled-panel-tasks': SCHEDULED_PANEL_MODULES,
-            'refined-palettes': APPEARANCE_MODULE, 'branding-cleanup-ui': None, 'self-use-branding-ui': None, 'sidebar-collapse-ui': None, 'hide-first-batch-ui': None, 'panel-workspace-ui': None}
+            'refined-palettes': APPEARANCE_MODULE, 'branding-cleanup-ui': None, 'self-use-branding-ui': None, 'sidebar-collapse-ui': None, 'hide-first-batch-ui': None, 'panel-workspace-ui': None, 'hide-site-inventory-ui': None}
 
 
 def sha(path):
@@ -81,7 +81,7 @@ def verify(root, stage, revision):
                         for value in hashes.values())):
             raise ValueError('Image API overlay differs')
     preserved = release.get('preserved_api_sha256', {})
-    expected_preserved = ({PHP_MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui') else
+    expected_preserved = ({PHP_MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui') else
                           {PHP_MODULE} if profile == 'host-report' else set())
     if (not isinstance(preserved, dict) or set(preserved) != expected_preserved or
             not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)

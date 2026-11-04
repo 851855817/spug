@@ -73,7 +73,7 @@ export default [
       {title: t('文件分发'), auth: 'exec.transfer.do', path: '/exec/transfer', component: ExecTransfer},
       {title: t('面板任务'), auth: 'exec.panel.view|admin', path: '/exec/panel', component: ExecPanel},
       {hidden: true, auth: 'admin', path: '/exec/operations', component: LegacyOperations},
-      {title: t('网站与证书'), auth: 'admin', path: '/exec/sites', component: SiteInventory},
+      {hidden: true, title: t('网站与证书'), auth: 'admin', path: '/exec/sites', component: SiteInventory},
       {title: t('备份检查台'), auth: 'admin', path: '/exec/backups', component: BackupInventory},
     ]
   },
