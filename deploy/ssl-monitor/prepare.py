@@ -31,6 +31,16 @@ def hashes(root):
             for p in sorted(root.rglob('*')) if p.is_file()}
 
 
+def add_isolated_settings(source, compatibility):
+    # Published images deliberately contain runtime files only. Exercise their
+    # exported source using the existing disposable DB settings, never replace
+    # production settings or import any live credential file into the fixture.
+    for name in ('test_settings.py', 'baota_ci_settings.py'):
+        origin, target = source / 'spug' / name, compatibility / 'spug' / name
+        assert origin.is_file() and not origin.is_symlink() and not target.is_symlink()
+        shutil.copy2(origin, target)
+
+
 def main():
     sys.dont_write_bytecode = True
     os.environ['PYTHONDONTWRITEBYTECODE'] = '1'
@@ -150,6 +160,7 @@ with tarfile.open(fileobj=sys.stdout.buffer,mode='w|') as out:
                 path = Path(member.name)
                 assert not path.is_absolute() and '..' not in path.parts and (member.isfile() or member.isdir())
             stream.extractall(compatibility, filter='data')
+        add_isolated_settings(rehearsal, compatibility)
         # Existing /data migration history survives upstream rsync on restart;
         # reproduce that same merge using migration Python only, never settings.
         for folder in (rehearsal / 'apps').glob('*/migrations'):
