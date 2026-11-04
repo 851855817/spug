@@ -10,9 +10,22 @@ import tarfile
 
 from manifest import API_FILES, validate_changes
 
+SOURCE_PATHS = ('spug_api', 'spug_web/public', 'deploy', 'LICENSE', '.github/workflows/baota-checks.yml')
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def export_source(repo, stage, git):
+    for name in filter(None, git('ls-files', '-z', *SOURCE_PATHS).decode().split('\0')):
+        source = repo / name
+        assert source.is_file() and not source.is_symlink()
+        target = stage / 'source' / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        content = source.read_bytes()
+        if target.suffix in ('.py', '.ini', '.sh', '.service', '.timer'):
+            content = content.replace(b'\r\n', b'\n')
+        target.write_bytes(content)
 
 
 def main():
@@ -37,16 +50,7 @@ def main():
     stage = repo.parent / ('ssl-' + revision[:7])
     stage.mkdir(exist_ok=False)
     shutil.copytree(repo / 'spug_web/build', stage / 'build')
-    for name in filter(None, git('ls-files', '-z', 'spug_api', 'deploy', 'LICENSE',
-                                '.github/workflows/baota-checks.yml').decode().split('\0')):
-        source = repo / name
-        assert source.is_file() and not source.is_symlink()
-        target = stage / 'source' / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        content = source.read_bytes()
-        if target.suffix in ('.py', '.ini', '.sh', '.service', '.timer'):
-            content = content.replace(b'\r\n', b'\n')
-        target.write_bytes(content)
+    export_source(repo, stage, git)
     ui = {p.relative_to(stage / 'build').as_posix(): sha(p) for p in (stage / 'build').rglob('*')
           if p.is_file() and p.name != 'ui-release.json'}
     (stage / 'build/ui-release.json').write_text(json.dumps({'revision': revision, 'sha256': ui}, indent=2))

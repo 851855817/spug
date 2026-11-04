@@ -44,6 +44,7 @@ API 前缀 `/api/monitor/ssl/`：
 - POST `checks/` `{source_keys:[...]}` 仅队列，返回 `{jobs:[...]}`；不从视图同步执行 SSH/TLS。
 - GET `jobs/`（page/page_size）和 `jobs/<id>/` 返回阶段、状态、原因与安全结果，不返回内部计划。
 - POST `renew/` `{certificate_id}` 仅创建续签预检，返回 job；POST `renew/<id>/start/` `{revision,acknowledgements:[...]}`；POST `renew/<id>/verify/` `{}` 只读。Job 公共结构 `{id,kind,state,phase,message,revision,certificate_id,panel_task_id,acknowledgements,summary,result,created_at,updated_at}`。确认项 `{code,label}`，前端开始只提交 code。
+- POST `renew/<id>/cancel/` `{}` 仅取消本人未下发的 prepared 预检，释放占用；30 分钟未确认预检自动失效。`verified` 为只读确认本地和公网新证书的终态，服务重载未确认时仍返回 `reload_verified:false`。
 - GET `reminders/` `muted=1,page,page_size` 返回 `{items,total,unread_count}`；行 `{id,certificate_id,domain,source_name,stage,expires_at,message,muted}`。POST `reminders/<id>/mute/` `{muted:bool}` 仅本人。
 
 ## 验收与发布

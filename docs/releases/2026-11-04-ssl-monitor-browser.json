@@ -1,5 +1,5 @@
 {
-  "fixture": "http://127.0.0.1:50155",
+  "fixture": "http://127.0.0.1:56018",
   "real_headless_browser": true,
   "fresh_temporary_profile": true,
   "resolver_blocks_non_loopback": true,
@@ -27,175 +27,175 @@
   "console_errors": [],
   "network_requests": [
     {
-      "url": "http://127.0.0.1:50155/monitor/ssl",
+      "url": "http://127.0.0.1:56018/monitor/ssl",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/static/css/2.88ef4cd8.chunk.css",
+      "url": "http://127.0.0.1:56018/static/css/2.88ef4cd8.chunk.css",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/static/css/main.1f9e3667.chunk.css",
+      "url": "http://127.0.0.1:56018/static/css/main.1f9e3667.chunk.css",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/static/js/2.a5eca917.chunk.js",
+      "url": "http://127.0.0.1:56018/static/js/2.fd3a78d0.chunk.js",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/static/js/main.b7bae862.chunk.js",
+      "url": "http://127.0.0.1:56018/static/js/main.5fdb5801.chunk.js",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/kops-20261027/manifest.json",
+      "url": "http://127.0.0.1:56018/kops-20261027/manifest.json",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/setting/appearance/public/",
+      "url": "http://127.0.0.1:56018/api/setting/appearance/public/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/notify/",
+      "url": "http://127.0.0.1:56018/api/notify/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/?page=1&page_size=20",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/?page=1&page_size=20",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/setting/user/",
+      "url": "http://127.0.0.1:56018/api/setting/user/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/kops-20261027/favicon.svg",
+      "url": "http://127.0.0.1:56018/kops-20261027/favicon.svg",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/kops-20261027/favicon.svg",
+      "url": "http://127.0.0.1:56018/kops-20261027/favicon.svg",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/?state=expired&page=1&page_size=20",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/?state=expired&page=1&page_size=20",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/?page=1&page_size=20",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/?page=1&page_size=20",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/sources/",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/sources/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/renew/",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/renew/",
       "method": "POST"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/jobs/8/",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/jobs/8/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/?page=1&page_size=20",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/?page=1&page_size=20",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/renew/8/start/",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/renew/8/start/",
       "method": "POST"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/jobs/8/",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/jobs/8/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/?page=1&page_size=20",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/?page=1&page_size=20",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/renew/8/verify/",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/renew/8/verify/",
       "method": "POST"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/jobs/8/",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/jobs/8/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/?page=1&page_size=20",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/?page=1&page_size=20",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/11/mute/",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/reminders/11/mute/",
       "method": "POST"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/?muted=1&page=1&page_size=5",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/reminders/?muted=1&page=1&page_size=5",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/11/mute/",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/reminders/11/mute/",
       "method": "POST"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/?muted=1&page=1&page_size=5",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/reminders/?muted=1&page=1&page_size=5",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/monitor/ssl",
+      "url": "http://127.0.0.1:56018/monitor/ssl",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/static/css/2.88ef4cd8.chunk.css",
+      "url": "http://127.0.0.1:56018/static/css/2.88ef4cd8.chunk.css",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/static/css/main.1f9e3667.chunk.css",
+      "url": "http://127.0.0.1:56018/static/css/main.1f9e3667.chunk.css",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/static/js/2.a5eca917.chunk.js",
+      "url": "http://127.0.0.1:56018/static/js/2.fd3a78d0.chunk.js",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/static/js/main.b7bae862.chunk.js",
+      "url": "http://127.0.0.1:56018/static/js/main.5fdb5801.chunk.js",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/kops-20261027/manifest.json",
+      "url": "http://127.0.0.1:56018/kops-20261027/manifest.json",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/setting/appearance/public/",
+      "url": "http://127.0.0.1:56018/api/setting/appearance/public/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/notify/",
+      "url": "http://127.0.0.1:56018/api/notify/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/monitor/ssl/?page=1&page_size=20",
+      "url": "http://127.0.0.1:56018/api/monitor/ssl/?page=1&page_size=20",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/api/setting/user/",
+      "url": "http://127.0.0.1:56018/api/setting/user/",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:50155/kops-20261027/favicon.svg",
+      "url": "http://127.0.0.1:56018/kops-20261027/favicon.svg",
       "method": "GET"
     }
   ],
@@ -208,7 +208,7 @@
     "docs/releases/ssl-monitor-shots/05-midnight-teal-overview.png",
     "docs/releases/ssl-monitor-shots/06-compact-table.png"
   ],
-  "revision": "8dfbac4262861d8d26980ec03c28cdcd9ecc5472",
+  "revision": "440b0a5da191fb46e586347889fb4f6186a29cd3",
   "working_tree_dirty": true,
   "tested_ui_source_sha256": {
     "src/pages/ssl-monitor/CertificateDetail.js": "c8ac3ef0329fb30a0abf4210fcb75c31b7074fb9c093b18830f1cd36962e72f7",
@@ -381,6 +381,6 @@
   ],
   "passed": true,
   "mock_writes": 5,
-  "build_asset": "/static/js/main.b7bae862.chunk.js",
-  "build_asset_sha256": "57c75d5b12d13f3cbb209d3929e0c0344100be5abd891590432dd337c370eb9b"
+  "build_asset": "/static/js/main.5fdb5801.chunk.js",
+  "build_asset_sha256": "134b86ab06a3234a792daa9c5e4c0d2e258a759d8648e073ec0befeb156a4e46"
 }
