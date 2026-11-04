@@ -1,0 +1,246 @@
+{
+  "fixture": "http://127.0.0.1:64394",
+  "real_headless_browser": true,
+  "fresh_temporary_profile": true,
+  "resolver_blocks_non_loopback": true,
+  "mocked_api_only": true,
+  "assertions": [
+    "batch navigation stays visible and site inventory entry is absent",
+    "customization cannot display hidden entry",
+    "restoring defaults cannot restore hidden entry",
+    "SSL monitoring remains the certificate menu and loads cached data",
+    "legacy bookmarks and todo destination remain compatible",
+    "dark compact navigation also hides duplicate entry",
+    "all fixture requests are recognized GETs; no task submitted",
+    "all page traffic stays on loopback"
+  ],
+  "runtime_exceptions": [],
+  "console_errors": [],
+  "network_requests": [
+    {
+      "url": "http://127.0.0.1:64394/exec/panel?type=inspection",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/static/js/2.cdba060a.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/static/js/main.b9d6c169.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/ops/catalog/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/exec/sites?state=expiring",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/static/js/2.cdba060a.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/static/js/main.b9d6c169.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/baota/inventory/options/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/baota/inventory/sites/?page=1&page_size=20&state=expiring",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/exec/panel?type=inspection",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/static/js/2.cdba060a.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/static/js/main.b9d6c169.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/ops/catalog/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:64394/kops-20261027/favicon.svg",
+      "method": "GET"
+    }
+  ],
+  "blocked_outbound_requests": [],
+  "screenshots": [
+    "docs/releases/hide-site-inventory-shots/01-batch-menu.png",
+    "docs/releases/hide-site-inventory-shots/02-ssl-monitor.png",
+    "docs/releases/hide-site-inventory-shots/03-dark-batch-menu.png"
+  ],
+  "revision": "340ead51eac670811f58b82ac9bc880e4a25e0f8",
+  "working_tree_dirty": false,
+  "tested_ui_source_sha256": {
+    "src/routes.js": "1a2010692b4cab870dd304946a4b0feace3facc2b1b72ae0536749690043885d"
+  },
+  "mock_requests": [
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/catalog/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/inventory/options/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/inventory/sites/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/catalog/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    }
+  ],
+  "passed": true,
+  "mock_writes": 0,
+  "build_asset": "/static/js/main.b9d6c169.chunk.js",
+  "build_asset_sha256": "330eb6eaebebfdb7e1d9494d98f33a58dc67ed96df7f22b11a4ec0d96537d501"
+}

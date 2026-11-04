@@ -1,0 +1,33 @@
+{
+  "revision": "340ead51eac670811f58b82ac9bc880e4a25e0f8",
+  "previous_revision": "61980491e2565c2c9b68f9a08717ebc69f2b308b",
+  "published": true,
+  "backup": "/opt/spug/backups/20261104-172559-before-upgrade-340ead5-a6a298bd",
+  "paired_backup_valid": true,
+  "business_and_schema_unchanged": true,
+  "preservation_objects": 69,
+  "ssl_table_counts_preserved": {
+    "monitor_ssl_certificates": 11,
+    "monitor_ssl_jobs": 2,
+    "monitor_ssl_leases": 2,
+    "monitor_ssl_reminder_preferences": 0,
+    "monitor_ssl_reminders": 0,
+    "monitor_ssl_sources": 4
+  },
+  "existing_ssl_switches_and_reminders_preserved": true,
+  "complete_api_trees_unchanged": true,
+  "api_tree_sizes": [
+    247,
+    287
+  ],
+  "ui_receipt_valid": true,
+  "services_running": 9,
+  "original_preserved_pids": true,
+  "health_checks_ok": 15,
+  "health_timer": "active",
+  "internal_http": 200,
+  "server_https": 200,
+  "compiled_release_binding": true,
+  "original_license": true,
+  "public_https": 200
+}
