@@ -1,0 +1,23 @@
+{
+  "six_tables_empty": true,
+  "all_sources_disabled": true,
+  "all_reminders_disabled": true,
+  "default_scheduler_no_write": true,
+  "source_count": 4,
+  "revision": "0e5edaf2dbb639a185e0def29291b469641c5d10",
+  "previous_revision": "48c305dbbd656fa9cc2ecbbf9be749fb390bf3fc",
+  "migration": "0002_ssl_monitor",
+  "business_preserved": true,
+  "old_schema_preserved": true,
+  "old_migrations_preserved": true,
+  "credentials_preserved": true,
+  "paired_backup_valid": true,
+  "api_ui_receipts_valid": true,
+  "health_timer": "active",
+  "health_checks_ok": 15,
+  "exact_api_and_ui_files": true,
+  "services_running": 9,
+  "original_preserved_pids": true,
+  "internal_http": 200,
+  "public_https": 200
+}

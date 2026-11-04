@@ -39,11 +39,11 @@
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:56018/static/js/2.fd3a78d0.chunk.js",
+      "url": "http://127.0.0.1:56018/static/js/2.af3f1ac9.chunk.js",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:56018/static/js/main.5fdb5801.chunk.js",
+      "url": "http://127.0.0.1:56018/static/js/main.43e27b7d.chunk.js",
       "method": "GET"
     },
     {
@@ -163,11 +163,11 @@
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:56018/static/js/2.fd3a78d0.chunk.js",
+      "url": "http://127.0.0.1:56018/static/js/2.af3f1ac9.chunk.js",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:56018/static/js/main.5fdb5801.chunk.js",
+      "url": "http://127.0.0.1:56018/static/js/main.43e27b7d.chunk.js",
       "method": "GET"
     },
     {
@@ -208,8 +208,8 @@
     "docs/releases/ssl-monitor-shots/05-midnight-teal-overview.png",
     "docs/releases/ssl-monitor-shots/06-compact-table.png"
   ],
-  "revision": "440b0a5da191fb46e586347889fb4f6186a29cd3",
-  "working_tree_dirty": true,
+  "revision": "0e5edaf2dbb639a185e0def29291b469641c5d10",
+  "working_tree_dirty": false,
   "tested_ui_source_sha256": {
     "src/pages/ssl-monitor/CertificateDetail.js": "c8ac3ef0329fb30a0abf4210fcb75c31b7074fb9c093b18830f1cd36962e72f7",
     "src/pages/ssl-monitor/Guidance.js": "a810370c86ce50e53f3c5d6303ad5192986fe30dbc68e6b166888e3ab0260ceb",
@@ -360,12 +360,12 @@
     },
     {
       "method": "GET",
-      "path": "/api/notify/",
+      "path": "/api/monitor/ssl/reminders/",
       "body": null
     },
     {
       "method": "GET",
-      "path": "/api/monitor/ssl/reminders/",
+      "path": "/api/notify/",
       "body": null
     },
     {
@@ -381,6 +381,6 @@
   ],
   "passed": true,
   "mock_writes": 5,
-  "build_asset": "/static/js/main.5fdb5801.chunk.js",
-  "build_asset_sha256": "134b86ab06a3234a792daa9c5e4c0d2e258a759d8648e073ec0befeb156a4e46"
+  "build_asset": "/static/js/main.43e27b7d.chunk.js",
+  "build_asset_sha256": "1f3bc71b9de04b3c7b43cf113d7f5a73288ae676d1c6466571ad9e6dc5f1e96f"
 }

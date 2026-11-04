@@ -1,0 +1,52 @@
+{
+  "revision": "0e5edaf2dbb639a185e0def29291b469641c5d10",
+  "previous_revision": "48c305dbbd656fa9cc2ecbbf9be749fb390bf3fc",
+  "archive_sha256": "dfe935f3e84fe0296e47f89b77438d2c3356502b73965f02c477526770314792",
+  "schema_changes": true,
+  "linux_regression": true,
+  "mariadb_regression": true,
+  "migration_rehearsal": true,
+  "rollback_rehearsal": true,
+  "release_failure_tests": true,
+  "image_tree_exact": true,
+  "rollback_image_tree_exact": true,
+  "migration": "0002_ssl_monitor",
+  "new_table_count": 6,
+  "regressions": [
+    {
+      "group": "mariadb_ssl",
+      "executed": 54,
+      "skipped": 0
+    },
+    {
+      "group": "linux_backend",
+      "executed": 682,
+      "skipped": 11
+    },
+    {
+      "group": "platform_health",
+      "executed": 22,
+      "skipped": 0
+    },
+    {
+      "group": "inventory_release",
+      "executed": 7,
+      "skipped": 0
+    },
+    {
+      "group": "expiry_release",
+      "executed": 10,
+      "skipped": 0
+    },
+    {
+      "group": "legacy_release_guards",
+      "executed": 185,
+      "skipped": 0
+    },
+    {
+      "group": "ssl_release",
+      "executed": 34,
+      "skipped": 0
+    }
+  ]
+}
