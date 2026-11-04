@@ -32,11 +32,11 @@
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:51241/static/js/2.8880c991.chunk.js",
+      "url": "http://127.0.0.1:51241/static/js/2.f8caf7ac.chunk.js",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:51241/static/js/main.a2d78705.chunk.js",
+      "url": "http://127.0.0.1:51241/static/js/main.80e61e3c.chunk.js",
       "method": "GET"
     },
     {
@@ -112,11 +112,11 @@
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:51241/static/js/2.8880c991.chunk.js",
+      "url": "http://127.0.0.1:51241/static/js/2.f8caf7ac.chunk.js",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:51241/static/js/main.a2d78705.chunk.js",
+      "url": "http://127.0.0.1:51241/static/js/main.80e61e3c.chunk.js",
       "method": "GET"
     },
     {
@@ -164,11 +164,11 @@
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:51241/static/js/2.8880c991.chunk.js",
+      "url": "http://127.0.0.1:51241/static/js/2.f8caf7ac.chunk.js",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:51241/static/js/main.a2d78705.chunk.js",
+      "url": "http://127.0.0.1:51241/static/js/main.80e61e3c.chunk.js",
       "method": "GET"
     },
     {
@@ -208,11 +208,11 @@
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:51241/static/js/2.8880c991.chunk.js",
+      "url": "http://127.0.0.1:51241/static/js/2.f8caf7ac.chunk.js",
       "method": "GET"
     },
     {
-      "url": "http://127.0.0.1:51241/static/js/main.a2d78705.chunk.js",
+      "url": "http://127.0.0.1:51241/static/js/main.80e61e3c.chunk.js",
       "method": "GET"
     },
     {
@@ -256,8 +256,8 @@
     "docs/releases/panel-workspace-shots/04-ssl-prefill.png",
     "docs/releases/panel-workspace-shots/05-dark-compact-result.png"
   ],
-  "revision": "6a6a65f262f47e897bbdac43277f08700ef6182e",
-  "working_tree_dirty": true,
+  "revision": "e6ee4e3a5831ff79b9aebe56123ddbb3e7b34839",
+  "working_tree_dirty": false,
   "tested_ui_source_sha256": {
     "src/routes.js": "1bd0a9d8fcd10b57adb4e0be061577d2182ecfcead5858953e0188ab4175cc38",
     "src/pages/exec/panel/index.js": "79e8768110bac3cc9dc624da12d700b8ef69937cedfa890f33231eedda898f85",
@@ -381,6 +381,6 @@
   ],
   "passed": true,
   "mock_writes": 0,
-  "build_asset": "/static/js/main.a2d78705.chunk.js",
-  "build_asset_sha256": "086b01eab32aebdc025e83f6cc9ed5af3b1ebba6a7b7e736ec83e45f61fd4292"
+  "build_asset": "/static/js/main.80e61e3c.chunk.js",
+  "build_asset_sha256": "76d08fd4d822732706c0be41a43ef8e5d48d104fafc7197dfdfda5ea701e3a89"
 }
