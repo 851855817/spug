@@ -7,18 +7,25 @@ import RunDetail from './RunDetail';
 import Records from './Records';
 import { parseRunId } from './helpers';
 
-export default function Operations() {
+export default function Operations({embedded = false, location, navigation} = {}) {
   const allowed = hasPermission('admin');
   const [catalog, setCatalog] = useState(null);
   const [error, setError] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [runId, setRunId] = useState(() => {
-    const ids = new URLSearchParams(history.location.search).getAll('run_id');
+    const ids = new URLSearchParams((location || history.location).search).getAll('run_id');
     return ids.length === 1 ? parseRunId(ids[0]) : null;
   });
   const [activeTab, setActiveTab] = useState(runId ? 'records' : 'create');
   const [revision, setRevision] = useState(0);
   const resultHeading = useRef();
+  useEffect(() => {
+    if (!location) return;
+    const ids = new URLSearchParams(location.search).getAll('run_id');
+    const id = ids.length === 1 ? parseRunId(ids[0]) : null;
+    setRunId(id);
+    if (id) setActiveTab('records');
+  }, [location]);
   useEffect(() => {
     if (!allowed) return;
     let valid = true; setError(false);
@@ -33,17 +40,18 @@ export default function Operations() {
   function open(value) {
     const id = parseRunId(value);
     if (!id) return;
-    const query = new URLSearchParams(history.location.search);
+    const current = location || history.location;
+    const query = new URLSearchParams(current.search);
     query.set('run_id', String(id));
-    history.replace({...history.location, search: `?${query.toString()}`});
+    (navigation || history).replace({...current, search: `?${query.toString()}`});
     setActiveTab('records'); setRunId(id); setRevision(current => current + 1);
   }
   if (!allowed) return <Alert showIcon type="warning" message="仅超级管理员可访问运维作业。"/>;
   return <div>
-    <Breadcrumb><Breadcrumb.Item>首页</Breadcrumb.Item><Breadcrumb.Item>批量执行</Breadcrumb.Item><Breadcrumb.Item>运维作业</Breadcrumb.Item></Breadcrumb>
-    <Card title="运维作业">
+    {!embedded && <Breadcrumb><Breadcrumb.Item>首页</Breadcrumb.Item><Breadcrumb.Item>批量执行</Breadcrumb.Item><Breadcrumb.Item>运维作业</Breadcrumb.Item></Breadcrumb>}
+    <Card title={embedded ? undefined : '运维作业'}>
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
-        <Tabs.TabPane key="create" tab="新建作业">
+        <Tabs.TabPane key="create" tab={embedded ? '新建任务' : '新建作业'}>
           {error ? <Space><Alert type="error" message="作业目录读取失败，请重试。"/><Button onClick={() => setRefresh(value => value + 1)}>重新读取</Button></Space> :
             catalog ? <RunForm catalog={catalog} onCreated={open}/> : <Spin/>}
         </Tabs.TabPane>

@@ -30,6 +30,7 @@ beforeEach(() => {
   container = document.createElement('div'); document.body.appendChild(container);
   http.get.mockResolvedValue(task); http.post.mockResolvedValue({...task, state: 'running'});
   hasPermission.mockReturnValue(true);
+  Modal.confirm.mockImplementation(() => ({destroy: jest.fn()}));
 });
 afterEach(() => {act(() => {ReactDOM.unmountComponentAtNode(container);}); container.remove(); jest.clearAllMocks();});
 const button = text => [...container.querySelectorAll('button')].find(x => x.textContent === text);
@@ -143,5 +144,37 @@ test('SSL phase authorization is hidden without execute permission or while acti
     deployable: [{target_id: 3, child_key: 'site:10'}]}});
   await act(async () => ReactDOM.render(<TaskDetail taskId={7}/>, container));
   expect(button('确认继续当前证书部署阶段')).toBeUndefined();
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test.each(['cancel', 'continue', 'deploy'])('leaving a panel task closes its %s dialog and prevents stale dispatch', async kind => {
+  http.get.mockResolvedValue({...task, state: 'paused', batch: {enabled: true, state: 'paused', pending: 1,
+    deployable: [{target_id: 3, child_key: 'site:10'}]}});
+  await act(async () => ReactDOM.render(<TaskDetail taskId={7}/>, container));
+  const labels = {cancel: '取消未下发项', continue: '核对结果并继续', deploy: '确认继续当前证书部署阶段'};
+  await act(async () => button(labels[kind]).click());
+  const confirmation = Modal.confirm.mock.calls[0][0];
+  const instance = Modal.confirm.mock.results[0].value;
+  await act(async () => ReactDOM.unmountComponentAtNode(container));
+  expect(instance.destroy).toHaveBeenCalled();
+  await act(async () => confirmation.onOk());
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('a saved dialog cannot dispatch after opening another task', async () => {
+  await act(async () => ReactDOM.render(<TaskDetail taskId={7}/>, container));
+  await act(async () => button('取消未下发项').click());
+  const confirmation = Modal.confirm.mock.calls[0][0];
+  http.get.mockResolvedValue({...task, id: 8});
+  await act(async () => ReactDOM.render(<TaskDetail taskId={8}/>, container));
+  await act(async () => confirmation.onOk());
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('confirmation rechecks action permission before dispatch', async () => {
+  await act(async () => ReactDOM.render(<TaskDetail taskId={7}/>, container));
+  await act(async () => button('取消未下发项').click());
+  hasPermission.mockImplementation(code => code !== 'exec.panel.cancel');
+  await act(async () => Modal.confirm.mock.calls[0][0].onOk());
   expect(http.post).not.toHaveBeenCalled();
 });

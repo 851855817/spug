@@ -94,6 +94,20 @@ class ExpiryImageTests(WorkerImageTests):
         self.assertIn('scheduled_check_expiry', scheduler)
 
 
+class PostSSLImageTests(ExpiryImageTests):
+    def test_upstream_sync_and_migration_still_precede_supervisor(self):
+        self.assertNotIn('updatedb', self.entrypoint)
+        self.assertNotIn('makemigrations', self.entrypoint)
+        self.assertEqual(self.entrypoint.splitlines().count('python3 manage.py migrate --noinput'), 1)
+        self.assertLess(self.entrypoint.index('rsync '), self.entrypoint.index('python3 manage.py migrate --noinput'))
+        self.assertLess(self.entrypoint.index('python3 manage.py migrate --noinput'),
+                        self.entrypoint.index('exec supervisord -c /etc/supervisord.conf'))
+        root = Path('/opt/spug/spug_api/apps/monitor')
+        self.assertIn('ssl.models import', (root / 'models.py').read_text())
+        self.assertTrue((root / 'ssl/models.py').is_file())
+        self.assertTrue((root / 'migrations/0002_ssl_monitor.py').is_file())
+
+
 class UploadRollbackImageTests(ImageTests):
     def test_no_reverse_schema_generation_with_existing_worker_wiring(self):
         self.assertEqual(self.programs(), ORIGINAL_PROGRAMS | {'spug-panel-worker', 'spug-ops-worker'})
@@ -110,6 +124,7 @@ class UploadRollbackImageTests(ImageTests):
 
 
 if __name__ == '__main__':
-    cases = {'worker': WorkerImageTests, 'expiry': ExpiryImageTests, 'rollback': RollbackImageTests, 'upload-rollback': UploadRollbackImageTests}
+    cases = {'worker': WorkerImageTests, 'expiry': ExpiryImageTests, 'post-ssl': PostSSLImageTests,
+             'rollback': RollbackImageTests, 'upload-rollback': UploadRollbackImageTests}
     case = cases[sys.argv.pop(1)]
     unittest.main(defaultTest=case.__name__)

@@ -23,9 +23,12 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
   const generation = useRef(0);
   const actionRevision = useRef(0);
   const actionPending = useRef(false);
+  const mounted = useRef(false);
+  const dialog = useRef();
   const latestChange = useRef(onTaskChange);
   latestChange.current = onTaskChange;
   useEffect(() => {
+    mounted.current = true;
     const token = ++generation.current;
     let timer;
     setTask(null); setAcknowledged([]); setError(''); setBusy(false);
@@ -45,11 +48,16 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
       }
     }
     poll();
-    return () => {generation.current = token + 1; clearTimeout(timer);};
+    return () => {
+      mounted.current = false; generation.current = token + 1; clearTimeout(timer);
+      if (dialog.current) dialog.current.destroy();
+      dialog.current = null;
+    };
   }, [taskId]);
 
   async function command(action, values = {}) {
-    if (actionPending.current) return;
+    const permission = {start: 'execute', continue: 'execute', cancel: 'cancel', reconcile: 'view', retry: 'create'}[action];
+    if (!mounted.current || !task || !permission || !hasPermission(`exec.panel.${permission}`) || actionPending.current) return;
     const token = generation.current;
     actionPending.current = true;
     actionRevision.current++;
@@ -64,6 +72,14 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
       if (onTaskChange) onTaskChange(result);
     } catch (_) { /* HTTP reports errors; retain the frozen preview. */ }
     finally {actionPending.current = false; if (token === generation.current) setBusy(false);}
+  }
+  function confirmAction(config) {
+    if (!mounted.current || actionPending.current) return;
+    const token = generation.current;
+    if (dialog.current) dialog.current.destroy();
+    dialog.current = Modal.confirm({...config, onOk: () => {
+      if (mounted.current && generation.current === token) return config.onOk();
+    }});
   }
   if (!task) return error ? <Alert type="error" message={error}/> : <Spin/>;
   const counts = summarizeTask(task);
@@ -91,17 +107,17 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
     <Space wrap style={{margin: '16px 0'}}>
       {batch.enabled && !batch.active && !batch.deployment_pending && hasPermission('exec.panel.execute') &&
         (batch.deployable || []).map(item => <Button key={`${item.target_id}:${item.child_key}`} loading={busy}
-          onClick={() => Modal.confirm({title: '确认继续当前证书部署阶段？',
+          onClick={() => confirmAction({title: '确认继续当前证书部署阶段？',
             content: `${item.panel_name || '当前面板'} · ${item.label || item.child_key}：只读核验已确认可部署。确认将保存证书并可能重载 Web 服务；其它面板和后续批次仍暂停。`,
             okText: '确认部署此证书', onOk: () => command('continue', {acknowledge: true,
               deploy: {target_id: item.target_id, child_key: item.child_key}})})}>确认继续当前证书部署阶段</Button>)}
       {canContinue && hasPermission('exec.panel.execute') && <Button type="primary" loading={busy}
-        onClick={() => Modal.confirm({title: batch.requires_acknowledgement ? '确认已核对本批异常并继续？' : '核对本批结果并继续？',
+        onClick={() => confirmAction({title: batch.requires_acknowledgement ? '确认已核对本批异常并继续？' : '核对本批结果并继续？',
           content: batch.requires_acknowledgement ? '本批已熔断。继续只放行尚未下发的项目，已下发项目不会重发。' : '继续放行下一批尚未下发的面板。',
           okText: '确认继续', onOk: () => command('continue', batch.requires_acknowledgement ? {acknowledge: true} : {})})}>核对结果并继续</Button>}
       {hasPermission('exec.panel.view') && <Button loading={busy} onClick={() => command('reconcile')}>只读核验</Button>}
       {hasPermission('exec.panel.cancel') && !['completed', 'cancelled'].includes(task.state) && <Button danger loading={busy}
-        onClick={() => Modal.confirm({title: '取消尚未下发的项目？', content: '已发送的远端操作可能继续运行，请查看结果并只读核验。',
+        onClick={() => confirmAction({title: '取消尚未下发的项目？', content: '已发送的远端操作可能继续运行，请查看结果并只读核验。',
           okText: '取消未下发项', onOk: () => command('cancel')})}>取消未下发项</Button>}
       {hasPermission('exec.panel.create') && ['completed', 'uncertain', 'remote', 'cancelled'].includes(task.state) && <Button loading={busy}
         onClick={() => command('retry')}>关联新预检重试</Button>}

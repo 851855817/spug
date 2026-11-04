@@ -48,7 +48,16 @@ def normalized_rows(model, rows, now):
     # Auth middleware renews this TTL on every authenticated GET. Preserve
     # identity/token/permissions and revocation; only an active TTL's exact
     # future second is volatile. No database value is modified.
-    if (model._meta.app_label, model.__name__) != ('account', 'User'):
+    identity = (model._meta.app_label, model.__name__)
+    if identity == ('monitor', 'SSLLease'):
+        # The idle scheduler renews this worker-only timestamp every ten
+        # seconds, even with no due source. Keep the row, token and job binding;
+        # only normalize the expired timestamp of an already released worker.
+        return [dict(row, expires_at='released-worker-expiry')
+                if (row.get('key') == 'worker' and row.get('token') == '' and row.get('job_id') is None
+                    and isinstance(row.get('expires_at'), datetime) and row['expires_at'].timestamp() <= now)
+                else dict(row) for row in rows]
+    if identity != ('account', 'User'):
         return rows
     return [dict(row, token_expired='active-session-expiry')
             if (row.get('is_active') is True and isinstance(row.get('access_token'), str)
@@ -83,6 +92,26 @@ def failed_renewal_preflight(target):
         for child in children)
 
 
+def ssl_idle(registry, now):
+    """Installed SSL tables remain in the full digest; active work blocks UI updates."""
+    try:
+        jobs = registry.get_model('monitor', 'SSLJob')
+        leases = registry.get_model('monitor', 'SSLLease')
+        sources = registry.get_model('monitor', 'SSLSource')
+    except LookupError:
+        return True
+    if (jobs.objects.filter(state__in=('queued', 'running', 'prepared', 'uncertain')).exists()
+            or jobs.objects.filter(verify_requested=True).exists()
+            or leases.objects.filter(expires_at__gt=now).exclude(token='').exists()):
+        return False
+    # Keep the user's switches intact. A due or imminent periodic collection
+    # needs its own window; do not let it start across preservation comparisons.
+    horizon = now + timedelta(minutes=15)
+    return all(source.last_attempt_at is not None
+               and source.last_attempt_at + timedelta(hours=source.interval_hours) > horizon
+               for source in sources.objects.filter(enabled=True))
+
+
 models = [model for model in apps.get_models(include_auto_created=True)
           if (model._meta.app_label, model.__name__) not in (
               ('baota', 'ResourceMonitorSnapshot'), ('baota', 'ResourceMonitorLease'))]
@@ -106,6 +135,7 @@ assert all(isinstance(panel.get_password(), str) and isinstance(panel.get_api_ke
 result['credentials_decrypt'] = True
 
 if '--require-idle' in sys.argv:
+    assert ssl_idle(apps, timezone.now()), 'SSL task or lease active; defer release'
     assert not PanelLock.objects.exists(), 'Panel operation locked; defer release'
     # Includes all new health_policy tasks: never downgrade their in-flight verifier.
     pending = PanelTaskTarget.objects.exclude(state__in=(

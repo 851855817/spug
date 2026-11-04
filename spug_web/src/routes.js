@@ -25,8 +25,7 @@ import BaotaIndex from './pages/baota';
 import ExecTask from './pages/exec/task';
 import ExecTemplate from './pages/exec/template';
 import ExecTransfer from './pages/exec/transfer';
-import ExecPanel from './pages/exec/panel';
-import ExecOperations from './pages/exec/operations';
+import ExecPanel, { LegacyOperations } from './pages/exec/panel';
 import { SiteInventory, BackupInventory } from './pages/panel-inventory';
 import DeployApp from './pages/deploy/app';
 import DeployRepository from './pages/deploy/repository';
@@ -72,8 +71,8 @@ export default [
       {title: t('执行任务'), auth: 'exec.task.do', path: '/exec/task', component: ExecTask},
       {title: t('模板管理'), auth: 'exec.template.view', path: '/exec/template', component: ExecTemplate},
       {title: t('文件分发'), auth: 'exec.transfer.do', path: '/exec/transfer', component: ExecTransfer},
-      {title: t('面板任务'), auth: 'exec.panel.view', path: '/exec/panel', component: ExecPanel},
-      {title: t('运维作业'), auth: 'admin', path: '/exec/operations', component: ExecOperations},
+      {title: t('面板任务'), auth: 'exec.panel.view|admin', path: '/exec/panel', component: ExecPanel},
+      {hidden: true, auth: 'admin', path: '/exec/operations', component: LegacyOperations},
       {title: t('网站与证书'), auth: 'admin', path: '/exec/sites', component: SiteInventory},
       {title: t('备份检查台'), auth: 'admin', path: '/exec/backups', component: BackupInventory},
     ]

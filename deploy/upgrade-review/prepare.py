@@ -162,7 +162,7 @@ def main():
         ['docker', 'image', 'inspect', image], text=True))[0], revision)
     source = stage / 'source'
     preservation = {}
-    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui'):
+    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui'):
         # Read the fixed literal without importing staged Python: imports can
         # write unarchived __pycache__ files and invalidate the bundle binding.
         tree = ast.parse((source / 'deploy/upgrade-review/publish.py').read_text())
@@ -197,14 +197,16 @@ def main():
         'apps.setting.test_appearance', 'spug.test_urls', 'apps.schedule.test_panel_tasks',
         'apps.schedule.test_urls', 'apps.ops.tests',
         'apps.ops.test_result_counts', 'apps.ops.expiry.tests', 'apps.baota.inventory.tests',
+        'apps.monitor.ssl.tests', 'apps.monitor.ssl.test_collectors',
         '--settings=spug.test_settings', '--noinput'], check=True, timeout=300)
-    for folder in ('upgrade-review', 'expiry'):
+    for folder in ('upgrade-review', 'expiry', 'ssl-monitor'):
         subprocess.run(['python3', '-m', 'unittest', 'discover', '-s', str(source / 'deploy' / folder),
                         '-p', 'test_*.py'], check=True, timeout=120,
                        env=dict(os.environ, PYTHONDONTWRITEBYTECODE='1'))
     subprocess.run(['docker', 'run', '--rm', '--network', 'none', '--read-only', '--memory', '128m',
         '--pids-limit', '32', '-v', str(source / 'deploy/baota/test_image.py') + ':/test_image.py:ro',
-        '--entrypoint', 'python3', image_id, '/test_image.py', 'expiry'], check=True, timeout=90)
+        '--entrypoint', 'python3', image_id, '/test_image.py',
+        'post-ssl' if manifest.get('profile') == 'panel-workspace-ui' else 'expiry'], check=True, timeout=90)
     current_id = image_identity(json.loads(subprocess.check_output(
         ['docker', 'image', 'inspect', image], text=True))[0], revision)
     if current_id != image_id:
