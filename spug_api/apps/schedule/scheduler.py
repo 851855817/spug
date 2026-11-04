@@ -120,9 +120,13 @@ class Scheduler:
 
     def _init_builtin_jobs(self):
         from apps.ops.expiry.reminders import scheduled_check_expiry
+        from apps.monitor.ssl.jobs import scheduled_tick as ssl_monitor_tick
         from .panel_tasks import notify_pending
         self.scheduler.add_job(auto_run_by_day, 'cron', hour=1, minute=20)
         self.scheduler.add_job(auto_run_by_minute, 'interval', minutes=1)
+        self.scheduler.add_job(ssl_monitor_tick, 'interval', seconds=10,
+                               id='ssl-monitor-worker', max_instances=1, coalesce=True,
+                               misfire_grace_time=1, replace_existing=True)
         self.scheduler.add_job(self._sync_panel_jobs, 'interval', seconds=5,
                                id='panel-schedule-sync', max_instances=1, coalesce=True)
         self.scheduler.add_job(notify_pending, 'interval', seconds=5,

@@ -8,6 +8,7 @@ on:
       - 'spug_api/apps/baota/**'
       - 'spug_api/apps/ops/**'
       - 'spug_api/apps/schedule/**'
+      - 'spug_api/apps/monitor/**'
       - 'spug_api/spug/settings.py'
       - 'spug_api/spug/urls.py'
       - 'spug_api/apps/setting/health*.py'
@@ -53,6 +54,7 @@ on:
       - 'deploy/inventory/**'
       - 'deploy/expiry/**'
       - 'deploy/upgrade-review/**'
+      - 'deploy/ssl-monitor/**'
       - '.github/workflows/baota-checks.yml'
   workflow_dispatch:
 
@@ -87,7 +89,7 @@ jobs:
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api \
             --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test "${baota_test_modules[@]}" apps.schedule.test_panel_tasks apps.schedule.test_urls apps.setting.test_health apps.setting.test_reminder_preferences apps.setting.test_appearance spug.test_urls apps.ops.tests apps.ops.test_result_counts apps.ops.expiry.tests apps.baota.inventory.tests --settings=spug.test_settings --noinput
+            manage.py test "${baota_test_modules[@]}" apps.schedule.test_panel_tasks apps.schedule.test_urls apps.setting.test_health apps.setting.test_reminder_preferences apps.setting.test_appearance spug.test_urls apps.ops.tests apps.ops.test_result_counts apps.ops.expiry.tests apps.baota.inventory.tests apps.monitor.ssl.tests apps.monitor.ssl.test_collectors --settings=spug.test_settings --noinput
       - name: Test independent host diagnostics
         run: python3 -m unittest discover -s deploy/platform-health/tests
       - name: Test release backup failure handling
@@ -96,6 +98,8 @@ jobs:
         run: python3 -m unittest discover -s deploy/expiry -p 'test_*.py'
       - name: Test upgrade review release failure handling
         run: python3 -m unittest discover -s deploy/upgrade-review -p 'test_*.py'
+      - name: Test SSL additive release failure handling
+        run: python3 -m unittest discover -s deploy/ssl-monitor -p 'test_*.py'
       - name: Check whitespace
         run: git diff --check HEAD^ HEAD
       - name: Build worker image with disposable static assets
@@ -105,6 +109,7 @@ jobs:
           cp -a spug_api/apps/baota "$baota_context/spug_api/apps/"
           cp -a spug_api/apps/setting "$baota_context/spug_api/apps/"
           cp -a spug_api/apps/ops "$baota_context/spug_api/apps/"
+          cp -a spug_api/apps/monitor "$baota_context/spug_api/apps/"
           mkdir -p "$baota_context/spug_api/apps/schedule"
           cp spug_api/apps/schedule/*.py "$baota_context/spug_api/apps/schedule/"
           cp spug_api/spug/settings.py spug_api/spug/urls.py "$baota_context/spug_api/spug/"
@@ -177,7 +182,7 @@ jobs:
             -e BAOTA_CI_DB_HOST=baota-ci-db -e BAOTA_CI_DB_PASSWORD=disposable-ci-password \
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test apps.baota.test_tasks apps.baota.test_batches apps.baota.test_upload_store apps.baota.test_upload_tasks apps.baota.test_resource_monitor apps.schedule.test_panel_tasks apps.schedule.test_urls apps.setting.test_appearance apps.ops.tests apps.ops.test_result_counts apps.ops.expiry.tests apps.baota.inventory.tests --settings=spug.baota_ci_settings --noinput
+            manage.py test apps.baota.test_tasks apps.baota.test_batches apps.baota.test_upload_store apps.baota.test_upload_tasks apps.baota.test_resource_monitor apps.schedule.test_panel_tasks apps.schedule.test_urls apps.setting.test_appearance apps.ops.tests apps.ops.test_result_counts apps.ops.expiry.tests apps.baota.inventory.tests apps.monitor.ssl.tests apps.monitor.ssl.test_collectors --settings=spug.baota_ci_settings --noinput
       - name: Remove disposable database
         if: always()
         run: |

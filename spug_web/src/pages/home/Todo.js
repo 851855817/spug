@@ -10,6 +10,7 @@ import { usePageVisibility } from '../server-monitor/useServerMonitor';
 import styles from './index.module.less';
 import ReminderDismiss, { ReminderControls } from '../../components/ReminderDismiss';
 import { siteReminder, serverReminder, usePersonalReminders } from '../../components/personalReminders';
+import SSLReminderEntry from '../ssl-monitor/ReminderEntry';
 
 const categories = [
   {key: 'certificate-expired', label: '证书已过期', api: '/api/baota/inventory/sites/', path: '/exec/sites', state: 'expired', certificate: true},
@@ -78,7 +79,7 @@ function TodoIndex() {
           {category.data?.items.length > 0 && category.data.items.every(item => prefs.isMuted(category.certificate ? siteReminder(item) : serverReminder(item))) &&
             <small>本页事项已忽略，点击标题查看全部。</small>}
         </section>)}
-        <div className={styles.todoHint}>每类显示当前页前 3 条未忽略事项；统计为全部数量，点击标题查看全部。<ReminderControls/></div>
+        <div className={styles.todoHint}>每类显示当前页前 3 条未忽略事项；统计为全部数量，点击标题查看全部。<ReminderControls/><SSLReminderEntry/></div>
       </>}
     </Card>
   )

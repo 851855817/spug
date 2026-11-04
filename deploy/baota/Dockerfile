@@ -6,6 +6,7 @@ LABEL org.opencontainers.image.source="https://github.com/851855817/spug" \
 COPY spug_api/apps/baota /opt/spug/spug_api/apps/baota
 COPY spug_api/apps/setting /opt/spug/spug_api/apps/setting
 COPY spug_api/apps/ops /opt/spug/spug_api/apps/ops
+COPY spug_api/apps/monitor /opt/spug/spug_api/apps/monitor
 COPY spug_api/apps/schedule/panel_tasks.py /opt/spug/spug_api/apps/schedule/panel_tasks.py
 COPY spug_api/apps/schedule/views.py /opt/spug/spug_api/apps/schedule/views.py
 COPY spug_api/apps/schedule/urls.py /opt/spug/spug_api/apps/schedule/urls.py

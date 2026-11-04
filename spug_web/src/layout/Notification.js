@@ -12,6 +12,7 @@ import moment from 'moment';
 import styles from './layout.module.less';
 import ReminderDismiss, { ReminderControls } from '../components/ReminderDismiss';
 import { getReminderPreferences, notificationReminder, usePersonalReminders } from '../components/personalReminders';
+import SSLReminderEntry from '../pages/ssl-monitor/ReminderEntry';
 
 let ws = {readyState: 3};
 let timer;
@@ -162,6 +163,7 @@ export default function () {
   };
   return (
     <div className={styles.notification}>
+      <SSLReminderEntry compact/>
       <Dropdown trigger={['click']} onOpenChange={handleVisible} menu={notifyMenu}>
         <div className={styles.trigger}>
           <Badge count={count > 0 ? count : 0}>

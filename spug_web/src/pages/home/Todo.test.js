@@ -62,6 +62,12 @@ test('ordinary accounts never request administrator-only certificate or expiry d
   expect(container.querySelectorAll('a')).toHaveLength(0);
 });
 
+test('administrators can open independent SSL reminders without changing the initial todo reads', async () => {
+  await render();
+  expect([...container.querySelectorAll('button')].some(button => button.textContent === '查看 SSL 到期提醒')).toBe(true);
+  expect(http.get.mock.calls.some(([path]) => path.startsWith('/api/monitor/ssl/'))).toBe(false);
+});
+
 test('each failed category reports failure without masking other todos or displaying raw errors', async () => {
   failed = true; await render();
   expect(container.textContent).toContain('读取失败'); expect(container.textContent).toContain('soon-0.example.test');

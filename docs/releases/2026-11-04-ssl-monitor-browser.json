@@ -1,0 +1,386 @@
+{
+  "fixture": "http://127.0.0.1:50155",
+  "real_headless_browser": true,
+  "fresh_temporary_profile": true,
+  "resolver_blocks_non_loopback": true,
+  "mocked_api_only": true,
+  "assertions": [
+    "six certificate rows with slim status facts",
+    "exact UTC+8 dates rendered",
+    "stale and wildcard not labelled healthy",
+    "stat click filters expired record",
+    "unconfigured source defaults OFF",
+    "default source interval is six hours",
+    "renewal cannot start before acknowledgement",
+    "uncertain outcome offers verification without resend",
+    "personal mute removes current reminder",
+    "personal mute can be restored",
+    "dark theme exact surface applied",
+    "table retains horizontal scroll",
+    "mutation requests include frozen revision and explicit acknowledgements",
+    "uncertain renewal sends only readonly verification after one start",
+    "all personal reminder mutations are fixture-local",
+    "all API requests match mocked fixture",
+    "all page network traffic stays on loopback"
+  ],
+  "runtime_exceptions": [],
+  "console_errors": [],
+  "network_requests": [
+    {
+      "url": "http://127.0.0.1:50155/monitor/ssl",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/static/js/2.a5eca917.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/static/js/main.b7bae862.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/?state=expired&page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/sources/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/renew/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/jobs/8/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/renew/8/start/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/jobs/8/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/renew/8/verify/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/jobs/8/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/11/mute/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/?muted=1&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/11/mute/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/?muted=1&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/monitor/ssl",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/static/js/2.a5eca917.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/static/js/main.b7bae862.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:50155/kops-20261027/favicon.svg",
+      "method": "GET"
+    }
+  ],
+  "blocked_outbound_requests": [],
+  "screenshots": [
+    "docs/releases/ssl-monitor-shots/01-porcelain-overview.png",
+    "docs/releases/ssl-monitor-shots/02-source-settings.png",
+    "docs/releases/ssl-monitor-shots/03-frozen-preflight.png",
+    "docs/releases/ssl-monitor-shots/04-uncertain-result.png",
+    "docs/releases/ssl-monitor-shots/05-midnight-teal-overview.png",
+    "docs/releases/ssl-monitor-shots/06-compact-table.png"
+  ],
+  "revision": "8dfbac4262861d8d26980ec03c28cdcd9ecc5472",
+  "working_tree_dirty": true,
+  "tested_ui_source_sha256": {
+    "src/pages/ssl-monitor/CertificateDetail.js": "c8ac3ef0329fb30a0abf4210fcb75c31b7074fb9c093b18830f1cd36962e72f7",
+    "src/pages/ssl-monitor/Guidance.js": "a810370c86ce50e53f3c5d6303ad5192986fe30dbc68e6b166888e3ab0260ceb",
+    "src/pages/ssl-monitor/helpers.js": "dc03d6c8e043ba3df4deb2e07ebb0aa2423bf386a092bb7008047e28724e2b2f",
+    "src/pages/ssl-monitor/index.js": "a45975fb6a38f7ebb744c7b0f94b70a0e642698543e7c9a7c47c25feb7164ce5",
+    "src/pages/ssl-monitor/index.module.less": "8b55961132fb824eb2c56d2bf67b4b773e41a36ef463963764b08b3f3d9342ee",
+    "src/pages/ssl-monitor/ReminderEntry.js": "e4e371a0c80c68c9adc54cc0052f092a846c75fe426887d5dddd26b3b3f71efc",
+    "src/pages/ssl-monitor/Reminders.js": "7b24477e4833fbc40bab32b048d7984553292e5220aa0d743be275739f669d8e",
+    "src/pages/ssl-monitor/Renewal.js": "03257cb98fac443e74ba3e8dc52cc118c3979178ffc8732e136c771b07621b60",
+    "src/pages/ssl-monitor/SourceSettings.js": "a5c133c4c3ee7560d40d9a9f0751bcbba35c7c745669c02b77fe5ccfd3625ca0",
+    "src/pages/ssl-monitor/Status.js": "315aaab694039bda2bc3080114a2cb6e2598b45825d2e4a24c176cc5185a68b9",
+    "src/routes.js": "95ba618cd1f8a60d2269b7a16230e261af0071127255b879b8846f91b7b2e86f",
+    "src/pages/home/Todo.js": "0bc23dbe9cedcbc13870626f38597baf7d761bd06496931eb95bfbf1e92a5d8c",
+    "src/layout/Notification.js": "a8f18af55fbf0d406d28391fd1f1d34f6a3cd0da5425a52a2c566561baa984ae"
+  },
+  "mock_requests": [
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/sources/",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/monitor/ssl/renew/",
+      "body": {
+        "certificate_id": 1
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/jobs/8/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/monitor/ssl/renew/8/start/",
+      "body": {
+        "revision": "review-8",
+        "acknowledgements": [
+          "ssh_renew",
+          "service_reload"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/jobs/8/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/monitor/ssl/renew/8/verify/",
+      "body": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/jobs/8/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/monitor/ssl/reminders/11/mute/",
+      "body": {
+        "muted": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/monitor/ssl/reminders/11/mute/",
+      "body": {
+        "muted": false
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/",
+      "body": null
+    }
+  ],
+  "passed": true,
+  "mock_writes": 5,
+  "build_asset": "/static/js/main.b7bae862.chunk.js",
+  "build_asset_sha256": "57c75d5b12d13f3cbb209d3929e0c0344100be5abd891590432dd337c370eb9b"
+}

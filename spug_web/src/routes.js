@@ -38,6 +38,7 @@ import ConfigApp from './pages/config/app';
 import ConfigSetting from './pages/config/setting';
 import MonitorIndex from './pages/monitor';
 import ServerMonitor from './pages/server-monitor';
+import SSLMonitor from './pages/ssl-monitor';
 import ServerExpiry from './pages/server-expiry';
 import AlarmIndex from './pages/alarm/alarm';
 import AlarmGroup from './pages/alarm/group';
@@ -101,8 +102,9 @@ export default [
       {path: '/config/setting/:type/:id', component: ConfigSetting},
     ]
   },
-  {icon: <MonitorOutlined/>, title: t('监控中心'), auth: 'monitor.monitor.view', child: [
+  {icon: <MonitorOutlined/>, title: t('监控中心'), auth: 'monitor.monitor.view|admin', child: [
     {title: t('服务器监控'), auth: 'monitor.monitor.view', path: '/monitor/servers', component: ServerMonitor},
+    {title: 'SSL监控', auth: 'admin', path: '/monitor/ssl', component: SSLMonitor},
     {title: t('监控任务'), auth: 'monitor.monitor.view', path: '/monitor', component: MonitorIndex},
   ]},
   {

@@ -1,12 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { act } from 'react-dom/test-utils';
-import { http } from 'libs';
+import { hasPermission, http } from 'libs';
 import { notification } from 'antd';
 import Notification from './Notification';
 import { getReminderPreferences, notificationReminder } from '../components/personalReminders';
 
-jest.mock('libs', () => ({X_TOKEN: 'fixture', t: value => value, http: {get: jest.fn(), post: jest.fn(), patch: jest.fn()}}));
+jest.mock('libs', () => ({hasPermission: jest.fn(), X_TOKEN: 'fixture', t: value => value, http: {get: jest.fn(), post: jest.fn(), patch: jest.fn()}}));
 jest.mock('antd', () => {
   const List = ({dataSource, renderItem}) => <div>{dataSource.map(row => <section key={row.id} data-row={row.id}>{renderItem(row)}</section>)}</div>;
   List.Item = ({children, onClick}) => <div onClick={onClick}>{children}</div>;
@@ -21,6 +21,7 @@ const flush = async () => {for (let i=0;i<30;i++) await Promise.resolve();};
 let container, socket, settings, records;
 const row = id => ({id, title: '任务失败', content: '模拟任务无法连接', unread: true, source: 'schedule', created_at: `2030-01-01 01:00:0${id}`});
 beforeEach(() => {
+  hasPermission.mockReturnValue(false);
   jest.useFakeTimers(); localStorage.setItem('id', String(Math.random())); localStorage.setItem('token','fixture');
   Object.defineProperty(window,'crypto',{configurable:true,value:{getRandomValues: values => require('crypto').randomFillSync(values)}});
   global.WebSocket = class {constructor(){socket=this;this.readyState=1;} send(){} close(){this.readyState=3;}};
@@ -34,6 +35,13 @@ afterEach(async () => {act(()=>{ReactDOM.unmountComponentAtNode(container);});aw
   jest.useRealTimers();jest.resetAllMocks();localStorage.clear();});
 const render=async()=>act(async()=>{ReactDOM.render(<Notification/>,container);await flush();});
 const incoming=async()=>act(async()=>{socket.onmessage({data:JSON.stringify({title:records[0].title,content:records[0].content})});await flush();});
+
+test('admin SSL reminder entry is separate and does not query or modify global notification state',async()=>{
+  hasPermission.mockReturnValue(true); await render();
+  expect([...container.querySelectorAll('button')].some(button=>button.textContent==='SSL 提醒')).toBe(true);
+  expect(http.get.mock.calls.some(([path])=>path.startsWith('/api/monitor/ssl/'))).toBe(false);
+  expect(http.post).not.toHaveBeenCalled(); expect(http.patch).not.toHaveBeenCalled();
+});
 
 test('dismissing a notification changes only personal preferences and removes its own badge count',async()=>{
   await render();

@@ -26,6 +26,37 @@ class WorkerStopping(Exception):
     pass
 
 
+class SSLAuthorizedClient:
+    """Re-read opt-in SSL authorization immediately before each mutation."""
+    def __init__(self, client, task):
+        self.client, self.task = client, task
+
+    def authorize(self, mutating=False):
+        from apps.monitor.ssl.renewal import panel_runtime_authorized
+        if not panel_runtime_authorized(self.task.pk, mutating=mutating):
+            from .client import PanelAPIError
+            raise PanelAPIError('SSL 来源或账号授权已变化，未发送请求')
+
+    def request(self, *args, **kwargs):
+        self.authorize(bool(kwargs.get('mutating')))
+        return self.client.request(*args, **kwargs)
+
+    def read_site_web_config(self, *args, **kwargs):
+        self.authorize()
+        return self.client.read_site_web_config(*args, **kwargs)
+
+    def read_site_public_certificate(self, *args, **kwargs):
+        self.authorize()
+        return self.client.read_site_public_certificate(*args, **kwargs)
+
+    def read_issued_certificate(self, *args, **kwargs):
+        self.authorize()
+        return self.client.read_issued_certificate(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self.client, name)
+
+
 class StopAwareClient:
     """Drain the current bounded HTTP call, then prevent the next network call."""
     def __init__(self, client, stop_event):
@@ -220,6 +251,8 @@ class PanelWorker:
         try:
             s.configured(target.panel, target.panel_snapshot['api_config_revision'])
             with self.client(target.panel) as client:
+                if any(a.get('action') == 'ssl_monitor' for a in target.task.audit):
+                    client = SSLAuthorizedClient(client, target.task)
                 preview = get_operation(target.task.operation).preflight(client, copy.deepcopy(target.params))
             s.bounded(preview)
             items = preview['items']
@@ -306,6 +339,10 @@ class PanelWorker:
             try:
                 from apps.schedule.panel_tasks import before_mutation
                 before_mutation(task)
+                if any(a.get('action') == 'ssl_monitor' for a in task.audit):
+                    from apps.monitor.ssl.renewal import panel_runtime_authorized
+                    if not panel_runtime_authorized(task.pk):
+                        raise ValueError('SSL 来源或账号授权已变化')
                 s.configured(target.panel, target.panel_snapshot['api_config_revision'])
                 required = child['snapshot'].get('plan', {}).get('required_acknowledgements', [])
                 if (any(code not in s.ACK_CODES for code in required)
@@ -345,6 +382,8 @@ class PanelWorker:
             with self.client(target.panel) as client:
                 from apps.schedule.panel_tasks import authorized_client
                 client = authorized_client(client, target.task)
+                if any(a.get('action') == 'ssl_monitor' for a in target.task.audit):
+                    client = SSLAuthorizedClient(client, target.task)
                 result = get_operation(target.task.operation).dispatch(
                     client, copy.deepcopy(child['snapshot']), phase,
                     copy.deepcopy(child.get('result', {}).get('remote', {})))
