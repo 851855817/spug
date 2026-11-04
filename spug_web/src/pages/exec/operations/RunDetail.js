@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
 import Table from 'components/ResizableTable';
 import { hasPermission, http } from 'libs';
-import { ACTIVE_STATES, CATEGORY_LABELS, RUN_LABELS, displayValue, downloadReport, hostName } from './helpers';
+import { ACTIVE_STATES, CATEGORY_LABELS, RUN_LABELS, displayValue, downloadReport, failureHint, hostName } from './helpers';
 
 const POLL_INTERVAL = 5000;
 const MAX_POLLS = 60;
@@ -205,7 +205,10 @@ export default function RunDetail({runId}) {
     <Table resizeKey="operations-results-v2" rowKey="id" dataSource={visibleTargets} pagination={false} scroll={{x: 900}} columns={[
       {title: '主机', dataIndex: 'host', width: 260, render: hostName},
       {title: '结果状态', key: 'state', width: 110, render: (_, target) => <Tag color={RESULT_COLORS[resultState(target)]}>{RESULT_LABELS[resultState(target)]}</Tag>},
-      {title: '异常原因', key: 'reason', width: 400, render: (_, target) => <span style={{whiteSpace: 'pre-wrap', overflowWrap: 'anywhere'}}>{resultReason(target, run)}</span>},
+      {title: '异常原因', key: 'reason', width: 400, render: (_, target) => <div style={{whiteSpace: 'pre-wrap', overflowWrap: 'anywhere'}}>
+        {resultReason(target, run)}
+        {['failed', 'unknown'].includes(target.state) && <div><Typography.Text type="secondary">处理建议：{failureHint(target)}</Typography.Text></div>}
+      </div>},
       {title: '检查数据', key: 'data', width: 150, render: (_, target) => target.checks?.length ?
         <Button type="link" size="small" onClick={() => setExpandedIds(ids => ids.includes(target.id) ? ids.filter(id => id !== target.id) : [...ids, target.id])}>
           {expandedIds.includes(target.id) ? '收起数据' : `查看数据（${target.checks.length} 项）`}</Button> : '暂无数据'},

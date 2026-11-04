@@ -20,7 +20,9 @@ def recover_interrupted():
             continue
         run.batch_done += interrupted
         run.batch_failures += interrupted
-        run.state = 'cancelled' if run.cancel_requested else 'tripped'
+        run.state = ('cancelled' if run.cancel_requested else
+                     ('queued' if run.targets.filter(state='pending').exists() else 'completed')
+                     if service.is_continuous(run) else 'tripped')
         run.save(update_fields=['state', 'batch_done', 'batch_failures', 'updated_at'])
         service.audit(run, 'interrupted', detail={'targets': interrupted})
 
@@ -62,7 +64,7 @@ class OpsWorker:
         return target.id
 
     @transaction.atomic
-    def finish(self, target_id, checks, category='', uncertain=False):
+    def finish(self, target_id, checks, category='', uncertain=False, message=''):
         run_id = OpsTarget.objects.values_list('run_id', flat=True).get(pk=target_id)
         run = OpsRun.objects.select_for_update().get(pk=run_id)
         target = OpsTarget.objects.select_for_update().get(pk=target_id)
@@ -73,6 +75,8 @@ class OpsWorker:
         target.message = MESSAGES.get(category, '只读检查完成；告警与未采集字段请查看检查项')
         if uncertain:
             target.message = '检查发送或采集结果待核实，不会自动重发；请检查主机状态'
+        if message:
+            target.message = message[:200]
         target.checks = checks if not category else []
         target.finished_at = timezone.now()
         target.save(update_fields=['state', 'category', 'message', 'checks', 'finished_at'])
@@ -114,7 +118,7 @@ class OpsWorker:
             checks = self.probe(target.host, target.run.job, target.run.params)
             self.finish(target_id, checks)
         except ProbeError as exc:
-            self.finish(target_id, [], exc.category, uncertain=exc.uncertain)
+            self.finish(target_id, [], exc.category, uncertain=exc.uncertain, message=str(exc))
         except Exception:
             self.finish(target_id, [], 'check_error')
         return True

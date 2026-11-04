@@ -1,5 +1,6 @@
 """Bounded non-interactive SSH: fixed commands and strictly typed scalar results."""
 import json
+import errno
 import math
 import queue
 import re
@@ -27,10 +28,36 @@ MESSAGES = {
 
 
 class ProbeError(Exception):
-    def __init__(self, category, uncertain=False):
+    def __init__(self, category, uncertain=False, *, reason='', exit_code=None, php_version=None):
         self.category = category if category in MESSAGES else 'check_error'
         self.uncertain = bool(uncertain)
-        super().__init__(MESSAGES[self.category])
+        details = {
+            'dns': 'DNS 解析失败，未取得主机 IP；检查主机地址和 DNS。',
+            'refused': 'TCP 连接被拒绝；检查 SSH 端口和 sshd 是否监听。',
+            'unreachable': 'TCP 网络不可达；检查路由、安全组及防火墙。',
+            'tcp_timeout': 'TCP 连接超时（最长 10 秒）；检查端口、安全组和网络。',
+            'key': 'SSH 私钥为空、格式无效或需要口令；核对主机管理中的密钥。',
+            'auth': 'SSH 密钥认证失败；核对登录用户、authorized_keys 和登录权限。',
+            'handshake': 'SSH 握手或连接中断；检查 SSH 服务、端口及网络。',
+            'channel': 'SSH 会话通道建立失败；检查 SSH 会话限制。',
+            'json': '检查输出不是有效 JSON；核对解释器、启动提示及检查程序。',
+            'no_metrics': '检查完成但未返回有效指标；核对依赖版本和系统支持。',
+            'output_limit': '检查输出超过 64 KiB，已停止读取；检查异常启动提示或解释器。',
+            'python_missing': '远端返回退出码 127，未找到所需命令；核对 python3 是否已安装并在 PATH 中。',
+            'php_command': 'PHP 检查返回退出码 127；核对所选 PHP CLI 能否启动及其运行依赖。',
+            'handshake_timeout': 'SSH 握手或认证阶段超时；检查 SSH 服务、网络和认证响应。',
+            'channel_timeout': 'SSH 会话通道建立超时；检查 SSH 会话限制和主机负载。',
+            'execute_timeout': 'SSH 命令发送或读取超时；核对主机负载和网络。',
+            'deadline': 'SSH 连接或检查超过总时限，未自动重试；检查主机负载与网络。',
+        }
+        message = details.get(reason, MESSAGES[self.category])
+        if reason == 'php_missing' and php_version in catalogue.PHP_VERSIONS:
+            message = '所选 PHP CLI 不存在或不可执行：/www/server/php/%s/bin/php；检查是否安装对应版本。' % php_version
+        if type(exit_code) is int and -1 <= exit_code <= 255 and reason != 'python_missing':
+            message += '（退出码 %s）' % exit_code
+        if self.uncertain:
+            message += ' 本台结果待核实，不会自动重发。'
+        super().__init__(message[:200])
 
 
 def _scalar(value, kind):
@@ -50,7 +77,7 @@ def _scalar(value, kind):
 def parse_probe(job, payload):
     schema = catalogue.SCHEMAS.get(job)
     if not schema or not isinstance(payload, dict) or not isinstance(payload.get('values'), dict):
-        raise ProbeError('check_error')
+        raise ProbeError('check_error', reason='no_metrics')
     checks = []
     for key, label, kind, rule in schema:
         value = payload['values'].get(key)
@@ -63,7 +90,7 @@ def parse_probe(job, payload):
         checks.append({'key': key, 'label': label, 'status': 'warning' if warning else 'ok',
                        'value': value, 'summary': '需要关注' if warning else '已采集'})
     if not any(x['status'] != 'unknown' for x in checks):
-        raise ProbeError('check_error')
+        raise ProbeError('check_error', reason='no_metrics')
     return checks
 
 
@@ -93,7 +120,8 @@ def _connect_socket(hostname, port, deadline):
     except queue.Empty:
         raise ProbeError('timeout') from None
     if not addresses:
-        raise ProbeError('connection')
+        raise ProbeError('connection', reason='dns')
+    last_reason = ''
     for family, socktype, proto, _, address in addresses[:8]:
         stream = socket.socket(family, socktype, proto)
         try:
@@ -102,10 +130,12 @@ def _connect_socket(hostname, port, deadline):
             return stream
         except socket.timeout:
             stream.close()
-            raise ProbeError('timeout') from None
-        except OSError:
+            raise ProbeError('timeout', reason='tcp_timeout') from None
+        except OSError as exc:
             stream.close()
-    raise ProbeError('connection')
+            last_reason = ('refused' if exc.errno in (errno.ECONNREFUSED, 10061) else
+                           'unreachable' if exc.errno in (errno.ENETUNREACH, errno.EHOSTUNREACH, 10051, 10065) else '')
+    raise ProbeError('connection', reason=last_reason)
 
 
 def run_probe(host, job, params):
@@ -113,6 +143,7 @@ def run_probe(host, job, params):
     deadline = time.monotonic() + TOTAL_TIMEOUT
     client, channel, stream = SSHClient(), None, None
     dispatched = False
+    phase = 'key'
     expired = threading.Event()
 
     def close_resources():
@@ -140,12 +171,14 @@ def run_probe(host, job, params):
     try:
         key = host.private_key
         if not isinstance(key, str) or not key or len(key.encode()) > 32768:
-            raise ProbeError('ssh_auth')
+            raise ProbeError('ssh_auth', reason='key')
         try:
             private_key = SSH.load_pkey(key)
         except (ValueError, SSHException):
-            raise ProbeError('ssh_auth') from None
+            raise ProbeError('ssh_auth', reason='key') from None
+        phase = 'connect'
         stream = _connect_socket(host.hostname, host.port or 22, deadline)
+        phase = 'handshake'
         client.set_missing_host_key_policy(AutoAddPolicy())
         client.connect(hostname=host.hostname, port=host.port or 22, username=host.username,
                        pkey=private_key, sock=stream, timeout=_remaining(deadline),
@@ -154,10 +187,12 @@ def run_probe(host, job, params):
         transport = client.get_transport()
         if not transport or not transport.is_active():
             raise ProbeError('connection')
+        phase = 'channel'
         channel = transport.open_session(timeout=_remaining(deadline))
         channel.settimeout(_remaining(deadline))
         channel.set_combine_stderr(True)
         dispatched = True
+        phase = 'execute'
         channel.exec_command(command)
         output = bytearray()
         while True:
@@ -171,20 +206,23 @@ def run_probe(host, job, params):
                     continue
                 output.extend(data)
                 if len(output) > MAX_OUTPUT:
-                    raise ProbeError('check_error')
+                    raise ProbeError('check_error', reason='output_limit')
             elif channel.exit_status_ready():
                 break
             else:
                 time.sleep(min(0.05, _remaining(deadline)))
         exit_code = channel.recv_exit_status()
-        if exit_code in (42, 127):
-            raise ProbeError('dependency')
+        if exit_code == 42:
+            raise ProbeError('dependency', reason='php_missing' if job == 'php_environment' else '',
+                             php_version=params.get('php_version', '74'), exit_code=exit_code)
+        if exit_code == 127:
+            raise ProbeError('dependency', reason='php_command' if job == 'php_environment' else 'python_missing')
         if exit_code:
-            raise ProbeError('check_error')
+            raise ProbeError('check_error', exit_code=exit_code)
         try:
             payload = json.loads(bytes(output).decode('utf-8'))
         except (UnicodeDecodeError, ValueError, RecursionError):
-            raise ProbeError('check_error') from None
+            raise ProbeError('check_error', reason='json') from None
         checks = parse_probe(job, payload)
         _remaining(deadline)
         if expired.is_set():
@@ -192,16 +230,22 @@ def run_probe(host, job, params):
         return checks
     except ProbeError as exc:
         if expired.is_set():
-            raise ProbeError('timeout', uncertain=dispatched) from None
+            raise ProbeError('timeout', uncertain=dispatched, reason='deadline') from None
         if dispatched and exc.category in ('timeout', 'connection'):
             raise ProbeError(exc.category, uncertain=True) from None
         raise
     except AuthenticationException:
-        raise ProbeError('timeout' if expired.is_set() else 'ssh_auth', uncertain=dispatched) from None
+        raise ProbeError('timeout' if expired.is_set() else 'ssh_auth', uncertain=dispatched,
+                         reason='deadline' if expired.is_set() else 'auth') from None
     except (socket.timeout, TimeoutError):
-        raise ProbeError('timeout', uncertain=dispatched) from None
+        reason = 'deadline' if expired.is_set() or time.monotonic() >= deadline else {
+            'handshake': 'handshake_timeout', 'channel': 'channel_timeout',
+            'execute': 'execute_timeout', 'connect': 'tcp_timeout',
+        }.get(phase, '')
+        raise ProbeError('timeout', uncertain=dispatched, reason=reason) from None
     except (SSHException, OSError, EOFError):
-        raise ProbeError('timeout' if expired.is_set() else 'connection', uncertain=dispatched) from None
+        raise ProbeError('timeout' if expired.is_set() else 'connection', uncertain=dispatched,
+                         reason='deadline' if expired.is_set() else 'channel' if phase == 'channel' else 'handshake') from None
     except Exception:
         raise ProbeError('timeout' if expired.is_set() else 'check_error',
                          uncertain=dispatched and expired.is_set()) from None

@@ -19,7 +19,8 @@ SCHEDULED_PANEL_MODULES = (
     'apps/schedule/builtin.py', 'apps/baota/task_service.py', 'apps/baota/worker.py',
     'apps/baota/upload_store.py', 'apps/baota/upload_runner.py',
 )
-PROFILES = {'php-update': PHP_MODULE, 'host-report': HEALTH_MODULE, 'operations-ui': None, 'task-results-ui': None,
+CONTINUOUS_MODULES = ('apps/ops/service.py', 'apps/ops/worker.py', 'apps/ops/runner.py')
+PROFILES = {'continuous-inspections': CONTINUOUS_MODULES, 'php-update': PHP_MODULE, 'host-report': HEALTH_MODULE, 'operations-ui': None, 'task-results-ui': None,
             'panel-login': LOGIN_MODULES, 'inventory-filters': 'apps/baota/inventory/service.py', 'workbench-ui': None, 'branding-ui': None, 'personal-reminders-ui': None, 'inventory-role-presets-ui': None,
             'ssl-renew-diagnostics': 'apps/baota/operations/certificates.py', 'site-appearance': APPEARANCE_MODULES,
             'scheduled-panel-tasks': SCHEDULED_PANEL_MODULES,
@@ -52,7 +53,12 @@ def verify(root, stage, revision):
         raise ValueError('Unknown image release profile')
     for key in ('api_sha256', 'previous_api_sha256'):
         hashes = release.get(key)
-        if profile == 'scheduled-panel-tasks':
+        if profile == 'continuous-inspections':
+            if (not isinstance(hashes, dict) or set(hashes) != set(CONTINUOUS_MODULES) or
+                    not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)
+                            for value in hashes.values())):
+                raise ValueError('Image continuous inspection overlay differs')
+        elif profile == 'scheduled-panel-tasks':
             if (not isinstance(hashes, dict) or set(hashes) != set(SCHEDULED_PANEL_MODULES) or
                     not all((value is None if key == 'previous_api_sha256' and name == SCHEDULED_PANEL_MODULE else
                              isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value))
@@ -75,7 +81,7 @@ def verify(root, stage, revision):
                         for value in hashes.values())):
             raise ValueError('Image API overlay differs')
     preserved = release.get('preserved_api_sha256', {})
-    expected_preserved = ({PHP_MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui') else
+    expected_preserved = ({PHP_MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui') else
                           {PHP_MODULE} if profile == 'host-report' else set())
     if (not isinstance(preserved, dict) or set(preserved) != expected_preserved or
             not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)

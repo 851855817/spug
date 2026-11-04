@@ -12,6 +12,12 @@ from .models import OpsAudit, OpsBaseline, OpsRun, OpsTarget
 
 
 STATES = ('pending', 'running', 'success', 'failed', 'unknown', 'cancelled')
+CONTINUOUS_BATCH_SIZE = 50
+CONTINUOUS_FAILURE_THRESHOLD = 51
+
+
+def is_continuous(run):
+    return (run.batch_size, run.failure_threshold) == (CONTINUOUS_BATCH_SIZE, CONTINUOUS_FAILURE_THRESHOLD)
 
 
 def timestamp(value):
@@ -56,14 +62,22 @@ def create_run(user, data):
     require_admin(user)
     if not isinstance(data, dict) or data.get('confirmed') is not True:
         raise ValueError('请确认只读检查范围后创建作业')
-    if set(data) - {'job', 'host_ids', 'group_ids', 'params', 'batch_size', 'failure_threshold', 'confirmed'}:
+    if set(data) - {'job', 'host_ids', 'group_ids', 'params', 'batch_size', 'failure_threshold', 'confirmed', 'execution_mode'}:
         raise ValueError('不支持的作业字段')
     job = catalogue.get_job(data.get('job'))
     params = catalogue.parameters(job['code'], data.get('params', {}))
-    batch_size = positive(data.get('batch_size', 1), '批次大小')
-    failure_threshold = positive(data.get('failure_threshold', 1), '失败阈值')
-    if batch_size > 10 or failure_threshold > batch_size:
-        raise ValueError('批次大小为 1–10，失败阈值不能超过批次大小')
+    mode = data.get('execution_mode', 'manual')
+    if mode not in ('manual', 'continuous'):
+        raise ValueError('不支持的执行方式')
+    if mode == 'continuous':
+        if {'batch_size', 'failure_threshold'} & data.keys():
+            raise ValueError('连续巡检不接受手动批次参数')
+        batch_size, failure_threshold = CONTINUOUS_BATCH_SIZE, CONTINUOUS_FAILURE_THRESHOLD
+    else:
+        batch_size = positive(data.get('batch_size', 1), '批次大小')
+        failure_threshold = positive(data.get('failure_threshold', 1), '失败阈值')
+        if batch_size > 10 or failure_threshold > batch_size:
+            raise ValueError('批次大小为 1–10，失败阈值不能超过批次大小')
     selected = id_list(data.get('host_ids', []))
     selected_groups = id_list(data.get('group_ids', []))
     groups = {x.id: x for x in Group.objects.all()}
@@ -88,7 +102,7 @@ def create_run(user, data):
         for i, host in enumerate(hosts)
     ])
     audit(run, 'created', user, {'targets': len(hosts), 'batch_size': batch_size,
-                                 'failure_threshold': failure_threshold, 'confirmed': True})
+                                 'failure_threshold': failure_threshold, 'confirmed': True, 'execution_mode': mode})
     return run
 
 
@@ -105,7 +119,7 @@ def run_view(run, detail=True):
     counts['warning_checks'] = sum(check.get('status') == 'warning' for target in targets for check in target.checks)
     counts['unknown_checks'] = sum(check.get('status') == 'unknown' for target in targets for check in target.checks)
     response = {'id': run.id, 'job': run.job, 'job_name': run.job_name, 'version': run.version,
-                'params': run.params, 'state': run.state, 'batch_size': run.batch_size,
+                'params': run.params, 'state': run.state, 'execution_mode': 'continuous' if is_continuous(run) else 'manual', 'batch_size': run.batch_size,
                 'failure_threshold': run.failure_threshold, 'batch_done': run.batch_done,
                 'batch_failures': run.batch_failures, 'cancel_requested': run.cancel_requested,
                 'counts': counts, 'created_at': timestamp(run.created_at), 'updated_at': timestamp(run.updated_at),

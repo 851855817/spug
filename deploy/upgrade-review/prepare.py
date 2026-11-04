@@ -13,6 +13,7 @@ import tarfile
 
 APPEARANCE_MODULES = ('apps/setting/appearance.py', 'apps/setting/urls.py', 'spug/settings.py')
 REFINED_PALETTES_MODULE = 'apps/setting/appearance.py'
+CONTINUOUS_MODULES = ('apps/ops/service.py', 'apps/ops/worker.py', 'apps/ops/runner.py')
 SCHEDULED_PANEL_MODULES = (
     'apps/schedule/panel_tasks.py', 'apps/schedule/views.py', 'apps/schedule/urls.py',
     'apps/schedule/models.py', 'apps/schedule/executors.py', 'apps/schedule/scheduler.py',
@@ -84,6 +85,22 @@ def refined_palettes_api_digest(baseline, candidate, previous, overlay):
     if (baseline.get(REFINED_PALETTES_MODULE) != previous[REFINED_PALETTES_MODULE] or
             candidate != dict(baseline, **overlay)):
         raise ValueError('Refined palettes image API file set, content or prestate differs')
+    return unchanged_api_digest({name: value for name, value in baseline.items() if name not in overlay},
+                                {name: value for name, value in candidate.items() if name not in overlay})
+
+
+def continuous_inspections_api_digest(baseline, candidate, previous, overlay):
+    """Permit exactly three existing ops replacements; preserve all other files."""
+    unchanged_api_digest(baseline, baseline)
+    unchanged_api_digest(candidate, candidate)
+    for hashes in (previous, overlay):
+        if (not isinstance(hashes, dict) or set(hashes) != set(CONTINUOUS_MODULES) or
+                not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)
+                        for value in hashes.values())):
+            raise ValueError('Invalid existing continuous inspection image overlay')
+    if (any(baseline.get(name) != value for name, value in previous.items()) or
+            candidate != dict(baseline, **overlay)):
+        raise ValueError('Continuous inspection API file set, content or prestate differs')
     return unchanged_api_digest({name: value for name, value in baseline.items() if name not in overlay},
                                 {name: value for name, value in candidate.items() if name not in overlay})
 
@@ -162,7 +179,7 @@ def main():
         ['docker', 'image', 'inspect', image], text=True))[0], revision)
     source = stage / 'source'
     preservation = {}
-    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui'):
+    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui'):
         # Read the fixed literal without importing staged Python: imports can
         # write unarchived __pycache__ files and invalidate the bundle binding.
         tree = ast.parse((source / 'deploy/upgrade-review/publish.py').read_text())
@@ -176,8 +193,9 @@ def main():
             raise ValueError('Invalid fixed API file probe')
         baseline_api = image_api_snapshot(baseline_id, probe)
         candidate_api = image_api_snapshot(image_id, probe)
-        if manifest.get('profile') in ('site-appearance', 'scheduled-panel-tasks', 'refined-palettes'):
-            compare = (scheduled_panel_tasks_api_digest if manifest['profile'] == 'scheduled-panel-tasks' else
+        if manifest.get('profile') in ('continuous-inspections', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes'):
+            compare = (continuous_inspections_api_digest if manifest['profile'] == 'continuous-inspections' else
+                       scheduled_panel_tasks_api_digest if manifest['profile'] == 'scheduled-panel-tasks' else
                        appearance_api_digest if manifest['profile'] == 'site-appearance' else refined_palettes_api_digest)
             tree_digest = compare(baseline_api, candidate_api,
                 manifest.get('previous_api_sha256'), manifest.get('api_sha256'))
@@ -195,7 +213,7 @@ def main():
     modules = ['apps.baota.' + path.stem for path in sorted((source / 'spug_api/apps/baota').glob('test*.py'))]
     subprocess.run(command + ['manage.py', 'test', *modules, 'apps.setting.test_health', 'apps.setting.test_reminder_preferences',
         'apps.setting.test_appearance', 'spug.test_urls', 'apps.schedule.test_panel_tasks',
-        'apps.schedule.test_urls', 'apps.ops.tests',
+        'apps.schedule.test_urls', 'apps.ops.tests', 'apps.ops.test_continuous',
         'apps.ops.test_result_counts', 'apps.ops.expiry.tests', 'apps.baota.inventory.tests',
         'apps.monitor.ssl.tests', 'apps.monitor.ssl.test_collectors',
         '--settings=spug.test_settings', '--noinput'], check=True, timeout=300)
@@ -206,7 +224,7 @@ def main():
     subprocess.run(['docker', 'run', '--rm', '--network', 'none', '--read-only', '--memory', '128m',
         '--pids-limit', '32', '-v', str(source / 'deploy/baota/test_image.py') + ':/test_image.py:ro',
         '--entrypoint', 'python3', image_id, '/test_image.py',
-        'post-ssl' if manifest.get('profile') == 'panel-workspace-ui' else 'expiry'], check=True, timeout=90)
+        'post-ssl' if manifest.get('profile') in ('panel-workspace-ui', 'continuous-inspections') else 'expiry'], check=True, timeout=90)
     current_id = image_identity(json.loads(subprocess.check_output(
         ['docker', 'image', 'inspect', image], text=True))[0], revision)
     if current_id != image_id:

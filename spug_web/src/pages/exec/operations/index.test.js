@@ -78,20 +78,37 @@ test('catalog displays read-only descriptions, dependencies and limitations', as
   expect(container.textContent).toContain('不读取完整配置；仅检查根分区');
 });
 
-test('creation waits for explicit confirmation and submits the frozen selectors, defaults and PHP branch', async () => {
+test('creation immediately submits continuous inspection with the selected targets and PHP branch', async () => {
   const onCreated = jest.fn();
   await act(async () => {ReactDOM.render(<RunForm catalog={catalog} onCreated={onCreated}/>, container);});
   choose('标准作业', ['php_environment']); choose('选择主机', [1]); choose('选择分组', [1]);
   expect(container.textContent).toContain('预估 2 台');
+  expect(container.querySelector('input[type=number]')).toBeNull();
   await act(async () => {button('确认执行').click();});
-  await act(async () => {button('确认执行').click();});
-  expect(http.post).not.toHaveBeenCalled();
-  expect(Modal.confirm).toHaveBeenCalledTimes(1);
-  const confirmation = Modal.confirm.mock.calls[0][0];
-  expect(confirmation.content).toContain('SSH'); expect(confirmation.content).toContain('只读'); expect(confirmation.content).toContain('资源');
-  await act(async () => {await confirmation.onOk();});
-  expect(http.post).toHaveBeenCalledWith('/api/ops/runs/', {job: 'php_environment', host_ids: [1], group_ids: [1], params: {php_version: '74'}, batch_size: 1, failure_threshold: 1, confirmed: true});
+  expect(Modal.confirm).not.toHaveBeenCalled();
+  expect(http.post).toHaveBeenCalledWith('/api/ops/runs/', {job: 'php_environment', host_ids: [1], group_ids: [1], params: {php_version: '74'}, execution_mode: 'continuous', confirmed: true});
   expect(onCreated).toHaveBeenCalledWith(7);
+});
+
+test('repeated clicks during creation submit once and display no confirmation dialog', async () => {
+  let resolve;
+  http.post.mockImplementation(() => new Promise(done => {resolve = done;}));
+  await act(async () => ReactDOM.render(<RunForm catalog={catalog}/>, container));
+  choose('选择主机', [1]);
+  await act(async () => {button('确认执行').click(); button('确认执行').click();});
+  expect(http.post).toHaveBeenCalledTimes(1);
+  expect(Modal.confirm).not.toHaveBeenCalled();
+  await act(async () => resolve(run));
+});
+
+test('failed target displays the specific diagnostic and a useful next step', async () => {
+  http.get.mockResolvedValue({...run, state: 'completed', execution_mode: 'continuous', targets: [
+    {...run.targets[1], category: 'dependency', message: 'PHP CLI 不存在：/www/server/php/74/bin/php（退出码 42）'}]});
+  await act(async () => ReactDOM.render(<RunDetail runId={7}/>, container));
+  expect(container.textContent).toContain('/www/server/php/74/bin/php');
+  expect(container.textContent).toContain('退出码 42');
+  expect(container.textContent).toContain('处理建议');
+  expect(container.textContent).toContain('依赖与版本');
 });
 
 test('empty targets disable creation and over 50 recursive distinct targets cannot be confirmed', async () => {
@@ -238,8 +255,7 @@ test.each(['0', '-1', '1.5', '1e2', '01', '2147483648', '9007199254740992', '7/c
 test('confirmed creation switches to records and focuses its result without continuing work', async () => {
   await act(async () => {ReactDOM.render(<Operations/>, container);});
   choose('选择主机', [1]);
-  act(() => {button('确认执行').click();});
-  await act(async () => {await Modal.confirm.mock.calls[0][0].onOk();});
+  await act(async () => {button('确认执行').click();});
   expect(container.querySelector('[data-active-tab]').getAttribute('data-active-tab')).toBe('records');
   expect(document.activeElement).toBe(container.querySelector('h2'));
   expect(window.location.search).toBe('?run_id=7');
