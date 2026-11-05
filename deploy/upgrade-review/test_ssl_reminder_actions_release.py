@@ -180,4 +180,3 @@ class SSLReminderActionsReleaseTests(unittest.TestCase):
                     self.assertEqual((directory / 'apps/baota/operations/php_update.py').read_bytes(), b'php')
                     self.assertEqual((directory / 'apps/setting/health.py').read_bytes(), b'health')
                 self.assertEqual(preferences.read_bytes(), b'persisted palette preferences')
-
