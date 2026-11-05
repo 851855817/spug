@@ -84,6 +84,26 @@ class SSLWorkflowTests(TransactionTestCase):
         with self.assertRaises(PermissionError):
             service.sources(self.admin)
 
+    def test_first_source_without_snapshot_is_pending_not_configuration_changed(self):
+        saved = self.enable()
+        self.assertEqual(saved['status'], 'never_checked')
+        self.assertEqual(saved['message'], '尚未检查')
+
+    def test_first_failed_scan_shows_actual_reason_in_source_and_public_job(self):
+        from apps.monitor.ssl.collectors import CollectorError
+        service, jobs, _ = self.modules()
+        self.enable()
+        queued = service.enqueue_checks(self.admin, {'source_keys': [self.key]})['jobs'][0]
+        with patch.object(jobs, 'discover', side_effect=CollectorError('include_missing')):
+            jobs.run_pending()
+        source = service.sources(self.admin)['items'][0]
+        self.assertEqual(source['status'], 'stale')
+        self.assertIn('引用', source['message'])
+        self.assertIn('不存在', source['message'])
+        result = service.get_job(self.admin, queued['id'])
+        self.assertEqual(result['result']['sources'][0]['message'], source['message'])
+        self.assertIsNone(source['last_success_at'])
+
     def test_enqueue_is_durable_single_admission_and_never_calls_remote(self):
         service, jobs, _ = self.modules()
         self.enable()

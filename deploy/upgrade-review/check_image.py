@@ -20,9 +20,10 @@ SCHEDULED_PANEL_MODULES = (
     'apps/baota/upload_store.py', 'apps/baota/upload_runner.py',
 )
 CONTINUOUS_MODULES = ('apps/ops/service.py', 'apps/ops/worker.py', 'apps/ops/runner.py')
+SSL_SSH_MODULES = ('apps/monitor/ssl/remote_probe.py', 'apps/monitor/ssl/collectors.py', 'apps/monitor/ssl/service.py')
 PROFILES = {'continuous-inspections': CONTINUOUS_MODULES, 'php-update': PHP_MODULE, 'host-report': HEALTH_MODULE, 'operations-ui': None, 'task-results-ui': None,
             'panel-login': LOGIN_MODULES, 'inventory-filters': 'apps/baota/inventory/service.py', 'workbench-ui': None, 'branding-ui': None, 'personal-reminders-ui': None, 'inventory-role-presets-ui': None,
-            'ssl-reminder-actions': 'apps/monitor/ssl/service.py', 'ssl-renew-diagnostics': 'apps/baota/operations/certificates.py', 'site-appearance': APPEARANCE_MODULES,
+            'ssl-ssh-discovery': SSL_SSH_MODULES, 'ssl-reminder-actions': 'apps/monitor/ssl/service.py', 'ssl-renew-diagnostics': 'apps/baota/operations/certificates.py', 'site-appearance': APPEARANCE_MODULES,
             'scheduled-panel-tasks': SCHEDULED_PANEL_MODULES,
             'refined-palettes': APPEARANCE_MODULE, 'branding-cleanup-ui': None, 'self-use-branding-ui': None, 'sidebar-collapse-ui': None, 'hide-first-batch-ui': None, 'panel-workspace-ui': None, 'hide-site-inventory-ui': None, 'login-warning-ui': None}
 
@@ -53,8 +54,9 @@ def verify(root, stage, revision):
         raise ValueError('Unknown image release profile')
     for key in ('api_sha256', 'previous_api_sha256'):
         hashes = release.get(key)
-        if profile == 'continuous-inspections':
-            if (not isinstance(hashes, dict) or set(hashes) != set(CONTINUOUS_MODULES) or
+        if profile in ('continuous-inspections', 'ssl-ssh-discovery'):
+            modules = SSL_SSH_MODULES if profile == 'ssl-ssh-discovery' else CONTINUOUS_MODULES
+            if (not isinstance(hashes, dict) or set(hashes) != set(modules) or
                     not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)
                             for value in hashes.values())):
                 raise ValueError('Image continuous inspection overlay differs')
@@ -81,7 +83,7 @@ def verify(root, stage, revision):
                         for value in hashes.values())):
             raise ValueError('Image API overlay differs')
     preserved = release.get('preserved_api_sha256', {})
-    expected_preserved = ({PHP_MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'ssl-reminder-actions', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui') else
+    expected_preserved = ({PHP_MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'ssl-reminder-actions', 'ssl-ssh-discovery', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui') else
                           {PHP_MODULE} if profile == 'host-report' else set())
     if (not isinstance(preserved, dict) or set(preserved) != expected_preserved or
             not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)

@@ -13,6 +13,7 @@ from apps.account.models import User
 from apps.host.models import Host
 from apps.baota.models import Panel
 from .models import SSLSource, SSLCertificate, SSLJob, SSLLease, SSLReminder, SSLReminderPreference
+from .remote_probe import DISCOVERY_MESSAGES
 
 
 INTERVALS = (1, 6, 12, 24)
@@ -22,7 +23,7 @@ MAX_SOURCES = 10
 MAX_CERTIFICATES = 100
 ACTIVE = ('queued', 'running', 'prepared', 'uncertain')
 STATES = ('normal', 'expiring', 'expired', 'error', 'unknown', 'unconfigured', 'stale')
-MESSAGES = {'timeout': '检查超时，请缩小来源范围后重试', 'auth_failed': '来源认证失败，请检查连接配置',
+MESSAGES = {**DISCOVERY_MESSAGES, 'timeout': '检查超时，请缩小来源范围后重试', 'auth_failed': '来源认证失败，请检查连接配置',
     'host_unverified': 'SSH 主机尚未验证', 'panel_unconfigured': '宝塔 API 尚未配置并验证',
     'unsupported': '来源配置无法完整识别，请查看工具与配置指导',
     'invalid_response': '来源返回的数据无法安全解析', 'output_limit': '来源数据超过单次检查限制，请缩小范围',
@@ -145,7 +146,9 @@ def source_status(kind, obj, pref, now=None):
         return 'disabled', '监控尚未开启'
     if not User.objects.filter(pk=pref.owner_id, is_active=True, is_supper=True, is_deleted=False).exists():
         return 'disabled', '开启监控的账号已停用或失去权限，请重新配置'
-    if pref.config_digest != config_digest(kind, obj):
+    # The digest is a successful snapshot identity, not an initial credential
+    # baseline. A first failed check has none and must keep its actual reason.
+    if pref.config_digest and pref.config_digest != config_digest(kind, obj):
         return 'invalidated', '来源配置已变化，请重新检查'
     if not pref.last_success_at:
         return pref.status, pref.message

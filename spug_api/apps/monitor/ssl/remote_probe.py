@@ -27,6 +27,21 @@ MAX_DEPTH = 12
 MAX_OUTPUT_BYTES = 2 * 1024 * 1024
 PROBE_TIMEOUT = 28
 RENEW_TIMEOUT = 180
+DISCOVERY_MESSAGES = {
+    'configuration_syntax': '网站配置语法暂无法解析；请核对 Nginx/Apache 配置语法与受支持格式',
+    'dynamic_configuration': '证书、监听或配置引用使用动态或不支持的写法；请核对变量路径及动态证书选择',
+    'include_missing': '配置引用的文件不存在；请核对 include 路径及相对路径的主配置目录',
+    'include_outside_roots': '配置引用超出支持目录；请核对 include 路径，容器或自定义目录暂未覆盖',
+    'include_cycle': '配置引用形成循环；请核对 include 文件之间是否互相引用',
+    'include_depth_limit': '配置引用嵌套超过 12 层；请减少嵌套或使用已配置的宝塔来源巡检',
+    'file_unreadable': '配置文件无法读取；请核对 SSH 账号权限及文件是否存在',
+    'non_regular_file': '配置路径不是普通文件；请核对路径，探针不读取设备或管道',
+    'configuration_encoding': '配置文件不是受支持的 UTF-8 编码；请核对文件编码',
+    'file_limit': '配置文件数量或单文件大小超限；请缩小配置范围，最多 200 个文件、单文件 256 KB',
+    'total_limit': '配置读取总量超过 2 MB；请缩小配置引用范围或使用已配置的宝塔来源巡检',
+    'item_limit': '发现的证书记录超过单来源 100 条；请缩小来源范围',
+    'certificate_invalid': '公开证书格式不完整或大小超限；请核对部署的 PEM 证书文件',
+}
 CONFIG_ROOTS = ('/etc/nginx', '/etc/apache2', '/etc/httpd', '/www/server/nginx/conf',
                 '/www/server/apache/conf', '/www/server/panel/vhost/nginx', '/www/server/panel/vhost/apache',
                 '/www/server/panel/vhost/rewrite', '/usr/share/nginx/modules-available')
@@ -277,7 +292,10 @@ def nginx_sites(reader, path):
             if any(part in words[0] for part in ('lua', 'perl', 'javascript', 'exec')):
                 reload_safe = False
             site = {'domains': [], 'ports': [], 'certs': [], 'keys': [], 'main': path, 'server': 'nginx'} if words == ['server'] else None
-            if words[0] in ('server', 'location') and '$' in ' '.join(words):
+            # A location regex uses $ as a literal end anchor; it does not
+            # interpolate a certificate path. Certificate directives below
+            # still reject variable/dynamic selection and nonliteral paths.
+            if words[0] == 'server' and '$' in ' '.join(words):
                 raise ProbeError('dynamic_configuration')
             contexts.append((words[0], site))
             words = []
@@ -996,7 +1014,7 @@ def main():
     except ProbeError as error:
         code = str(error)
         known = ('timeout', 'output_limit', 'stale_plan', 'unsupported_renewal', 'renewal_uncertain')
-        output = json.dumps({'error': code if code in known else 'unsupported'})
+        output = json.dumps({'error': code if code in known or code in DISCOVERY_MESSAGES else 'unsupported'})
     except Exception:
         output = '{"error":"unsupported"}'
     sys.stdout.write(output)

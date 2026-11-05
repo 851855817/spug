@@ -15,11 +15,12 @@ from apps.baota import resources as panel_resources
 from apps.baota.operations.base import digest
 from apps.baota.operations.certificates import (certificate_info, main_ssl_configuration,
                                                 _apache_directives, _nginx_directives)
-from .remote_probe import MAX_ITEMS, MAX_OUTPUT_BYTES
+from .remote_probe import DISCOVERY_MESSAGES, MAX_ITEMS, MAX_OUTPUT_BYTES
 from .tls import normalize_domain, validate_port
 
 
 MESSAGES = {
+    **DISCOVERY_MESSAGES,
     'timeout': 'SSL 检查超时', 'auth_failed': 'SSH 认证失败，请检查已保存凭据',
     'host_unverified': '主机尚未验证', 'panel_unconfigured': '宝塔 API 尚未配置',
     'unsupported': '配置格式、引用范围或运行环境不受支持；未返回不完整快照',

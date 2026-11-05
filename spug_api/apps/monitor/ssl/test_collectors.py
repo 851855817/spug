@@ -1,4 +1,5 @@
 import datetime
+import io
 import json
 import os
 from pathlib import Path
@@ -92,6 +93,58 @@ listen 443 ssl; server_name example.com;
 ssl_certificate /srv/tls/fullchain.pem; ssl_certificate_key /srv/tls/private.key;
 }''')
         self.assertEqual([x['domain'] for x in self.scan()['items']], ['example.com'])
+
+    def test_nginx_static_location_regex_end_anchor_is_not_a_dynamic_certificate(self):
+        self.write('/etc/nginx/sites-enabled/example.conf', r'''server {
+listen 443 ssl; server_name example.com;
+ssl_certificate /srv/tls/fullchain.pem;
+ssl_certificate_key /srv/tls/private.key;
+location ~ \.(jpg|png)$ { expires 30d; }
+location ~* ^/private/.*$ { deny all; }
+}''')
+        result = self.scan()
+        self.assertEqual([(item['domain'], item['port']) for item in result['items']], [('example.com', 443)])
+        self.assertEqual(result['warnings'], [])
+
+    def test_probe_reports_known_discovery_cause_without_remote_configuration(self):
+        for code in ('configuration_syntax', 'dynamic_configuration', 'include_missing',
+                     'include_outside_roots', 'include_cycle', 'include_depth_limit',
+                     'file_unreadable', 'non_regular_file', 'configuration_encoding',
+                     'file_limit', 'total_limit', 'item_limit', 'certificate_invalid'):
+            with self.subTest(code=code), mock.patch.object(remote_probe, 'scan', side_effect=remote_probe.ProbeError(code)), mock.patch.object(
+                    remote_probe.sys, 'stdin', SimpleNamespace(buffer=io.BytesIO(b'{"action":"discover"}'))), mock.patch.object(
+                    remote_probe.sys, 'stdout', new_callable=io.StringIO) as output:
+                remote_probe.main()
+                self.assertEqual(json.loads(output.getvalue()), {'error': code})
+
+    def test_regex_location_does_not_allow_dynamic_certificate_selection(self):
+        for directive in ('ssl_certificate $ssl_server_name.pem;',
+                          'ssl_certificate_by_lua_block { return nil; }'):
+            with self.subTest(directive=directive):
+                self.write('/etc/nginx/sites-enabled/example.conf', r'''server {
+listen 443 ssl; server_name example.com;
+ssl_certificate /srv/tls/fullchain.pem;
+location ~ \.(jpg|png)$ { ''' + directive + ' } }')
+                with self.assertRaisesRegex(remote_probe.ProbeError, 'dynamic_configuration'):
+                    self.scan()
+
+    def test_probe_unknown_exception_does_not_expose_remote_contents(self):
+        with mock.patch.object(remote_probe, 'scan', side_effect=RuntimeError('SECRET CONFIGURATION')), mock.patch.object(
+                remote_probe.sys, 'stdin', SimpleNamespace(buffer=io.BytesIO(b'{}'))), mock.patch.object(
+                remote_probe.sys, 'stdout', new_callable=io.StringIO) as output:
+            remote_probe.main()
+            self.assertEqual(json.loads(output.getvalue()), {'error': 'unsupported'})
+
+    def test_known_discovery_errors_survive_ssh_output_boundary(self):
+        channel = mock.Mock()
+        channel.recv_ready.side_effect = [True, False]
+        channel.recv.return_value = b'{"error":"include_missing"}'
+        channel.recv_stderr_ready.return_value = False
+        channel.exit_status_ready.return_value = True
+        channel.recv_exit_status.return_value = 0
+        with self.assertRaises(collectors.CollectorError) as caught:
+            collectors._read_output(channel, collectors.time.monotonic() + 10)
+        self.assertEqual(caught.exception.code, 'include_missing')
 
     def test_baota_default_nginx_source_fixture_expands_fixed_rewrite_root(self):
         from apps.baota.test_ssl92 import nginx_config, CERT
