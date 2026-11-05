@@ -703,10 +703,53 @@ class SSLWorkflowTests(TransactionTestCase):
         self.assertEqual(service.reminders(self.admin, {})['unread_count'], 0)
         row = service.reminders(self.admin, {'muted': '1'})['items'][0]
         self.assertEqual(row['id'], later.pk)
+        self.assertEqual(service.listing(self.admin, {})['items'][0]['reminder'], {'id': later.pk, 'muted': True})
         other = self.user('other')
         self.assertEqual(service.reminders(other, {})['unread_count'], 1)
         service.mute_reminder(self.admin, row['id'], {'muted': False})
         self.assertEqual(service.reminders(self.admin, {})['unread_count'], 1)
+
+    def test_certificate_list_exposes_only_current_account_reminder_and_get_never_writes(self):
+        from apps.monitor.ssl.models import SSLReminderPreference
+        service, _, _ = self.modules()
+        self.enable(reminders=True)
+        self.check()
+        reminder = service.reminders(self.admin, {})['items'][0]
+        before = SSLReminderPreference.objects.count()
+        self.assertEqual(service.listing(self.admin, {})['items'][0]['reminder'],
+                         {'id': reminder['id'], 'muted': False})
+        self.assertEqual(SSLReminderPreference.objects.count(), before)
+        service.mute_reminder(self.admin, reminder['id'], {'muted': True})
+        self.assertEqual(service.listing(self.admin, {})['items'][0]['reminder'],
+                         {'id': reminder['id'], 'muted': True})
+        self.assertFalse(service.listing(self.user('other'), {})['items'][0]['reminder']['muted'])
+        service.mute_reminder(self.admin, reminder['id'], {'muted': False})
+        self.assertFalse(service.listing(self.admin, {})['items'][0]['reminder']['muted'])
+
+    def test_certificate_list_does_not_offer_mute_without_a_current_valid_reminder(self):
+        service, _, _ = self.modules()
+        self.enable(reminders=False)
+        self.check()
+        self.assertIsNone(service.listing(self.admin, {})['items'][0]['reminder'])
+        self.expire_cooldown()
+        from apps.monitor.ssl.models import SSLSource
+        SSLSource.objects.update(reminders=True)
+        self.check()
+        self.assertIsNotNone(service.listing(self.admin, {})['items'][0]['reminder'])
+        SSLSource.objects.update(status='failed')
+        self.assertIsNone(service.listing(self.admin, {})['items'][0]['reminder'])
+
+    def test_certificate_list_reminder_resets_after_certificate_cycle_changes(self):
+        service, _, _ = self.modules()
+        self.enable(reminders=True)
+        self.check()
+        first = service.reminders(self.admin, {})['items'][0]
+        service.mute_reminder(self.admin, first['id'], {'muted': True})
+        self.expire_cooldown()
+        self.check(self.fixture(fingerprint='b' * 64))
+        current = service.listing(self.admin, {})['items'][0]['reminder']
+        self.assertNotEqual(current['id'], first['id'])
+        self.assertFalse(current['muted'])
 
     def test_owner_can_cancel_unused_preflight_and_admit_new_renewal(self):
         service, _, renewal = self.modules()

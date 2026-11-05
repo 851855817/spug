@@ -28,6 +28,8 @@ export default function SSLMonitor() {
   const [revision, setRevision] = useState(0), [settings, setSettings] = useState(false), [detail, setDetail] = useState(null);
   const [jobId, setJobId] = useState(null), [guidance, setGuidance] = useState(null), [actionError, setActionError] = useState('');
   const [preflighting, setPreflighting] = useState(null), [checking, setChecking] = useState(false), [queued, setQueued] = useState([]);
+  const [reminderRevision, setReminderRevision] = useState(0), [muting, setMuting] = useState(null);
+  const muteLock = useRef(false);
   const mounted = useRef(false), preflightLock = useRef(false), checkLock = useRef(false), owner = useRef(localStorage.getItem('id'));
   const sameOwner = () => owner.current === localStorage.getItem('id') && hasPermission('admin');
   const refresh = () => setRevision(value => value + 1);
@@ -49,6 +51,15 @@ export default function SSLMonitor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowed, visible, filters, page, pageSize, revision]);
   function filter(key, value) {setFilters(current => ({...current, [key]: value})); setPage(1);}
+  async function muteReminder(row) {
+    if (muteLock.current || !row.reminder || !sameOwner()) return;
+    muteLock.current = true; setMuting(row.id); setActionError('');
+    try {
+      await http.post(`${API}reminders/${row.reminder.id}/mute/`, {muted: !row.reminder.muted});
+      if (mounted.current && sameOwner()) {refresh(); setReminderRevision(value => value + 1);}
+    } catch (_) {if (mounted.current && sameOwner()) setActionError('提醒设置保存失败，请刷新后重试。');}
+    finally {muteLock.current = false; if (mounted.current && sameOwner()) setMuting(null);}
+  }
   async function preflight(row) {
     if (preflightLock.current || !sameOwner()) return;
     preflightLock.current = true; setPreflighting(row.id); setActionError('');
@@ -82,6 +93,10 @@ export default function SSLMonitor() {
     {title: '到期时间', dataIndex: 'expires_at', width: 170, render: value => <span className={styles.date}>{dateUTC8(value)}</span>},
     {title: '剩余天数', dataIndex: 'days_remaining', width: 120, render: (value, row) => <span className={styles[certificateState(row) === 'expired' ? 'errorText' : 'remaining']}>{remaining(value)}</span>},
     {title: '说明 / 最近巡检', key: 'reason', width: 225, render: (_, row) => <><span className={styles.reason}>{text(row.message || (row.stale ? '来源变更或巡检失败，请重新检查' : '—'))}</span><small className={styles.secondary}>{dateUTC8(row.sampled_at)}</small></>},
+    {title: '提醒', key: 'reminder', width: 130, render: (_, row) => row.reminder
+      ? <Button type="link" size="small" title="仅当前账号、本次证书到期周期生效" disabled={muting !== null || loading || !!error}
+          loading={muting === row.id} onClick={() => muteReminder(row)}>{row.reminder.muted ? '恢复提醒' : '不再提醒'}</Button>
+      : <span className={styles.secondaryInline}>{sources.find(source => source.key === row.source_key)?.reminders ? '暂无到期提醒' : '未开启提醒'}</span>},
     {title: '操作', key: 'actions', width: 150, fixed: 'right', render: (_, row) => <div className={styles.rowActions}>
       <Button type="link" onClick={() => setDetail(row)}>详情</Button>
       {row.latest_job_id && <Button type="link" onClick={() => setJobId(row.latest_job_id)}>任务</Button>}
@@ -102,7 +117,7 @@ export default function SSLMonitor() {
         aria-pressed={filters.state === stat.state} onClick={() => filter('state', stat.state)}>
         <div><span className={styles.statLabel}>{stat.label}</span><strong>{data?.stats?.[stat.key] ?? '—'}</strong><small>{stat.note}</small></div><span className={styles.statIcon}><Icon/></span>
       </button>;})}</div>
-      <Reminders/>
+      <Reminders revision={reminderRevision} onChanged={refresh}/>
       {targets.length > 10 && <Alert className={styles.message} type="info" showIcon message="每次最多检查 10 个来源，请通过分组或服务器筛选缩小范围。"/>}
       {error && <Alert className={styles.message} type="error" showIcon message={error}/>}
       {actionError && <Alert className={styles.message} type="warning" showIcon message={actionError}/>}
@@ -118,7 +133,7 @@ export default function SSLMonitor() {
           <Button icon={<ReloadOutlined/>} loading={loading} onClick={refresh}>刷新缓存</Button>
         </div>
         <div className={styles.tableHeader}><h2>证书列表 <span>共 {data?.total ?? '—'} 个域名</span></h2><span>到期优先 · 时间 UTC+8</span></div>
-        <ResizableTable className={styles.table} resizeKey="ssl-certificates" rowKey="id" loading={loading} columns={columns} dataSource={data?.items || []} scroll={{x: 1460}}
+        <ResizableTable className={styles.table} resizeKey="ssl-certificates" rowKey="id" loading={loading} columns={columns} dataSource={data?.items || []} scroll={{x: 1590}}
           locale={{emptyText: error ? '缓存读取失败' : '暂无证书。请在来源设置中明确开启主机或宝塔面板巡检。'}}
           pagination={{current: page, pageSize, total: data?.total || 0, showSizeChanger: true, showTotal: total => `共 ${total} 条`,
             onChange: (next, size) => {setPage(size === pageSize ? next : 1); setPageSize(size);}}}/>

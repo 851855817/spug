@@ -211,3 +211,65 @@ test('Baota configuration guidance opens the existing readonly panel preflight i
   expect(container.textContent).not.toContain('install-cert');
   expect(http.post).not.toHaveBeenCalled();
 });
+
+function reminderFixture() {
+  let muted = false;
+  const reminder = () => ({id: 24, certificate_id: row.id, domain: row.domain, source_name: source.name, muted, message: '证书即将到期'});
+  http.get.mockImplementation((path, config) => Promise.resolve(path.includes('reminders/')
+    ? {items: !!Number(config.params.muted) === muted ? [reminder()] : [], total: !!Number(config.params.muted) === muted ? 1 : 0, unread_count: muted ? 0 : 1}
+    : {items: [{...row, reminder: {id: 24, muted}}], total: 1, sources: [{...source, reminders: true}], stats: {}, active_jobs: []}));
+  http.post.mockImplementation((path, data) => {muted = data.muted; return Promise.resolve(reminder());});
+}
+const rowButton = label => [...container.querySelectorAll('tbody button')].find(button => button.textContent === label);
+const inReminder = label => [...container.querySelector('[aria-label="SSL 到期提醒"]').querySelectorAll('button')].find(button => button.textContent === label);
+
+test('certificate list mutes and restores the same reminder and refreshes the reminder section', async () => {
+  reminderFixture(); await render(<SSLMonitor/>);
+  expect(rowButton('不再提醒')).toBeDefined(); expect(http.post).not.toHaveBeenCalled();
+  await act(async () => {rowButton('不再提醒').click(); await flush();});
+  expect(http.post).toHaveBeenLastCalledWith('/api/monitor/ssl/reminders/24/mute/', {muted: true});
+  expect(rowButton('恢复提醒')).toBeDefined(); expect(inReminder('不再提醒')).toBeUndefined();
+  expect(container.querySelector('tbody').textContent).toContain('app.example.test');
+  await act(async () => {rowButton('恢复提醒').click(); await flush();});
+  expect(http.post).toHaveBeenLastCalledWith('/api/monitor/ssl/reminders/24/mute/', {muted: false});
+  expect(rowButton('不再提醒')).toBeDefined(); expect(inReminder('不再提醒')).toBeDefined();
+});
+
+test('muting from reminder section also refreshes the corresponding certificate row', async () => {
+  reminderFixture(); await render(<SSLMonitor/>);
+  await act(async () => {inReminder('不再提醒').click(); await flush();});
+  expect(rowButton('恢复提醒')).toBeDefined(); expect(http.post).toHaveBeenCalledTimes(1);
+});
+
+test('failed certificate mute preserves the existing state and offers a controlled error', async () => {
+  reminderFixture(); http.post.mockRejectedValue(new Error('private fixture transport detail')); await render(<SSLMonitor/>);
+  await act(async () => {rowButton('不再提醒').click(); await flush();});
+  expect(rowButton('不再提醒')).toBeDefined(); expect(rowButton('恢复提醒')).toBeUndefined();
+  expect(container.textContent).toContain('提醒设置保存失败'); expect(container.textContent).not.toContain('private fixture');
+});
+
+test('certificate mute is single flight and late responses after account change do not refresh domains', async () => {
+  localStorage.setItem('id', 'reminder-owner'); reminderFixture();
+  let finish; http.post.mockImplementation(() => new Promise(resolve => {finish = resolve;})); await render(<SSLMonitor/>);
+  await act(async () => {const button=rowButton('不再提醒'); button.click(); button.click(); await flush();});
+  expect(http.post).toHaveBeenCalledTimes(1); const reads=http.get.mock.calls.length;
+  localStorage.setItem('id', 'another-owner');
+  await act(async () => {finish({muted: true}); await flush();});
+  expect(http.get).toHaveBeenCalledTimes(reads);
+  localStorage.removeItem('id');
+});
+
+test('certificates without valid reminders do not submit mute requests or enable source reminders', async () => {
+  await render(<SSLMonitor/>);
+  expect(rowButton('不再提醒')).toBeUndefined(); expect(container.querySelector('tbody').textContent).toContain('未开启提醒');
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('enabled reminders without a valid current reminder show no mute action', async () => {
+  const original = http.get.getMockImplementation();
+  http.get.mockImplementation((path, config) => path === '/api/monitor/ssl/' ? Promise.resolve({items: [{...row, reminder: null}],
+    total: 1, sources: [{...source, reminders: true}], stats: {}, active_jobs: []}) : original(path, config));
+  await render(<SSLMonitor/>);
+  expect(rowButton('不再提醒')).toBeUndefined(); expect(container.querySelector('tbody').textContent).toContain('暂无到期提醒');
+  expect(http.post).not.toHaveBeenCalled();
+});

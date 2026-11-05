@@ -5,7 +5,7 @@ import { usePageVisibility } from '../server-monitor/useServerMonitor';
 import { API, dateUTC8, text } from './helpers';
 import styles from './index.module.less';
 
-export default function Reminders() {
+export default function Reminders({revision: externalRevision = 0, onChanged}) {
   const allowed = hasPermission('admin'), visible = usePageVisibility();
   const [data, setData] = useState(null), [error, setError] = useState(''), [muted, setMuted] = useState(false);
   const [page, setPage] = useState(1), [revision, setRevision] = useState(0), [pending, setPending] = useState(null);
@@ -22,13 +22,13 @@ export default function Reminders() {
       if (valid && sameOwner()) timer = window.setTimeout(() => setRevision(value => value + 1), 60000);
     });
     return () => {valid = false; window.clearTimeout(timer);};
-  }, [allowed, visible, muted, page, revision]); // owner identity is checked before applying every response.
+  }, [allowed, visible, muted, page, revision, externalRevision]); // owner identity is checked before applying every response.
   async function mute(item) {
     if (locked.current || !sameOwner()) return;
     locked.current = true; setPending(item.id); setError('');
     try {
       await http.post(`${API}reminders/${item.id}/mute/`, {muted: !item.muted});
-      if (mounted.current && sameOwner()) setRevision(value => value + 1);
+      if (mounted.current && sameOwner()) {setRevision(value => value + 1); if (onChanged) onChanged();}
     } catch (_) {if (mounted.current && sameOwner()) setError('提醒设置保存失败，请刷新后重试。');}
     finally {locked.current = false; if (mounted.current && sameOwner()) setPending(null);}
   }

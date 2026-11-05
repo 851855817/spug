@@ -4,6 +4,7 @@
 
 | 配置 | 允许覆盖 | 额外要求 |
 | --- | --- | --- |
+| `ssl-reminder-actions` | 仅 `apps/monitor/ssl/service.py` 与 SSL 列表 `index.js`、`Reminders.js` | 复用原账号／周期提醒，拒绝其他 API、schema 和 UI 变更；旧 service 摘要必须存在，保全其余完整 API 树、PHP 和健康模块。post-ssl、新配对备份、原始 API/UI 收据和回退；真实 overlay 仅新增这个 monitor 单文件许可 |
 | `login-warning-ui` | 仅 `spug_web/src/pages/login/index.js` | 移除认证成功后的真实 IP 提示弹窗；认证、MFA、LDAP 与 IP 校验保留。拒绝所有 API 与额外 UI 运行文件；完整 API 树保全、post-ssl 检查、空闲门、新配对备份及仅 UI 收据回退 |
 | `hide-site-inventory-ui` | 仅 `spug_web/src/routes.js` | 隐藏重复网站与证书菜单；拒绝所有 API 和其他 UI 运行文件。完整 API 树保全、post-ssl 检查、空闲门、新配对备份及仅 UI 收据回退 |
 | `continuous-inspections` | `apps/ops/{service,worker,runner}.py` 与巡检 `RunForm.js`、`RunDetail.js` | 三个 API 旧摘要必须存在，仅允许固定两个 UI 运行文件与 `test_continuous.py` 后端测试；其余完整 API 树、PHP 与健康模块保全。无迁移，最终候选按 post-ssl 检查；复用配对备份、空闲门及 API/UI 原始收据回退 |

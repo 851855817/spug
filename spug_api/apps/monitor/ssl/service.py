@@ -286,6 +286,8 @@ def listing(user, query):
     if not isinstance(q, str) or len(q) > 200 or any(ord(c) < 32 for c in q) or state and state not in STATES:
         raise ValueError('搜索或状态参数无效')
     all_sources = sources(user)['items']
+    current_reminders = {r['certificate_id']: {'id': r['id'], 'muted': r['muted']}
+                         for r in reminder_rows(user, all_sources)}
     filtered = [s for s in all_sources if (not selected or s['key'] == selected) and
                 (not group or any(g['key'] == group for g in s['groups']))]
     by_key = {s['key']: s for s in filtered}
@@ -294,7 +296,7 @@ def listing(user, query):
         src = by_key[cert.source_id]
         if q and q.lower() not in ' '.join((cert.domain, src['name'], src['address'])).lower():
             continue
-        rows.append(certificate_view(cert, src))
+        rows.append({**certificate_view(cert, src), 'reminder': current_reminders.get(cert.pk)})
     stats = {'total': len(rows), **{key: sum(r['state'] == key for r in rows)
                                   for key in ('normal', 'expiring', 'expired')}}
     stats['error'] = sum(r['state'] in ('error', 'stale', 'unknown', 'unconfigured') for r in rows)
@@ -463,8 +465,8 @@ def enqueue_checks(user, data):
         return {'jobs': [job_view(job)]}
 
 
-def reminder_rows(user):
-    src = {row['key']: row for row in sources(user)['items']}
+def reminder_rows(user, source_items=None):
+    src = {row['key']: row for row in (sources(user)['items'] if source_items is None else source_items)}
     muted = set(SSLReminderPreference.objects.filter(user_id=user.pk, muted=True).values_list(
         'reminder__certificate_id', 'reminder__cycle'))
     rows = []

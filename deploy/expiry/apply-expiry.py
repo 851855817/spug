@@ -17,6 +17,7 @@ for name, expected in files.items():
     assert not relative.is_absolute() and '..' not in relative.parts and 'migrations' not in relative.parts
     assert relative.suffix == '.py' or name == 'apps/baota/data/official_api_catalog.json'
     assert name.startswith(('apps/baota/', 'apps/ops/', 'apps/setting/')) or name in (
+        'apps/monitor/ssl/service.py',
         'spug/settings.py', 'spug/urls.py', 'apps/schedule/scheduler.py',
         'apps/schedule/panel_tasks.py', 'apps/schedule/views.py', 'apps/schedule/urls.py',
         'apps/schedule/models.py', 'apps/schedule/executors.py', 'apps/schedule/builtin.py')
