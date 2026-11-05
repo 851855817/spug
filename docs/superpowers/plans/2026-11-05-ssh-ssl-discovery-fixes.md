@@ -7,7 +7,9 @@
 - [x] 在 `test_collectors.py` 添加带结束锚点的普通 location 正则、固定探针错误码传递与未知异常脱敏回归；在 `tests.py` 添加新来源待检查、首次失败原因和公开任务结果回归。运行 `../../spug-testenv/Scripts/python.exe manage.py test apps.monitor.ssl.tests apps.monitor.ssl.test_collectors --settings=spug.test_settings --noinput`，确认新增断言因缺陷失败。
 - [x] 修改 `remote_probe.py` 的 location 判断和已知错误映射，`collectors.py` 与 `service.py` 复用固定映射；空摘要不判为配置变更。仅修改必要运行代码，无模型和权限变动。重跑 SSL 套件并检查证书动态选择、越界和未知错误继续拒绝。
 - [x] 为发布工具添加精确 `ssl-ssh-discovery` 三模块 profile 和真实 overlay／回退测试，保全 PHP、健康及其余完整 API 树。运行发布保护测试和完整后端回归。
-- [ ] 更新 `docs/ssl-monitor-guide.md` 中的 SSH 要求、操作步骤和已知限制，提交分支、推送并更新草稿 PR #4。
-- [ ] 使用当前现网版本建立新候选，重新核对业务空闲、配对备份、隔离候选测试和兼容回退；通过后发布并只读核验，不发起客户采集。若空闲或回退检查失败，保留现网并明确记录阻塞。
+- [x] 更新 `docs/ssl-monitor-guide.md` 中的 SSH 要求、操作步骤和已知限制，提交分支、推送并更新草稿 PR #4。
+- [x] 使用当前现网版本建立新候选，重新核对业务空闲、配对备份、隔离候选测试和兼容回退；通过后发布并只读核验，不发起客户采集。若空闲或回退检查失败，保留现网并明确记录阻塞。
 
 本地验证：新增回归修复前出现 16 个断言失败、1 个解析异常；修复后 SSL 110 项通过（Windows 条件跳过 1 项），补充动态证书边界 1 项通过。完整后端 704 项通过（Windows 条件跳过 13 项），发布保护 232 项通过（Windows 条件跳过 1 项）；独立审查新增 profile 7 项通过且无阻塞发现。仅模拟接口和临时文件树，未联系客户。
+
+发布完成：`c69db0a54f76e249bcd420b113a31709ef645087`，配对备份与 69 项保全、双根 API 覆盖收据和 15 项健康均通过。最终候选 705 项隔离后端、232 项发布及两组 CI 全部通过。完整证据见 `docs/releases/2026-11-05-ssh-ssl-discovery.md`。未执行客户巡检，需用户从原入口重新巡检验证真实配置。
