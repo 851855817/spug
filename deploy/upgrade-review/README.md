@@ -4,6 +4,7 @@
 
 | 配置 | 允许覆盖 | 额外要求 |
 | --- | --- | --- |
+| `login-warning-ui` | 仅 `spug_web/src/pages/login/index.js` | 移除认证成功后的真实 IP 提示弹窗；认证、MFA、LDAP 与 IP 校验保留。拒绝所有 API 与额外 UI 运行文件；完整 API 树保全、post-ssl 检查、空闲门、新配对备份及仅 UI 收据回退 |
 | `hide-site-inventory-ui` | 仅 `spug_web/src/routes.js` | 隐藏重复网站与证书菜单；拒绝所有 API 和其他 UI 运行文件。完整 API 树保全、post-ssl 检查、空闲门、新配对备份及仅 UI 收据回退 |
 | `continuous-inspections` | `apps/ops/{service,worker,runner}.py` 与巡检 `RunForm.js`、`RunDetail.js` | 三个 API 旧摘要必须存在，仅允许固定两个 UI 运行文件与 `test_continuous.py` 后端测试；其余完整 API 树、PHP 与健康模块保全。无迁移，最终候选按 post-ssl 检查；复用配对备份、空闲门及 API/UI 原始收据回退 |
 | `hide-first-batch-ui` | 路由配置、侧栏、系统设置入口、面板任务标签，共四个固定 UI 文件 | 恰好 `routes.js`、`layout/Sider.js`、`pages/system/setting/index.js`、`pages/exec/panel/index.js`（均相对 `spug_web/src/`）；拒绝全部 API 文件。完整 API 树、配对备份、空闲门、原进程与仅 UI 回退保护保持 |

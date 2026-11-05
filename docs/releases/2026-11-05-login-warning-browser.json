@@ -1,0 +1,436 @@
+{
+  "fixture": "http://127.0.0.1:62330",
+  "real_headless_browser": true,
+  "fresh_temporary_profile": true,
+  "resolver_blocks_non_loopback": true,
+  "mocked_api_only": true,
+  "assertions": [
+    "fresh login has no saved session",
+    "has_real_ip false enters home directly without warning",
+    "fresh login has no saved session",
+    "LDAP retains requested destination and login type",
+    "fresh login has no saved session",
+    "MFA does not create session before verification",
+    "missing MFA code does not log in",
+    "successful MFA enters home without warning",
+    "fresh login has no saved session",
+    "failed authentication stays on login without session",
+    "only mocked login POSTs and recognized cached GETs",
+    "LDAP request type verified",
+    "missing MFA code does not submit an extra request",
+    "all page traffic stays on loopback"
+  ],
+  "runtime_exceptions": [],
+  "console_errors": [],
+  "network_requests": [
+    {
+      "url": "http://127.0.0.1:62330/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/js/2.963ac808.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/js/main.88526b87.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/media/bg.a568162c.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/account/login/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/baota/monitor/cards/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/baota/inventory/sites/?page=1&page_size=20&state=expired",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/baota/inventory/sites/?page=1&page_size=20&state=expiring",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/ops/expiry/assets/?page=1&page_size=20&state=expired",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/ops/expiry/assets/?page=1&page_size=20&state=within_30",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/home/notice/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/home/navigation/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/js/2.963ac808.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/js/main.88526b87.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/media/bg.a568162c.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/account/login/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/js/2.963ac808.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/js/main.88526b87.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/media/bg.a568162c.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/account/login/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/account/login/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/baota/monitor/cards/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/baota/inventory/sites/?page=1&page_size=20&state=expired",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/baota/inventory/sites/?page=1&page_size=20&state=expiring",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/ops/expiry/assets/?page=1&page_size=20&state=expired",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/ops/expiry/assets/?page=1&page_size=20&state=within_30",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/home/notice/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/home/navigation/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/js/2.963ac808.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/js/main.88526b87.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/static/media/bg.a568162c.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62330/api/account/login/",
+      "method": "POST"
+    }
+  ],
+  "blocked_outbound_requests": [],
+  "screenshots": [
+    "docs/releases/login-warning-shots/01-login.png",
+    "docs/releases/login-warning-shots/02-home-without-warning.png",
+    "docs/releases/login-warning-shots/03-mfa-still-required.png",
+    "docs/releases/login-warning-shots/04-dark-narrow-rejection.png"
+  ],
+  "revision": "8e874e3a24eb93b40fca8841ae406097004a1da9",
+  "working_tree_dirty": true,
+  "tested_ui_source_sha256": {
+    "src/pages/login/index.js": "a5d3886432587e5842bbd428a6615bf188a53a6fbd2e4ce2443088a16e2c1acf"
+  },
+  "mock_requests": [
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "POST",
+      "path": "/api/account/login/",
+      "type": "default",
+      "captcha_present": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/monitor/cards/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/inventory/sites/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/inventory/sites/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/expiry/assets/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/expiry/assets/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/home/notice/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/home/navigation/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "POST",
+      "path": "/api/account/login/",
+      "type": "ldap",
+      "captcha_present": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "POST",
+      "path": "/api/account/login/",
+      "type": "default",
+      "captcha_present": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/account/login/",
+      "type": "default",
+      "captcha_present": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/monitor/cards/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/inventory/sites/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/inventory/sites/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/expiry/assets/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/expiry/assets/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/home/notice/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/home/navigation/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "POST",
+      "path": "/api/account/login/",
+      "type": "default",
+      "captcha_present": false
+    }
+  ],
+  "passed": true,
+  "mock_login_posts": 5,
+  "customer_requests": 0,
+  "build_asset": "/static/js/main.88526b87.chunk.js",
+  "build_asset_sha256": "fdc57194928f3527b636ac8b5772e20d2347f46c632d6c894307b9bc73d3e64c"
+}
