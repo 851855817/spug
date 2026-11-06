@@ -212,6 +212,75 @@ test('Baota configuration guidance opens the existing readonly panel preflight i
   expect(http.post).not.toHaveBeenCalled();
 });
 
+function visibilityFixture({reject = false} = {}) {
+  let hidden = false;
+  const original = http.get.getMockImplementation();
+  const expired = {...row, domain: 'expired.example.test', state: 'expired', days_remaining: -20,
+    cycle: 'a'.repeat(64), hidden: false, renewal: {supported: false}};
+  const normal = {...row, id: 2, domain: 'normal.example.test', state: 'normal', cycle: 'b'.repeat(64), hidden: false};
+  http.get.mockImplementation((path, config) => {
+    if (path !== '/api/monitor/ssl/') return original(path, config);
+    const items = [{...expired, hidden}, normal].filter(item => item.hidden === (config.params.hidden === '1'));
+    return Promise.resolve({items, total: items.length, hidden_count: hidden ? 1 : 0,
+      stats: {total: items.length, expired: items.filter(item => item.state === 'expired').length}, sources: [source], active_jobs: []});
+  });
+  http.post.mockImplementation((path, body) => {
+    expect(path).toBe('/api/monitor/ssl/certificates/1/visibility/');
+    expect(body.cycle).toBe(expired.cycle);
+    if (reject) return Promise.reject(new Error('request rejected'));
+    hidden = body.hidden;
+    return Promise.resolve({id: 1, hidden, cycle: expired.cycle});
+  });
+}
+
+const hiddenCheckbox = () => container.querySelector('input[aria-label="查看已隐藏证书"]');
+
+test('expired rows hide per certificate and can be restored from the hidden view', async () => {
+  visibilityFixture(); await render(<SSLMonitor/>);
+  expect(rowButton('隐藏')).toBeDefined();
+  expect([...container.querySelectorAll('table tr')].find(item => item.textContent.includes('normal.example.test')).textContent).not.toContain('隐藏');
+  await click('隐藏');
+  expect(container.querySelector('table').textContent).not.toContain('expired.example.test');
+  expect(container.querySelector('table').textContent).toContain('normal.example.test');
+  expect(container.textContent).toContain('查看已隐藏（1）');
+  await act(async () => {Simulate.change(hiddenCheckbox(), {target: {checked: true}}); await flush();});
+  expect(container.textContent).toContain('已隐藏证书');
+  expect(container.querySelector('table').textContent).toContain('expired.example.test');
+  await click('恢复显示');
+  expect(container.querySelector('table').textContent).not.toContain('expired.example.test');
+  await act(async () => {Simulate.change(hiddenCheckbox(), {target: {checked: false}}); await flush();});
+  expect(container.querySelector('table').textContent).toContain('expired.example.test');
+  expect(http.post.mock.calls.map(([, body]) => body.hidden)).toEqual([true, false]);
+});
+
+test('visibility changes reset pagination and send the certificate cycle without touching reminders', async () => {
+  visibilityFixture(); await render(<SSLMonitor/>); await click('下一页'); await click('隐藏');
+  const reads = http.get.mock.calls.filter(([path]) => path === '/api/monitor/ssl/');
+  expect(reads[reads.length - 1][1].params.page).toBe(1);
+  expect(http.post).toHaveBeenCalledTimes(1);
+  expect(http.post).toHaveBeenCalledWith('/api/monitor/ssl/certificates/1/visibility/', {hidden: true, cycle: 'a'.repeat(64)});
+});
+
+test('a failed visibility save keeps the row visible and offers retry', async () => {
+  visibilityFixture({reject: true}); await render(<SSLMonitor/>); await click('隐藏');
+  expect(container.querySelector('table').textContent).toContain('expired.example.test');
+  expect(container.textContent).toContain('显示设置保存失败');
+  expect(rowButton('隐藏').disabled).toBe(false);
+});
+
+test('duplicate hiding posts once and a changed account does not apply its late response', async () => {
+  visibilityFixture(); let finish;
+  http.post.mockImplementation(() => new Promise(resolve => {finish = resolve;}));
+  await render(<SSLMonitor/>);
+  const reads = http.get.mock.calls.length;
+  await act(async () => {rowButton('隐藏').click(); rowButton('隐藏').click(); await flush();});
+  expect(http.post).toHaveBeenCalledTimes(1);
+  localStorage.setItem('id', 'changed-owner');
+  await act(async () => {finish({id: 1, hidden: true, cycle: 'a'.repeat(64)}); await flush();});
+  expect(http.get.mock.calls.length).toBe(reads);
+  localStorage.removeItem('id');
+});
+
 function reminderFixture() {
   let muted = false;
   const reminder = () => ({id: 24, certificate_id: row.id, domain: row.domain, source_name: source.name, muted, message: '证书即将到期'});

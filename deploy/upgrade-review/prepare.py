@@ -15,6 +15,7 @@ APPEARANCE_MODULES = ('apps/setting/appearance.py', 'apps/setting/urls.py', 'spu
 REFINED_PALETTES_MODULE = 'apps/setting/appearance.py'
 CONTINUOUS_MODULES = ('apps/ops/service.py', 'apps/ops/worker.py', 'apps/ops/runner.py')
 SSL_SSH_MODULES = ('apps/monitor/ssl/remote_probe.py', 'apps/monitor/ssl/collectors.py', 'apps/monitor/ssl/service.py')
+SSL_VISIBILITY_MODULES = ('apps/monitor/ssl/service.py', 'apps/monitor/ssl/views.py', 'apps/monitor/ssl/urls.py')
 SCHEDULED_PANEL_MODULES = (
     'apps/schedule/panel_tasks.py', 'apps/schedule/views.py', 'apps/schedule/urls.py',
     'apps/schedule/models.py', 'apps/schedule/executors.py', 'apps/schedule/scheduler.py',
@@ -154,6 +155,22 @@ def ssl_ssh_discovery_api_digest(baseline, candidate, previous, overlay):
                                 {name: value for name, value in candidate.items() if name not in overlay})
 
 
+def ssl_visibility_api_digest(baseline, candidate, previous, overlay):
+    """Permit exactly three existing SSL visibility replacements; preserve all other files."""
+    unchanged_api_digest(baseline, baseline)
+    unchanged_api_digest(candidate, candidate)
+    for hashes in (previous, overlay):
+        if (not isinstance(hashes, dict) or set(hashes) != set(SSL_VISIBILITY_MODULES) or
+                not all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)
+                        for value in hashes.values())):
+            raise ValueError('Invalid existing SSH SSL visibility image overlay')
+    if (any(baseline.get(name) != value for name, value in previous.items()) or
+            candidate != dict(baseline, **overlay)):
+        raise ValueError('SSH SSL visibility API file set, content or prestate differs')
+    return unchanged_api_digest({name: value for name, value in baseline.items() if name not in overlay},
+                                {name: value for name, value in candidate.items() if name not in overlay})
+
+
 def image_api_snapshot(image_id, probe):
     if not isinstance(image_id, str) or not re.fullmatch('sha256:[0-9a-f]{64}', image_id):
         raise ValueError('Backend snapshot requires an immutable image')
@@ -228,7 +245,7 @@ def main():
         ['docker', 'image', 'inspect', image], text=True))[0], revision)
     source = stage / 'source'
     preservation = {}
-    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-reminder-actions', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
+    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-reminder-actions', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
         # Read the fixed literal without importing staged Python: imports can
         # write unarchived __pycache__ files and invalidate the bundle binding.
         tree = ast.parse((source / 'deploy/upgrade-review/publish.py').read_text())
@@ -242,8 +259,9 @@ def main():
             raise ValueError('Invalid fixed API file probe')
         baseline_api = image_api_snapshot(baseline_id, probe)
         candidate_api = image_api_snapshot(image_id, probe)
-        if manifest.get('profile') in ('continuous-inspections', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-reminder-actions'):
-            compare = (ssl_python36_api_digest if manifest['profile'] == 'ssl-ssh-python36' else
+        if manifest.get('profile') in ('continuous-inspections', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-reminder-actions'):
+            compare = (ssl_visibility_api_digest if manifest['profile'] == 'ssl-certificate-visibility' else
+                       ssl_python36_api_digest if manifest['profile'] == 'ssl-ssh-python36' else
                        ssl_ssh_discovery_api_digest if manifest['profile'] == 'ssl-ssh-discovery' else
                        ssl_reminder_actions_api_digest if manifest['profile'] == 'ssl-reminder-actions' else
                        continuous_inspections_api_digest if manifest['profile'] == 'continuous-inspections' else
@@ -276,7 +294,7 @@ def main():
     subprocess.run(['docker', 'run', '--rm', '--network', 'none', '--read-only', '--memory', '128m',
         '--pids-limit', '32', '-v', str(source / 'deploy/baota/test_image.py') + ':/test_image.py:ro',
         '--entrypoint', 'python3', image_id, '/test_image.py',
-        'post-ssl' if manifest.get('profile') in ('panel-workspace-ui', 'continuous-inspections', 'hide-site-inventory-ui', 'login-warning-ui', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-ssh-discovery') else 'expiry'], check=True, timeout=90)
+        'post-ssl' if manifest.get('profile') in ('panel-workspace-ui', 'continuous-inspections', 'hide-site-inventory-ui', 'login-warning-ui', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-ssh-discovery') else 'expiry'], check=True, timeout=90)
     current_id = image_identity(json.loads(subprocess.check_output(
         ['docker', 'image', 'inspect', image], text=True))[0], revision)
     if current_id != image_id:

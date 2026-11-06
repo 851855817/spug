@@ -65,6 +65,117 @@ class SSLWorkflowTests(TransactionTestCase):
         from apps.monitor.ssl.models import SSLSource
         SSLSource.objects.update(last_attempt_at=timezone.now() - timedelta(hours=7))
 
+    def expired_visibility_fixture(self):
+        from apps.monitor.ssl.models import SSLCertificate
+        service, _, _ = self.modules()
+        self.enable(reminders=True)
+        self.check(self.fixture(datetime.now(utc_timezone.utc) - timedelta(days=20)))
+        cert = SSLCertificate.objects.get(source_id=self.key)
+        return service, cert, service.certificate_cycle(cert)
+
+    def test_visibility_is_per_account_reversible_and_independent_of_reminders(self):
+        from apps.monitor.ssl.models import SSLReminderPreference, SSLCertificate
+        service, cert, cycle = self.expired_visibility_fixture()
+        before = service.reminders(self.admin, {})
+        other = self.user('other')
+        service.set_visibility(self.admin, cert.pk, {'hidden': True, 'cycle': cycle})
+        visible = service.listing(self.admin, {})
+        self.assertEqual((visible['total'], visible['stats']['expired'], visible['hidden_count']), (0, 0, 1))
+        hidden = service.listing(self.admin, {'hidden': '1'})
+        self.assertEqual(hidden['total'], 1)
+        self.assertTrue(hidden['items'][0]['hidden'])
+        self.assertEqual(hidden['items'][0]['cycle'], cycle)
+        self.assertEqual(service.listing(other, {})['total'], 1)
+        self.assertEqual(service.reminders(self.admin, {}), before)
+        self.assertFalse(SSLReminderPreference.objects.exists())
+        self.assertEqual(SSLCertificate.objects.count(), 1)
+        service.set_visibility(self.admin, cert.pk, {'hidden': False, 'cycle': cycle})
+        self.assertEqual(service.listing(self.admin, {})['total'], 1)
+        self.assertEqual(service.listing(self.admin, {'hidden': '1'})['total'], 0)
+
+    def test_visibility_filters_and_pagination_exclude_only_selected_record(self):
+        from apps.monitor.ssl.models import SSLCertificate
+        service, cert, cycle = self.expired_visibility_fixture()
+        second = SSLCertificate.objects.get(pk=cert.pk)
+        second.pk = None
+        second.identity = 'b' * 64
+        second.domain = 'second.example.com'
+        second.local_certificate = {**second.local_certificate, 'domains': ['second.example.com']}
+        second.save()
+        service.set_visibility(self.admin, cert.pk, {'hidden': True, 'cycle': cycle})
+        listing = service.listing(self.admin, {'state': 'expired', 'page_size': '1'})
+        self.assertEqual(listing['total'], 1)
+        self.assertEqual(listing['items'][0]['id'], second.pk)
+        self.assertEqual(listing['stats']['expired'], 1)
+        self.assertEqual(service.listing(self.admin, {'q': 'second'})['hidden_count'], 0)
+        self.assertEqual(service.listing(self.admin, {'hidden': '1', 'source': self.key})['total'], 1)
+        self.assertEqual(service.listing(self.admin, {'hidden': '1', 'state': 'normal'})['total'], 0)
+        with self.assertRaises(ValueError):
+            service.listing(self.admin, {'hidden': 'true'})
+
+    def test_visibility_new_certificate_cycle_reappears_without_get_writes(self):
+        from apps.setting.models import UserSetting
+        service, cert, cycle = self.expired_visibility_fixture()
+        service.set_visibility(self.admin, cert.pk, {'hidden': True, 'cycle': cycle})
+        pref_before = list(UserSetting.objects.values())
+        cert.local_certificate = {**cert.local_certificate, 'fingerprint': 'c' * 64,
+                                  'expires_at': (datetime.now(utc_timezone.utc) + timedelta(days=90)).isoformat()}
+        cert.save()
+        fresh = service.listing(self.admin, {})
+        self.assertEqual(fresh['total'], 1)
+        self.assertFalse(fresh['items'][0]['hidden'])
+        self.assertEqual(fresh['hidden_count'], 0)
+        self.assertNotEqual(fresh['items'][0]['cycle'], cycle)
+        self.assertEqual(service.listing(self.admin, {'hidden': '1'})['total'], 0)
+        self.assertEqual(list(UserSetting.objects.values()), pref_before)
+        with self.assertRaises(ValueError):
+            service.set_visibility(self.admin, cert.pk, {'hidden': True, 'cycle': cycle})
+
+    def test_visibility_rejects_nonexpired_invalid_and_revoked_requests(self):
+        service, cert, cycle = self.expired_visibility_fixture()
+        for payload in ({'hidden': 'true', 'cycle': cycle}, {'hidden': True},
+                        {'hidden': True, 'cycle': 'invalid'}, {'hidden': True, 'cycle': cycle, 'user_id': 2}):
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                service.set_visibility(self.admin, cert.pk, payload)
+        cert.local_certificate = {**cert.local_certificate,
+                                  'expires_at': (datetime.now(utc_timezone.utc) + timedelta(days=90)).isoformat()}
+        cert.save()
+        with self.assertRaises(ValueError):
+            service.set_visibility(self.admin, cert.pk, {'hidden': True, 'cycle': service.certificate_cycle(cert)})
+        User.objects.filter(pk=self.admin.pk).update(is_supper=False)
+        with self.assertRaises(PermissionError):
+            service.set_visibility(self.admin, cert.pk, {'hidden': False, 'cycle': service.certificate_cycle(cert)})
+
+    def test_visibility_hidden_records_can_be_restored_when_source_is_disabled(self):
+        from apps.monitor.ssl.models import SSLSource
+        service, cert, cycle = self.expired_visibility_fixture()
+        service.set_visibility(self.admin, cert.pk, {'hidden': True, 'cycle': cycle})
+        SSLSource.objects.filter(pk=self.key).update(enabled=False)
+        hidden = service.listing(self.admin, {'hidden': '1'})['items'][0]
+        self.assertTrue(hidden['stale'])
+        service.set_visibility(self.admin, cert.pk, {'hidden': False, 'cycle': cycle})
+        self.assertEqual(service.listing(self.admin, {})['total'], 1)
+
+    def test_visibility_get_does_not_create_preferences_or_contact_sources(self):
+        from apps.setting.models import UserSetting
+        service, jobs, _ = self.modules()
+        with patch.object(jobs, 'discover') as remote:
+            service.listing(self.admin, {})
+            service.listing(self.admin, {'hidden': '1'})
+        remote.assert_not_called()
+        self.assertFalse(UserSetting.objects.exists())
+
+    def test_visibility_http_boundary_is_local_and_accepts_only_post(self):
+        from apps.setting.models import UserSetting
+        service, cert, cycle = self.expired_visibility_fixture()
+        self.client.defaults['HTTP_X_TOKEN'] = self.admin.access_token
+        path = '/monitor/ssl/certificates/' + str(cert.pk) + '/visibility/'
+        self.assertEqual(self.client.get(path).status_code, 405)
+        self.assertFalse(UserSetting.objects.exists())
+        reply = self.client.post(path, json.dumps({'hidden': True, 'cycle': cycle}), content_type='application/json').json()
+        self.assertFalse(reply.get('error'), reply)
+        self.assertEqual(service.listing(self.admin, {})['total'], 0)
+
     def test_default_disabled_get_is_local_and_does_not_create_preferences(self):
         service, _, _ = self.modules()
         self.assertFalse(service.sources(self.admin)['items'][0]['enabled'])

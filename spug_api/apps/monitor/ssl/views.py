@@ -40,6 +40,11 @@ class CheckView(SSLView):
         return json_response(service.enqueue_checks(request.user, parse_body(request)))
 
 
+class VisibilityView(SSLView):
+    def post(self, request, certificate_id):
+        return json_response(service.set_visibility(request.user, certificate_id, parse_body(request)))
+
+
 class JobsView(SSLView):
     def get(self, request, job_id=None):
         if job_id is not None:

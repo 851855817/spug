@@ -12,6 +12,7 @@ from django.utils import timezone
 from apps.account.models import User
 from apps.host.models import Host
 from apps.baota.models import Panel
+from apps.setting.models import UserSetting
 from .models import SSLSource, SSLCertificate, SSLJob, SSLLease, SSLReminder, SSLReminderPreference
 from .remote_probe import DISCOVERY_MESSAGES
 
@@ -22,6 +23,8 @@ LEASE_SECONDS = 600
 MAX_SOURCES = 10
 MAX_CERTIFICATES = 100
 ACTIVE = ('queued', 'running', 'prepared', 'uncertain')
+VISIBILITY_KEY = 'ssl_hidden_certificates'
+MAX_HIDDEN_CERTIFICATES = 10000
 STATES = ('normal', 'expiring', 'expired', 'error', 'unknown', 'unconfigured', 'stale')
 MESSAGES = {**DISCOVERY_MESSAGES, 'timeout': '检查超时，请缩小来源范围后重试', 'auth_failed': '来源认证失败，请检查连接配置',
     'host_unverified': 'SSH 主机尚未验证', 'panel_unconfigured': '宝塔 API 尚未配置并验证',
@@ -219,6 +222,53 @@ def certificate_cycle(cert):
     return digest([cert.local_certificate.get('fingerprint'), cert.local_certificate.get('expires_at')])
 
 
+def hidden_certificates(user):
+    raw = UserSetting.objects.filter(user_id=user.pk, key=VISIBILITY_KEY).values_list('value', flat=True).first()
+    if not isinstance(raw, str) or len(raw) > 1024 * 1024:
+        return {}
+    try:
+        value = json.loads(raw)
+    except (ValueError, RecursionError):
+        return {}
+    if not isinstance(value, dict) or len(value) > MAX_HIDDEN_CERTIFICATES:
+        return {}
+    return {key: cycle for key, cycle in value.items() if re.fullmatch(r'[1-9][0-9]{0,18}', key)
+            and isinstance(cycle, str) and re.fullmatch(r'[0-9a-f]{64}', cycle)}
+
+
+def set_visibility(user, certificate_id, data):
+    permission(user)
+    strict(data, ('hidden', 'cycle'))
+    if (type(data.get('hidden')) is not bool or not isinstance(data.get('cycle'), str) or
+            not re.fullmatch(r'[0-9a-f]{64}', data['cycle'])):
+        raise ValueError('请提供显示设置和当前证书周期')
+    with transaction.atomic():
+        current = permission(user, lock=True)
+        cert = SSLCertificate.objects.select_for_update().select_related('source').filter(
+            pk=integer(certificate_id), present=True).first()
+        if cert is None:
+            raise ValueError('证书已不存在，请刷新列表')
+        source = next((row for row in sources(current)['items'] if row['key'] == cert.source_id), None)
+        if source is None:
+            raise ValueError('证书来源已不存在，请刷新列表')
+        cycle = certificate_cycle(cert)
+        if data['cycle'] != cycle:
+            raise ValueError('证书已更新，请刷新后重新操作')
+        if data['hidden'] and certificate_view(cert, source)['state'] != 'expired':
+            raise ValueError('仅可隐藏当前已过期的证书，请刷新列表')
+        preferences = hidden_certificates(current)
+        key = str(cert.pk)
+        if data['hidden']:
+            if key not in preferences and len(preferences) >= MAX_HIDDEN_CERTIFICATES:
+                raise ValueError('隐藏记录已达上限，请先恢复部分记录')
+            preferences[key] = cycle
+        else:
+            preferences.pop(key, None)
+        UserSetting.objects.update_or_create(user=current, key=VISIBILITY_KEY,
+            defaults={'value': json.dumps(preferences, separators=(',', ':'))})
+    return {'id': cert.pk, 'hidden': data['hidden'], 'cycle': cycle}
+
+
 def certificate_covers(domain, domains):
     if domain in domains:
         return True
@@ -282,12 +332,15 @@ def pagination(query):
 
 
 def listing(user, query):
-    permission(user)
-    strict(query, ('q', 'source', 'state', 'group', 'page', 'page_size'))
+    current = permission(user)
+    strict(query, ('q', 'source', 'state', 'group', 'page', 'page_size', 'hidden'))
     page, size = pagination(query)
     q, state, selected, group = query.get('q', ''), query.get('state', ''), query.get('source', ''), query.get('group', '')
     if not isinstance(q, str) or len(q) > 200 or any(ord(c) < 32 for c in q) or state and state not in STATES:
         raise ValueError('搜索或状态参数无效')
+    if query.get('hidden', '') not in ('', '0', '1'):
+        raise ValueError('显示筛选无效')
+    hidden = hidden_certificates(current)
     all_sources = sources(user)['items']
     current_reminders = {r['certificate_id']: {'id': r['id'], 'muted': r['muted']}
                          for r in reminder_rows(user, all_sources)}
@@ -299,14 +352,18 @@ def listing(user, query):
         src = by_key[cert.source_id]
         if q and q.lower() not in ' '.join((cert.domain, src['name'], src['address'])).lower():
             continue
-        rows.append({**certificate_view(cert, src), 'reminder': current_reminders.get(cert.pk)})
+        cycle = certificate_cycle(cert)
+        rows.append({**certificate_view(cert, src), 'reminder': current_reminders.get(cert.pk),
+                     'cycle': cycle, 'hidden': hidden.get(str(cert.pk)) == cycle})
+    hidden_count = sum(row['hidden'] for row in rows)
+    rows = [row for row in rows if row['hidden'] == (query.get('hidden') == '1')]
     stats = {'total': len(rows), **{key: sum(r['state'] == key for r in rows)
                                   for key in ('normal', 'expiring', 'expired')}}
     stats['error'] = sum(r['state'] in ('error', 'stale', 'unknown', 'unconfigured') for r in rows)
     rows.sort(key=lambda r: (r['expires_at'] is None, r['expires_at'] or '', r['domain'], r['id']))
     rows = [r for r in rows if not state or r['state'] == state or state == 'error' and
             r['state'] in ('stale', 'unknown', 'unconfigured')]
-    return {'items': rows[(page - 1) * size:page * size], 'total': len(rows), 'stats': stats,
+    return {'items': rows[(page - 1) * size:page * size], 'total': len(rows), 'stats': stats, 'hidden_count': hidden_count,
             'sources': all_sources, 'active_jobs': [job_view(j) for j in SSLJob.objects.filter(owner_id=user.pk, state__in=ACTIVE)[:50]]}
 
 

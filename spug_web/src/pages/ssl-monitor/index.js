@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Input, Select } from 'antd';
+import { Alert, Button, Checkbox, Input, Select } from 'antd';
 import { CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, GlobalOutlined, ReloadOutlined, SafetyCertificateOutlined, SettingOutlined } from '@ant-design/icons';
 import { Breadcrumb } from 'components';
 import { hasPermission, http } from 'libs';
@@ -29,6 +29,8 @@ export default function SSLMonitor() {
   const [jobId, setJobId] = useState(null), [guidance, setGuidance] = useState(null), [actionError, setActionError] = useState('');
   const [preflighting, setPreflighting] = useState(null), [checking, setChecking] = useState(false), [queued, setQueued] = useState([]);
   const [reminderRevision, setReminderRevision] = useState(0), [muting, setMuting] = useState(null);
+  const [savingVisibility, setSavingVisibility] = useState(null);
+  const visibilityLock = useRef(false);
   const muteLock = useRef(false);
   const mounted = useRef(false), preflightLock = useRef(false), checkLock = useRef(false), owner = useRef(localStorage.getItem('id'));
   const sameOwner = () => owner.current === localStorage.getItem('id') && hasPermission('admin');
@@ -51,6 +53,17 @@ export default function SSLMonitor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowed, visible, filters, page, pageSize, revision]);
   function filter(key, value) {setFilters(current => ({...current, [key]: value})); setPage(1);}
+  async function setVisibility(row) {
+    if (visibilityLock.current || !sameOwner() || !/^[a-f0-9]{64}$/.test(row.cycle || '')) return;
+    visibilityLock.current = true; setSavingVisibility(row.id); setActionError('');
+    const hidden = !row.hidden;
+    try {
+      const saved = await http.post(`${API}certificates/${row.id}/visibility/`, {hidden, cycle: row.cycle});
+      if (saved?.id !== row.id || saved.hidden !== hidden || saved.cycle !== row.cycle) throw new Error('Unconfirmed visibility');
+      if (mounted.current && sameOwner()) {setPage(1); refresh();}
+    } catch (_) {if (mounted.current && sameOwner()) setActionError('显示设置保存失败，请刷新列表后重试。');}
+    finally {visibilityLock.current = false; if (mounted.current && sameOwner()) setSavingVisibility(null);}
+  }
   async function muteReminder(row) {
     if (muteLock.current || !row.reminder || !sameOwner()) return;
     muteLock.current = true; setMuting(row.id); setActionError('');
@@ -97,12 +110,15 @@ export default function SSLMonitor() {
       ? <Button type="link" size="small" title="仅当前账号、本次证书到期周期生效" disabled={muting !== null || loading || !!error}
           loading={muting === row.id} onClick={() => muteReminder(row)}>{row.reminder.muted ? '恢复提醒' : '不再提醒'}</Button>
       : <span className={styles.secondaryInline}>{sources.find(source => source.key === row.source_key)?.reminders ? '暂无到期提醒' : '未开启提醒'}</span>},
-    {title: '操作', key: 'actions', width: 150, fixed: 'right', render: (_, row) => <div className={styles.rowActions}>
+    {title: '操作', key: 'actions', width: 205, fixed: 'right', render: (_, row) => <div className={styles.rowActions}>
       <Button type="link" onClick={() => setDetail(row)}>详情</Button>
       {row.latest_job_id && <Button type="link" onClick={() => setJobId(row.latest_job_id)}>任务</Button>}
       {row.renewal?.supported && !row.stale && !['unknown', 'unconfigured', 'error'].includes(certificateState(row))
         ? <Button type="link" loading={preflighting === row.id} disabled={preflighting !== null || !!error} onClick={() => preflight(row)}>续签</Button>
         : <Button type="link" onClick={() => setGuidance(row)}>配置指导</Button>}
+      {(row.hidden || certificateState(row) === 'expired') && /^[a-f0-9]{64}$/.test(row.cycle || '') &&
+        <Button type="link" title="仅当前账号、本次证书周期生效；提醒设置独立" disabled={savingVisibility !== null || loading || !!error}
+          loading={savingVisibility === row.id} onClick={() => setVisibility(row)}>{row.hidden ? '恢复显示' : '隐藏'}</Button>}
     </div>},
   ];
   if (!allowed || !sameOwner()) return null;
@@ -131,10 +147,13 @@ export default function SSLMonitor() {
             options={sources.filter(source => !filters.group || source.groups?.some(group => group.key === filters.group)).map(source => ({value: source.key, label: `${source.name} · ${source.kind === 'panel' ? '宝塔' : 'SSH'}`}))}/>
           <Select aria-label="证书状态筛选" allowClear placeholder="全部状态" value={filters.state} onChange={value => filter('state', value)} options={Object.entries(states).map(([value, label]) => ({value, label}))}/>
           <Button icon={<ReloadOutlined/>} loading={loading} onClick={refresh}>刷新缓存</Button>
+          <Checkbox aria-label="查看已隐藏证书" checked={filters.hidden === '1'} onChange={event => filter('hidden', event.target.checked ? '1' : undefined)}>
+            查看已隐藏（{data?.hidden_count ?? 0}）</Checkbox>
         </div>
-        <div className={styles.tableHeader}><h2>证书列表 <span>共 {data?.total ?? '—'} 个域名</span></h2><span>到期优先 · 时间 UTC+8</span></div>
-        <ResizableTable className={styles.table} resizeKey="ssl-certificates" rowKey="id" loading={loading} columns={columns} dataSource={data?.items || []} scroll={{x: 1590}}
-          locale={{emptyText: error ? '缓存读取失败' : '暂无证书。请在来源设置中明确开启主机或宝塔面板巡检。'}}
+        <div className={styles.tableHeader}><h2>{filters.hidden === '1' ? '已隐藏证书' : '证书列表'} <span>共 {data?.total ?? '—'} 个域名</span></h2>
+          <span>{filters.hidden === '1' ? '仅当前账号 · 可恢复显示' : '到期优先'} · 时间 UTC+8</span></div>
+        <ResizableTable className={styles.table} resizeKey="ssl-certificates" rowKey="id" loading={loading} columns={columns} dataSource={data?.items || []} scroll={{x: 1645}}
+          locale={{emptyText: error ? '缓存读取失败' : filters.hidden === '1' ? '当前筛选下没有已隐藏证书。' : data?.hidden_count ? '当前筛选下没有可见证书，可勾选“查看已隐藏”恢复显示。' : '当前筛选下没有证书，可调整筛选或在来源设置中开启巡检。'}}
           pagination={{current: page, pageSize, total: data?.total || 0, showSizeChanger: true, showTotal: total => `共 ${total} 条`,
             onChange: (next, size) => {setPage(size === pageSize ? next : 1); setPageSize(size);}}}/>
       </section>

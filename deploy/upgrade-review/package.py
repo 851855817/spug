@@ -180,10 +180,11 @@ PANEL_WORKSPACE_UI = {'spug_web/src/routes.js', 'spug_web/src/pages/exec/panel/i
                       'spug_web/src/pages/exec/panel/TaskDetail.js'}
 CONTINUOUS_MODULES = ('apps/ops/service.py', 'apps/ops/worker.py', 'apps/ops/runner.py')
 SSL_SSH_MODULES = ('apps/monitor/ssl/remote_probe.py', 'apps/monitor/ssl/collectors.py', 'apps/monitor/ssl/service.py')
+SSL_VISIBILITY_MODULES = ('apps/monitor/ssl/service.py', 'apps/monitor/ssl/views.py', 'apps/monitor/ssl/urls.py')
 CONTINUOUS_UI = {'spug_web/src/pages/exec/operations/RunForm.js', UI_FILE}
 PROFILES = {'continuous-inspections': CONTINUOUS_MODULES, 'php-update': API_FILE, 'host-report': HEALTH_FILE, 'operations-ui': None, 'task-results-ui': None,
             'panel-login': LOGIN_MODULES, 'inventory-filters': INVENTORY_FILE, 'workbench-ui': None, 'branding-ui': None, 'personal-reminders-ui': None, 'inventory-role-presets-ui': None,
-            'ssl-ssh-discovery': SSL_SSH_MODULES, 'ssl-ssh-python36': 'apps/monitor/ssl/remote_probe.py', 'ssl-reminder-actions': 'apps/monitor/ssl/service.py', 'ssl-renew-diagnostics': SSL_FILE, 'site-appearance': APPEARANCE_MODULES,
+            'ssl-certificate-visibility': SSL_VISIBILITY_MODULES, 'ssl-ssh-discovery': SSL_SSH_MODULES, 'ssl-ssh-python36': 'apps/monitor/ssl/remote_probe.py', 'ssl-reminder-actions': 'apps/monitor/ssl/service.py', 'ssl-renew-diagnostics': SSL_FILE, 'site-appearance': APPEARANCE_MODULES,
             'scheduled-panel-tasks': SCHEDULED_PANEL_MODULES,
             'refined-palettes': APPEARANCE_FILE, 'branding-cleanup-ui': None, 'self-use-branding-ui': None, 'sidebar-collapse-ui': None, 'hide-first-batch-ui': None, 'panel-workspace-ui': None, 'hide-site-inventory-ui': None, 'login-warning-ui': None}
 HELPERS = ('apply-expiry.py', 'deploy-compact-ui.py', 'fingerprint.py', 'release_safety.py')
@@ -216,6 +217,14 @@ def validate_runtime_changes(names, profile='php-update'):
                     BRANDING_CLEANUP_UI if profile == 'branding-cleanup-ui' else SELF_USE_BRANDING_UI)
         if api or ui != expected:
             raise ValueError('UI release only accepts its exact reviewed UI files and no API files')
+    elif profile == 'ssl-certificate-visibility':
+        api = {name for name in names if name.startswith('spug_api/')} - {
+            'spug_api/apps/monitor/ssl/tests.py'}
+        ui = {name for name in names if name.startswith('spug_web/')} - {
+            'spug_web/src/pages/ssl-monitor/index.test.js'}
+        if api != {'spug_api/' + name for name in SSL_VISIBILITY_MODULES} or ui != {
+                'spug_web/src/pages/ssl-monitor/index.js', 'spug_web/src/pages/ssl-monitor/index.module.less'}:
+            raise ValueError('SSL visibility requires exactly its three existing API and two UI files')
     elif profile == 'ssl-ssh-python36':
         api = {name for name in names if name.startswith('spug_api/')} - {
             'spug_api/apps/monitor/ssl/test_collectors.py'}
@@ -280,8 +289,8 @@ def write_manifests(stage, revision, previous_revision, previous_content,
     module = profile_module(profile)
     if not all(re.fullmatch(r'[0-9a-f]{40}', value) for value in (revision, previous_revision)):
         raise ValueError('Invalid release revision')
-    if profile in ('continuous-inspections', 'ssl-ssh-discovery'):
-        modules = SSL_SSH_MODULES if profile == 'ssl-ssh-discovery' else CONTINUOUS_MODULES
+    if profile in ('continuous-inspections', 'ssl-ssh-discovery', 'ssl-certificate-visibility'):
+        modules = PROFILES[profile]
         if (not isinstance(previous_content, dict) or set(previous_content) != set(modules) or
                 not all(isinstance(value, bytes) for value in previous_content.values())):
             raise ValueError('Continuous inspections requires three existing baseline modules')
@@ -312,12 +321,12 @@ def write_manifests(stage, revision, previous_revision, previous_content,
         previous_hashes = {name: hashlib.sha256(content).hexdigest() if content is not None else None
                            for name, content in previous_content.items()}
     else:
-        if profile in ('inventory-filters', 'ssl-renew-diagnostics', 'ssl-reminder-actions', 'ssl-ssh-python36', 'refined-palettes') and not isinstance(previous_content, bytes):
+        if profile in ('inventory-filters', 'ssl-renew-diagnostics', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'refined-palettes') and not isinstance(previous_content, bytes):
             raise ValueError('Selected API module must already exist in the baseline')
         api_hashes = {module: sha256(stage / 'source/spug_api' / module)} if module else {}
         previous_hashes = {module: hashlib.sha256(previous_content).hexdigest()} if module else {}
     preserved_hashes = {}
-    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-ssh-discovery', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
+    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-ssh-discovery', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
         if ((profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui') and previous_content is not None) or not isinstance(preserved_content, dict) or
                 set(preserved_content) != {API_FILE, HEALTH_FILE} or
                 not all(isinstance(value, bytes) for value in preserved_content.values())):
@@ -398,8 +407,8 @@ def main():
         'release_safety.py': repo / 'deploy/inventory/release_safety.py',
     }.items():
         (stage / name).write_bytes(source.read_bytes().replace(b'\r\n', b'\n'))
-    if args.profile in ('continuous-inspections', 'ssl-ssh-discovery'):
-        modules = SSL_SSH_MODULES if args.profile == 'ssl-ssh-discovery' else CONTINUOUS_MODULES
+    if args.profile in ('continuous-inspections', 'ssl-ssh-discovery', 'ssl-certificate-visibility'):
+        modules = PROFILES[args.profile]
         old_content = {name: git('show', previous + ':spug_api/' + name).replace(b'\r\n', b'\n')
                        for name in modules}
     elif args.profile == 'scheduled-panel-tasks':
@@ -421,14 +430,14 @@ def main():
                        git('show', previous + ':spug_api/apps/baota/urls.py').replace(b'\r\n', b'\n')}
     else:
         old_content = git('show', previous + ':spug_api/' + module).replace(b'\r\n', b'\n') if module else None
-    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-ssh-discovery', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
+    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-ssh-discovery', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
         preserved_content = {name: git('show', previous + ':spug_api/' + name).replace(b'\r\n', b'\n')
                              for name in (API_FILE, HEALTH_FILE)}
     else:
         preserved_content = (git('show', previous + ':spug_api/' + API_FILE).replace(b'\r\n', b'\n')
                              if args.profile == 'host-report' else None)
     write_manifests(stage, revision, previous, old_content, args.profile, preserved_content)
-    modules = SSL_SSH_MODULES if args.profile == 'ssl-ssh-discovery' else CONTINUOUS_MODULES if args.profile == 'continuous-inspections' else SCHEDULED_PANEL_MODULES if args.profile == 'scheduled-panel-tasks' else APPEARANCE_MODULES if args.profile == 'site-appearance' else LOGIN_MODULES if args.profile == 'panel-login' else (module,) if module else ()
+    modules = module if isinstance(module, tuple) else (module,) if module else ()
     (stage / 'Dockerfile').write_text(
         'FROM spug-baota:' + previous[:7] + '\nARG SOURCE_REVISION\n'
         'LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"\n'
