@@ -227,21 +227,117 @@ class Reader:
         return sorted(result)
 
 
+class NginxWord(str):
+    """Keep quoted punctuation distinguishable from a structural delimiter."""
+
+
+def nginx_delimiter(token, choices=';{}'):
+    return type(token) is str and token in choices
+
+
+NGINX_LUA_BLOCKS = frozenset((
+    'set_by_lua_block', 'rewrite_by_lua_block', 'access_by_lua_block',
+    'content_by_lua_block', 'header_filter_by_lua_block', 'body_filter_by_lua_block',
+    'log_by_lua_block', 'init_by_lua_block', 'init_worker_by_lua_block',
+    'balancer_by_lua_block',
+))
+
+
+def nginx_lua_end(text, index):
+    """Skip an opaque Lua body without evaluating it or treating it as config."""
+    depth = 1
+    while index < len(text):
+        char = text[index]
+        comment = text.startswith('--', index)
+        start = index + 2 if comment else index
+        bracket = re.match(r'\[(=*)\[', text[start:]) if text[start:start + 1] == '[' else None
+        if bracket:
+            ending = ']' + bracket[1] + ']'
+            found = text.find(ending, start + len(bracket[0]))
+            if found < 0:
+                raise ProbeError('configuration_syntax')
+            index = found + len(ending)
+        elif comment:
+            found = text.find('\n', start)
+            if found < 0:
+                raise ProbeError('configuration_syntax')
+            index = found + 1
+        elif char in ('"', "'"):
+            quote = char
+            index += 1
+            while index < len(text):
+                char = text[index]
+                index += 1
+                if char == '\\':
+                    index += 1
+                elif char == quote:
+                    break
+            else:
+                raise ProbeError('configuration_syntax')
+        else:
+            index += 1
+            if char == '{':
+                depth += 1
+            elif char == '}':
+                depth -= 1
+                if depth == 0:
+                    return index
+    raise ProbeError('configuration_syntax')
+
+
 def nginx_tokens(text):
-    lexer = shlex.shlex(text, posix=True, punctuation_chars=';{}')
-    lexer.whitespace_split = True
-    lexer.commenters = '#'
-    # Preserve escapes: a target-controlled escaped path is never normalized into
-    # a literal file path. This conservative grammar reports unsupported syntax.
-    lexer.escape = ''
-    try:
-        tokens = list(lexer)
-    except ValueError:
-        raise ProbeError('configuration_syntax') from None
-    result = []
-    for token in tokens:
-        result.extend(list(token) if token and all(c in ';{}' for c in token) else [token])
-    return result
+    # Python 3.6 shlex ignores punctuation_chars with whitespace_split=True.
+    # Parse the bounded Nginx input directly so remote Python versions agree.
+    tokens, word = [], []
+    quote, started, comment, index, directive_start = '', False, False, 0, 0
+    while index < len(text):
+        char = text[index]
+        index += 1
+        if comment:
+            comment = char != '\n'
+            continue
+        if char == '\\':
+            if index == len(text):
+                raise ProbeError('configuration_syntax')
+            # Preserve rather than evaluate escapes; certificate/include paths
+            # with escapes remain nonliteral and cannot become executable plans.
+            word.extend((char, text[index]))
+            index += 1
+            started = True
+        elif quote:
+            if char == quote:
+                quote = ''
+            else:
+                word.append(char)
+        elif char in ('"', "'"):
+            quote, started = char, True
+        elif char == '#' and not started:
+            comment = True
+        elif char.isspace() or char in ';{}':
+            if started:
+                tokens.append(NginxWord(''.join(word)))
+                word, started = [], False
+            if char in ';{}':
+                directive = tokens[directive_start] if len(tokens) > directive_start else ''
+                if char == '{' and 'lua' in directive:
+                    if directive not in NGINX_LUA_BLOCKS:
+                        raise ProbeError('dynamic_configuration')
+                    index = nginx_lua_end(text, index)
+                    # Preserve the directive so nginx_sites disables reload for
+                    # the complete service, while no Lua text becomes includes.
+                    tokens.extend(('{', '}'))
+                    directive_start = len(tokens)
+                    continue
+                tokens.append(char)
+                directive_start = len(tokens)
+        else:
+            word.append(char)
+            started = True
+    if quote:
+        raise ProbeError('configuration_syntax')
+    if started:
+        tokens.append(NginxWord(''.join(word)))
+    return tokens
 
 
 def nginx_document(reader, path, stack=(), depth=0, prefix=None):
@@ -254,7 +350,7 @@ def nginx_document(reader, path, stack=(), depth=0, prefix=None):
     prefix = prefix or os.path.dirname(path).replace('\\', '/')
     result, words = [], []
     for token in tokens:
-        if token == ';':
+        if nginx_delimiter(token, ';'):
             if words and words[0].lower() == 'include':
                 if len(words) != 2:
                     raise ProbeError('dynamic_configuration')
@@ -269,7 +365,7 @@ def nginx_document(reader, path, stack=(), depth=0, prefix=None):
             else:
                 result.extend(words + [';'])
             words = []
-        elif token in '{}':
+        elif nginx_delimiter(token, '{}'):
             result.extend(words + [token])
             words = []
         else:
@@ -284,7 +380,7 @@ def nginx_sites(reader, path):
     contexts, words, sites, pids = [], [], [], []
     reload_safe = True
     for token in tokens:
-        if token == '{':
+        if nginx_delimiter(token, '{'):
             if not words:
                 raise ProbeError('configuration_syntax')
             if words[0].startswith('ssl_certificate'):
@@ -299,13 +395,13 @@ def nginx_sites(reader, path):
                 raise ProbeError('dynamic_configuration')
             contexts.append((words[0], site))
             words = []
-        elif token == '}':
+        elif nginx_delimiter(token, '}'):
             if words or not contexts:
                 raise ProbeError('configuration_syntax')
             _, site = contexts.pop()
             if site is not None:
                 sites.append(site)
-        elif token == ';':
+        elif nginx_delimiter(token, ';'):
             if not words:
                 raise ProbeError('configuration_syntax')
             site = next((item for _, item in reversed(contexts) if item is not None), None)

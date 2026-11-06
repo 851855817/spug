@@ -86,6 +86,79 @@ ssl_certificate /srv/tls/fullchain.pem; ssl_certificate_key /srv/tls/private.key
 }''')
         self.assertEqual(self.scan()['warnings'], [])
 
+    def test_nginx_discovery_is_independent_of_python36_shlex_punctuation_bug(self):
+        original = remote_probe.shlex.shlex
+        def python36_shlex(*args, **kwargs):
+            # Python 3.6 ignores punctuation_chars when whitespace_split=True.
+            # All other shlex use (ACME literals) keeps the real implementation.
+            kwargs.pop('punctuation_chars', None)
+            return original(*args, **kwargs)
+        self.write('/etc/nginx/nginx.conf', '''events {
+use epoll; worker_connections 51200; multi_accept on;
+} http { include /etc/nginx/sites-enabled/*; }''')
+        with mock.patch.object(remote_probe.shlex, 'shlex', side_effect=python36_shlex):
+            result = self.scan()
+        self.assertEqual({item['domain'] for item in result['items']}, {'example.com', '*.example.com'})
+
+    def test_nginx_quoted_delimiters_and_empty_values_are_literal_words(self):
+        self.write('/etc/nginx/nginx.conf', '''events{} http {
+log_format combined '$remote_addr; } { # log data';
+map $http_origin $label { default "}"; "" ";"; }
+include /etc/nginx/sites-enabled/*;
+}''')
+        self.write('/etc/nginx/sites-enabled/example.conf', '''server {
+listen 443 ssl; server_name example.com;
+ssl_certificate "/srv/tls/fullchain.pem";
+ssl_certificate_key /srv/tls/private.key;
+set $empty ""; add_header X-Example "{";
+}''')
+        self.assertEqual([item['domain'] for item in self.scan()['items']], ['example.com'])
+
+    def test_nginx_unclosed_quote_and_escaped_certificate_paths_remain_rejected(self):
+        self.write('/etc/nginx/sites-enabled/example.conf', 'server { server_name "example.com; }')
+        with self.assertRaisesRegex(remote_probe.ProbeError, 'configuration_syntax'):
+            self.scan()
+        self.write('/etc/nginx/sites-enabled/example.conf', r'''server {
+listen 443 ssl; server_name example.com;
+ssl_certificate /srv/tls/fullchain\.pem;
+}''')
+        with self.assertRaisesRegex(remote_probe.ProbeError, 'dynamic_configuration'):
+            self.scan()
+
+    def test_baota_well_known_inline_lua_is_opaque_and_disables_automatic_reload(self):
+        self.certbot()
+        self.write('/etc/nginx/sites-enabled/example.conf', '''server {
+listen 443 ssl; server_name example.com;
+ssl_certificate /srv/tls/fullchain.pem; ssl_certificate_key /srv/tls/private.key;
+include /www/server/panel/vhost/nginx/well-known/example.com.conf;
+}''')
+        self.write('/www/server/panel/vhost/nginx/well-known/example.com.conf', '''
+if ($uri ~ "^/.well-known/") {
+set_by_lua_block $validation {
+    -- a comment with } and an include /tmp/not-a-config;
+    local text = [=[ } { include /tmp/not-a-config; ]=]
+    --[==[ another unmatched } comment ]==]
+    local values = { ["quoted}"] = "\\\"}" }
+    if text then return "ok" end
+}
+}
+''')
+        snapshot = self.scan()
+        self.assertEqual([item['domain'] for item in snapshot['items']], ['example.com'])
+        self.assertFalse(snapshot['items'][0]['renewal']['supported'])
+        self.assertEqual(snapshot['items'][0]['renewal']['reason_code'], 'unverified_service')
+
+    def test_inline_lua_cannot_hide_dynamic_certificate_or_unterminated_block(self):
+        for directive in ('ssl_certificate_by_lua_block', 'ssl_client_hello_by_lua_block'):
+            self.write('/etc/nginx/sites-enabled/example.conf', '''server {
+listen 443 ssl; server_name example.com; ssl_certificate /srv/tls/fullchain.pem;
+''' + directive + ' { return nil } }')
+            with self.assertRaises(remote_probe.ProbeError):
+                self.scan()
+        self.write('/etc/nginx/sites-enabled/example.conf', 'set_by_lua_block $value { local x = [[unfinished }')
+        with self.assertRaisesRegex(remote_probe.ProbeError, 'configuration_syntax'):
+            self.scan()
+
     def test_relative_nginx_include_uses_main_configuration_prefix(self):
         self.write('/etc/nginx/sites-enabled/example.conf', 'include snippets/ssl-site.conf;')
         self.write('/etc/nginx/snippets/ssl-site.conf', '''server {
