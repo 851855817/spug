@@ -1,0 +1,219 @@
+{
+  "fixture": "http://127.0.0.1:53595",
+  "real_headless_browser": true,
+  "fresh_temporary_profile": true,
+  "resolver_blocks_non_loopback": true,
+  "mocked_api_only": true,
+  "assertions": [
+    "six statistic cards are present",
+    "unconfigured and failures have independent counts",
+    "only current results are present",
+    "unconfigured reason is explicit",
+    "unconfigured row cannot renew",
+    "unconfigured statistic filters separately",
+    "detail describes main config without claiming include audit",
+    "public mismatch and observed SAN remain visible",
+    "empty local certificate facts are removed",
+    "unconfigured advice is apply and deploy first",
+    "main cause appears once with an actionable advice label",
+    "failure filter excludes unconfigured rows",
+    "failure explains public certificate read problem",
+    "total restores all current rows",
+    "deep link retains independent unconfigured filter",
+    "six cards fit the compact dark viewport",
+    "narrow layout retains all six clickable cards",
+    "only recognized local GETs; no remote job or personal write",
+    "no mutations during display and filter checks",
+    "all page traffic stays on loopback"
+  ],
+  "runtime_exceptions": [],
+  "console_errors": [],
+  "network_requests": [
+    {
+      "url": "http://127.0.0.1:53595/monitor/ssl",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/static/css/main.7ec9666e.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/static/js/2.31c0bd1a.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/static/js/main.90b63871.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/api/monitor/ssl/?state=unconfigured&page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/api/monitor/ssl/?state=error&page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/monitor/ssl?state=unconfigured",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/static/css/main.7ec9666e.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/static/js/2.31c0bd1a.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/static/js/main.90b63871.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/api/monitor/ssl/?state=unconfigured&page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:53595/kops-20261027/favicon.svg",
+      "method": "GET"
+    }
+  ],
+  "blocked_outbound_requests": [],
+  "screenshots": [
+    "docs/releases/ssl-configuration-shots/01-six-statistics.png",
+    "docs/releases/ssl-configuration-shots/02-disabled-details.png",
+    "docs/releases/ssl-configuration-shots/03-dark-unconfigured.png",
+    "docs/releases/ssl-configuration-shots/04-narrow-cards.png"
+  ],
+  "revision": "4739172403439e5e5a0ab37c733509714d4c35ee",
+  "working_tree_dirty": false,
+  "tested_ui_source_sha256": {
+    "src/pages/ssl-monitor/index.js": "9711de55613b44430f83ff47022833d20bdb7f3c72a1e317e2483305a9519c14",
+    "src/pages/ssl-monitor/index.module.less": "bd63f0bc3d45dfbba0e2de627e19510851bb2c4871c371d43d93c73b0490bf8c",
+    "src/pages/ssl-monitor/helpers.js": "3901569db0049f5fa873122e3d7cf19c62ef2698ee6b68b84b51329726799138",
+    "src/pages/ssl-monitor/CertificateDetail.js": "00a2bcc9c6979248563a4457180c525fd3a8273af177e753ad3969526e8f6d25"
+  },
+  "mock_requests": [
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    }
+  ],
+  "passed": true,
+  "mock_personal_writes": 0,
+  "customer_requests": 0,
+  "build_asset": "/static/js/main.90b63871.chunk.js",
+  "build_asset_sha256": "2b9483cb96d86a36d56ac20a6b5ceca88e75d5a985a5ceb9effc2168b2cbdd81"
+}

@@ -1,0 +1,95 @@
+{
+  "revision": "4739172403439e5e5a0ab37c733509714d4c35ee",
+  "previous_revision": "0cff37e5750e532fcc0563240c5eea542ff6e0db",
+  "published": true,
+  "backup": "/opt/spug/backups/20261106-154851-before-upgrade-4739172-a1196802",
+  "enabled_host_sources_without_snapshot": 0,
+  "initial_failure_status_not_misreported": true,
+  "fixed_diagnostics_available": true,
+  "current_ssl_listing_rows": 12,
+  "current_certificate_stats": {
+    "total": 12,
+    "normal": 10,
+    "expiring": 0,
+    "expired": 0,
+    "unconfigured": 0,
+    "error": 2
+  },
+  "hidden_current_certificates": 8,
+  "historical_stale_rows_excluded": 0,
+  "all_existing_snapshots_retained": 20,
+  "stale_query_empty": true,
+  "read_only_local_database": true,
+  "paired_backup_valid": true,
+  "business_and_schema_unchanged": true,
+  "preservation_objects": 69,
+  "ssl_table_counts_preserved": {
+    "monitor_ssl_certificates": 20,
+    "monitor_ssl_jobs": 73,
+    "monitor_ssl_leases": 2,
+    "monitor_ssl_reminder_preferences": 8,
+    "monitor_ssl_reminders": 8,
+    "monitor_ssl_sources": 4
+  },
+  "complete_api_trees_preserved_except_configuration_modules": true,
+  "api_overlay_paths": [
+    "apps/monitor/ssl/collectors.py",
+    "apps/monitor/ssl/jobs.py",
+    "apps/monitor/ssl/service.py"
+  ],
+  "api_tree_sizes": [
+    247,
+    287
+  ],
+  "api_and_ui_receipts_valid": true,
+  "services_running": 9,
+  "original_preserved_pids": true,
+  "health_checks_ok": 15,
+  "health_timer": "active",
+  "internal_http": 200,
+  "server_https": 200,
+  "compiled_release_binding": true,
+  "original_license": true,
+  "public_https": 200,
+  "release_profile": "ssl-configuration-status",
+  "post_publication_readonly_check": {
+    "job": {
+      "id": 74,
+      "kind": "check",
+      "state": "success",
+      "phase": "finished"
+    },
+    "source_count": 2,
+    "stats": {
+      "total": 12,
+      "normal": 10,
+      "expiring": 0,
+      "expired": 0,
+      "unconfigured": 2,
+      "error": 0
+    },
+    "reported_site_rows": [
+      {
+        "state": "unconfigured",
+        "message": "宝塔未开启 SSL，网站主配置未绑定证书",
+        "stale": false,
+        "sampled_at": "2026-11-06T07:51:21.516983+00:00",
+        "renewal_supported": false,
+        "renewal_reason": "请先在宝塔申请并部署证书，再重新巡检",
+        "public_tls_message": "公网证书域名不匹配"
+      },
+      {
+        "state": "unconfigured",
+        "message": "宝塔未开启 SSL，网站主配置未绑定证书",
+        "stale": false,
+        "sampled_at": "2026-11-06T07:51:29.750126+00:00",
+        "renewal_supported": false,
+        "renewal_reason": "请先在宝塔申请并部署证书，再重新巡检",
+        "public_tls_message": "公网证书域名不匹配"
+      }
+    ],
+    "configuration_mutations": 0,
+    "renewals": 0,
+    "source_settings_changed": false
+  }
+}
