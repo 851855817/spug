@@ -110,6 +110,23 @@ test('enabled source failures remain explicit without displaying disabled source
   expect(http.post).not.toHaveBeenCalled();
 });
 
+test('an open certificate detail follows fresh results and closes when its snapshot becomes stale', async () => {
+  await render(<SSLMonitor/>);
+  await click('详情');
+  expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+  const original = http.get.getMockImplementation();
+  let items = [{...row, expires_at: '2027-01-05T12:00:00Z',
+    local_certificate: {...row.local_certificate, expires_at: '2027-01-05T12:00:00Z'}}];
+  http.get.mockImplementation(path => path === '/api/monitor/ssl/' ? Promise.resolve({items,
+    total: items.length, stats: {}, sources: [source], active_jobs: []}) : original(path));
+  await act(async () => {jest.advanceTimersByTime(30000); await flush();});
+  expect(container.querySelector('[role="dialog"]').textContent).toContain('2027-01-05');
+  items = [];
+  await act(async () => {jest.advanceTimersByTime(30000); await flush();});
+  expect(container.querySelector('[role="dialog"]')).toBeNull();
+  expect(http.post).not.toHaveBeenCalled();
+});
+
 test('renewal result explicitly reports local deployment, reload and public TLS separately', async () => {
   http.get.mockResolvedValue({...prepared, state: 'failed', result: {local_updated: true, reload_verified: true, public_updated: false}});
   await render(<Renewal jobId={8} onClose={() => {}}/>);

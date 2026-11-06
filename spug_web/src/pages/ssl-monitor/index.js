@@ -41,8 +41,14 @@ export default function SSLMonitor() {
     let valid = true, timer, delay = 30000;
     setLoading(true); setError('');
     http.get(API, {params: {...filters, page, page_size: pageSize}}).then(result => {
-      if (valid && sameOwner()) {setData(result); setQueued([]); delay = result.active_jobs?.some(isPollingJob) ? 2500 : 30000;}
-    }, () => {if (valid && sameOwner()) {setData(null); setError('读取 SSL 巡检结果失败，请刷新重试。');}}).finally(() => {
+      if (valid && sameOwner()) {
+        const currentRows = (result.items || []).filter(row => !row.stale && row.state !== 'stale');
+        setData({...result, items: currentRows}); setQueued([]);
+        setDetail(current => current ? currentRows.find(row => row.id === current.id) || null : null);
+        setGuidance(current => current ? currentRows.find(row => row.id === current.id) || null : null);
+        delay = result.active_jobs?.some(isPollingJob) ? 2500 : 30000;
+      }
+    }, () => {if (valid && sameOwner()) {setData(null); setDetail(null); setGuidance(null); setError('读取 SSL 巡检结果失败，请刷新重试。');}}).finally(() => {
       if (valid && sameOwner()) {
         setLoading(false);
         timer = window.setTimeout(() => setRevision(value => value + 1), delay);
