@@ -1,8 +1,13 @@
 """The resource permission release is distinct from the old SSL contract."""
 import copy
+import configparser
 import importlib.util
 import json
 from pathlib import Path
+import shlex
+import subprocess
+import sys
+import tempfile
 import unittest
 
 
@@ -126,6 +131,56 @@ class FrozenMigrationTests(unittest.TestCase):
         for name in ('tools/other.py', 'tools/migrate.json', 'tools/../migrate.py', '/tools/migrate.py'):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'image-copy-path-invalid'):
                 contract.dockerfiles(*arguments, preserved_api_sha256={name: 'c' * 64})
+
+    def image_supervisor_script(self, image):
+        commands = [shlex.split(line[len('RUN '):]) for line in image.splitlines()
+                    if line.startswith('RUN python3 -c ')]
+        self.assertEqual(len(commands), 1, 'Each derived image must configure the exact nine services')
+        self.assertEqual(commands[0][:2], ['python3', '-c'])
+        return commands[0][2]
+
+    def test_both_derived_images_restore_known_ops_worker_and_pin_exact_service_sets(self):
+        contract = load(self, 'contract.py')
+        names = {'nginx', 'redis', 'spug-api', 'spug-ws', 'spug-worker', 'spug-monitor',
+                 'spug-scheduler', 'spug-panel-worker', 'spug-ops-worker'}
+        ops = configparser.ConfigParser(interpolation=None)
+        ops.read(HERE.parent / 'baota/ops-worker.ini')
+        images = contract.dockerfiles('a' * 40, contract.MIGRATIONS, {'apps/account/access.py': 'b' * 64})
+        for rollback, image in enumerate(images):
+            with self.subTest(rollback=bool(rollback)), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / 'supervisord.conf'
+                path.write_text('[supervisord]\nloglevel=info\n' + ''.join(
+                    '[program:%s]\ncommand=existing-%s\nautostart=true\nautorestart=true\n' % (name, name)
+                    for name in sorted(names - {'spug-ops-worker'})))
+                script = self.image_supervisor_script(image).replace('/etc/supervisord.conf', path.as_posix())
+                subprocess.check_call([sys.executable, '-c', script])
+                config = configparser.ConfigParser(interpolation=None)
+                config.read(path)
+                self.assertEqual({name[len('program:'):] for name in config.sections() if name.startswith('program:')}, names)
+                self.assertEqual(config['supervisord']['loglevel'], 'info')
+                expected_ops = dict(ops['program:spug-ops-worker'])
+                if rollback: expected_ops.update(autostart='false', autorestart='false')
+                self.assertEqual(dict(config['program:spug-ops-worker']), expected_ops)
+                for name in names:
+                    for key in ('autostart', 'autorestart'):
+                        self.assertEqual(config.getboolean('program:' + name, key), not rollback or name == 'redis')
+
+    def test_image_config_rejects_any_other_baseline_service_difference_without_writing(self):
+        contract = load(self, 'contract.py')
+        baseline = {'nginx', 'redis', 'spug-api', 'spug-ws', 'spug-worker', 'spug-monitor',
+                    'spug-scheduler', 'spug-panel-worker'}
+        images = contract.dockerfiles('a' * 40, contract.MIGRATIONS, {'apps/account/access.py': 'b' * 64})
+        for image in images:
+            script = self.image_supervisor_script(image)
+            for changed in (baseline - {'spug-worker'}, baseline | {'unexpected'}, baseline | {'spug-ops-worker'}):
+                with self.subTest(programs=changed), tempfile.TemporaryDirectory() as directory:
+                    path = Path(directory) / 'supervisord.conf'
+                    text = ''.join('[program:%s]\ncommand=existing\n' % name for name in sorted(changed))
+                    path.write_text(text)
+                    result = subprocess.run([sys.executable, '-c', script.replace('/etc/supervisord.conf', path.as_posix())],
+                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(path.read_text(), text)
 
 
 class SchemaPreservationTests(unittest.TestCase):

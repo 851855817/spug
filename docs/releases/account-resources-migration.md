@@ -72,6 +72,8 @@ python deploy/account-resources/stage.py --prepared "$STAGE" --scope "$SCOPE" --
 
 两个发布镜像从实际生产 `spug-baota:d48d73b` 构建，不能把页面 SHA 前缀当作旧镜像标签。固定旧镜像 ID 为 `sha256:752af29ea640270dc857178beebdde7a2ff8ac25ad1016b139f49e4e79388ce6`。逐个镜像执行以下检查；只挂探针，无源码挂载、网络或数据库：
 
+该基础镜像有 8 个服务段，现网后来增加了 `spug-ops-worker`。候选和回退镜像都先核验精确的旧 8 服务集合，再补入与仓库既有 `ops-worker.ini` 一致的公开配置，最后核验完整 9 服务；任何额外或其他缺失服务均拒绝构建。回退仅 Redis 可自动启动，不能因原镜像缺少该段而漏关执行器。
+
 ```sh
 docker build -t "spug-baota:$SHORT_SHA" -f "$STAGE/Dockerfile" "$STAGE"
 docker build -t "spug-baota:resource-rollback-$SHORT_SHA" -f "$STAGE/rollback.Dockerfile" "$STAGE"

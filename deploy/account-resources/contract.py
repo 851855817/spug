@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import shlex
 
 
 PROFILE = 'account-resources-v1'
@@ -149,6 +150,42 @@ def verify_additive(before, after, migration_facts):
             all(after['migrations'][k] == v for k, v in before['migrations'].items()), 'migration-history-changed')
 
 
+IMAGE_PROGRAMS = ('nginx', 'redis', 'spug-api', 'spug-ws', 'spug-worker', 'spug-monitor',
+                  'spug-scheduler', 'spug-panel-worker', 'spug-ops-worker')
+# Public configuration is frozen here because the production baseline image
+# predates this existing worker. Tests compare every option with ops-worker.ini.
+OPS_WORKER_INI = '''[program:spug-ops-worker]
+directory = /data/spug/spug_api
+command = python3 manage.py runopsworker
+autostart = true
+autorestart = true
+startsecs = 3
+stopsignal = TERM
+stopwaitsecs = 75
+stopasgroup = true
+killasgroup = true
+stdout_logfile = /data/spug/spug_api/logs/ops-worker.log
+stdout_logfile_maxbytes = 5MB
+stdout_logfile_backups = 3
+redirect_stderr = true
+'''
+
+
+def image_supervisor(rollback=False):
+    expected = tuple('program:' + name for name in IMAGE_PROGRAMS)
+    script = ("import configparser;from pathlib import Path;"
+              "p=Path('/etc/supervisord.conf');assert p.is_file() and not p.is_symlink();"
+              "c=configparser.ConfigParser(interpolation=None);assert c.read(p)==[str(p)];"
+              "expected=" + repr(expected) + ";"
+              "assert {n for n in c.sections() if n.startswith('program:')}==set(expected)-{'program:spug-ops-worker'};"
+              "c.read_string(" + repr(OPS_WORKER_INI) + ");"
+              "assert {n for n in c.sections() if n.startswith('program:')}==set(expected);")
+    if rollback:
+        script += "[(c.set(n,k,'false')) for n in expected if n!='program:redis' for k in ('autostart','autorestart')];"
+    script += "f=p.open('w');c.write(f);f.close()"
+    return 'RUN python3 -c ' + shlex.quote(script) + '\n'
+
+
 def dockerfiles(revision, migration_paths, api_sha256, preserved_api_sha256=None,
                 rollback_api_sha256=None, history_sha256=None):
     require(isinstance(revision, str) and re.fullmatch('[0-9a-f]{40}', revision)
@@ -163,18 +200,13 @@ def dockerfiles(revision, migration_paths, api_sha256, preserved_api_sha256=None
     paths = set(api_sha256) | set(migration_paths) | set(preserved_api_sha256 or {}) | set(rollback_api_sha256 or {}) | set(history_sha256 or {})
     require(all((p in ('manage.py', 'tools/migrate.py') or re.fullmatch(r'(apps|libs|consumer|spug)/[A-Za-z0-9_./-]+\.(py|json)', p))
                 and '..' not in p.split('/') for p in paths), 'image-copy-path-invalid')
-    candidate = (header + 'LABEL org.opencontainers.image.revision="' + revision + '"\n' + patch +
+    candidate = (header + 'LABEL org.opencontainers.image.revision="' + revision + '"\n' + patch + image_supervisor() +
                  'ENV KOPS_RESOURCE_AUDIT_LOG=/data/logs/resource-access.log\n' +
                  'COPY image-source/spug_api/ /opt/spug/spug_api/\n' +
                  'COPY build/ /opt/spug/spug_web/build/\n')
     hold = ("RUN test \"$(grep -Fxc 'python3 manage.py updatedb' /entrypoint.sh)\" -eq 1 && "
             "sed -i 's/^python3 manage.py updatedb$/: account-resource-maintenance-migrations-held/' /entrypoint.sh && "
             "! grep -Eq 'updatedb|makemigrations' /entrypoint.sh\n")
-    closed = ('RUN python3 -c "import configparser;from pathlib import Path;'
-              "p=Path('/etc/supervisord.conf');c=configparser.ConfigParser(interpolation=None);c.read(p);"
-              "names=[n for n in c.sections() if n.startswith('program:') and n!='program:redis'];"
-              "assert len(names)==8;[(c.set(n,k,'false')) for n in names for k in ('autostart','autorestart')];"
-              "f=p.open('w');c.write(f);f.close()\"\n")
     rollback = (header + 'LABEL org.opencontainers.image.revision="' + BASELINE['previous_revision'] + '"\n' +
-                hold + 'COPY rollback-image-source/spug_api/ /opt/spug/spug_api/\n' + closed)
+                hold + 'COPY rollback-image-source/spug_api/ /opt/spug/spug_api/\n' + image_supervisor(rollback=True))
     return candidate, rollback
