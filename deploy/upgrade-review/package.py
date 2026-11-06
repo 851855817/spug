@@ -184,7 +184,7 @@ SSL_VISIBILITY_MODULES = ('apps/monitor/ssl/service.py', 'apps/monitor/ssl/views
 CONTINUOUS_UI = {'spug_web/src/pages/exec/operations/RunForm.js', UI_FILE}
 PROFILES = {'continuous-inspections': CONTINUOUS_MODULES, 'php-update': API_FILE, 'host-report': HEALTH_FILE, 'operations-ui': None, 'task-results-ui': None,
             'panel-login': LOGIN_MODULES, 'inventory-filters': INVENTORY_FILE, 'workbench-ui': None, 'branding-ui': None, 'personal-reminders-ui': None, 'inventory-role-presets-ui': None,
-            'ssl-certificate-visibility': SSL_VISIBILITY_MODULES, 'ssl-ssh-discovery': SSL_SSH_MODULES, 'ssl-ssh-python36': 'apps/monitor/ssl/remote_probe.py', 'ssl-reminder-actions': 'apps/monitor/ssl/service.py', 'ssl-renew-diagnostics': SSL_FILE, 'site-appearance': APPEARANCE_MODULES,
+            'ssl-certificate-visibility': SSL_VISIBILITY_MODULES, 'ssl-ssh-discovery': SSL_SSH_MODULES, 'ssl-ssh-python36': 'apps/monitor/ssl/remote_probe.py', 'ssl-current-results': 'apps/monitor/ssl/service.py', 'ssl-reminder-actions': 'apps/monitor/ssl/service.py', 'ssl-renew-diagnostics': SSL_FILE, 'site-appearance': APPEARANCE_MODULES,
             'scheduled-panel-tasks': SCHEDULED_PANEL_MODULES,
             'refined-palettes': APPEARANCE_FILE, 'branding-cleanup-ui': None, 'self-use-branding-ui': None, 'sidebar-collapse-ui': None, 'hide-first-batch-ui': None, 'panel-workspace-ui': None, 'hide-site-inventory-ui': None, 'login-warning-ui': None}
 HELPERS = ('apply-expiry.py', 'deploy-compact-ui.py', 'fingerprint.py', 'release_safety.py')
@@ -261,12 +261,14 @@ def validate_runtime_changes(names, profile='php-update'):
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
         if runtime != {'spug_api/' + name for name in LOGIN_MODULES} or ui != LOGIN_UI:
             raise ValueError('Login release only accepts the fixed login API and UI changes')
-    elif profile == 'ssl-reminder-actions':
+    elif profile in ('ssl-current-results', 'ssl-reminder-actions'):
         api = {name for name in names if name.startswith('spug_api/')} - {'spug_api/apps/monitor/ssl/tests.py'}
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
-        if api != {'spug_api/apps/monitor/ssl/service.py'} or ui != {
-                'spug_web/src/pages/ssl-monitor/index.js', 'spug_web/src/pages/ssl-monitor/Reminders.js'}:
-            raise ValueError('SSL reminder actions require one existing service and the exact two UI files')
+        expected_ui = {'spug_web/src/pages/ssl-monitor/index.js'}
+        if profile == 'ssl-reminder-actions':
+            expected_ui.add('spug_web/src/pages/ssl-monitor/Reminders.js')
+        if api != {'spug_api/apps/monitor/ssl/service.py'} or ui != expected_ui:
+            raise ValueError('SSL listing patch requires one existing service and its exact reviewed UI files')
     elif profile == 'inventory-filters':
         ui = {name for name in names if name.startswith('spug_web/') and not name.endswith('.test.js')}
         if runtime != {'spug_api/' + INVENTORY_FILE} or ui != {INVENTORY_UI}:
@@ -321,12 +323,12 @@ def write_manifests(stage, revision, previous_revision, previous_content,
         previous_hashes = {name: hashlib.sha256(content).hexdigest() if content is not None else None
                            for name, content in previous_content.items()}
     else:
-        if profile in ('inventory-filters', 'ssl-renew-diagnostics', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'refined-palettes') and not isinstance(previous_content, bytes):
+        if profile in ('inventory-filters', 'ssl-renew-diagnostics', 'ssl-current-results', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'refined-palettes') and not isinstance(previous_content, bytes):
             raise ValueError('Selected API module must already exist in the baseline')
         api_hashes = {module: sha256(stage / 'source/spug_api' / module)} if module else {}
         previous_hashes = {module: hashlib.sha256(previous_content).hexdigest()} if module else {}
     preserved_hashes = {}
-    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-ssh-discovery', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
+    if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'ssl-current-results', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-ssh-discovery', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
         if ((profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui') and previous_content is not None) or not isinstance(preserved_content, dict) or
                 set(preserved_content) != {API_FILE, HEALTH_FILE} or
                 not all(isinstance(value, bytes) for value in preserved_content.values())):
@@ -430,7 +432,7 @@ def main():
                        git('show', previous + ':spug_api/apps/baota/urls.py').replace(b'\r\n', b'\n')}
     else:
         old_content = git('show', previous + ':spug_api/' + module).replace(b'\r\n', b'\n') if module else None
-    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-ssh-discovery', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
+    if args.profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'ssl-current-results', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-ssh-discovery', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
         preserved_content = {name: git('show', previous + ':spug_api/' + name).replace(b'\r\n', b'\n')
                              for name in (API_FILE, HEALTH_FILE)}
     else:

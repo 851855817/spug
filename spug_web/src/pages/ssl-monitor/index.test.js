@@ -51,7 +51,7 @@ beforeEach(() => {
 });
 afterEach(() => {act(() => {ReactDOM.unmountComponentAtNode(container);}); container.remove(); jest.useRealTimers(); jest.resetAllMocks();});
 
-test('local list, auto refresh and statistic filters perform GET only; unknown caches stay visibly stale', async () => {
+test('local list, auto refresh and statistic filters perform GET only', async () => {
   await render(<SSLMonitor/>);
   expect(container.textContent).toContain('SSL证书巡检'); expect(container.textContent).toContain('app.example.test');
   expect(container.textContent).toContain('2026-11-05 20:00:00'); expect(http.post).not.toHaveBeenCalled();
@@ -60,7 +60,7 @@ test('local list, auto refresh and statistic filters perform GET only; unknown c
   expect(http.get).toHaveBeenLastCalledWith('/api/monitor/ssl/', expect.objectContaining({params: expect.objectContaining({state: 'expiring', page: 1})}));
   await act(async () => {jest.advanceTimersByTime(30000); await flush();});
   expect(http.post).not.toHaveBeenCalled();
-  await click('刷新缓存'); expect(http.post).not.toHaveBeenCalled();
+  await click('刷新列表'); expect(http.post).not.toHaveBeenCalled();
 });
 
 test('ordinary accounts never request certificates, settings, jobs or reminders', async () => {
@@ -88,12 +88,26 @@ test('manual checking opens a local progress job and posts only enabled selected
   expect(container.textContent).toContain('巡检任务结果'); expect(container.textContent).toContain('正在检查来源');
 });
 
-test('fractional server days are displayed clearly and stale cached certificates offer no renew action', async () => {
+test('stale cached certificates are never displayed and offer no renew action', async () => {
   const original = http.get.getMockImplementation();
   http.get.mockImplementation(path => path === '/api/monitor/ssl/' ? Promise.resolve({items: [{...row, stale: true, days_remaining: 2.345678}],
     total: 1, stats: {normal: 0, error: 1}, sources: [source], active_jobs: []}) : original(path));
-  await render(<SSLMonitor/>); expect(container.textContent).toContain('旧缓存'); expect(container.textContent).not.toContain('2.345678');
+  await render(<SSLMonitor/>); expect(container.textContent).not.toContain('旧缓存');
+  expect(container.textContent).not.toContain(row.domain);
+  expect(container.textContent).not.toContain('2.345678');
   expect([...container.querySelectorAll('button')].some(button => button.textContent === '续签')).toBe(false);
+});
+
+test('enabled source failures remain explicit without displaying disabled source history', async () => {
+  const original = http.get.getMockImplementation();
+  http.get.mockImplementation(path => path === '/api/monitor/ssl/' ? Promise.resolve({items: [], total: 0, stats: {},
+    sources: [{...source, status: 'stale', message: '连接超时，请检查 SSH 连接'},
+      {...source, key: 'panel:1', enabled: false, name: '已关闭宝塔', status: 'disabled', message: '监控尚未开启'}], active_jobs: []}) : original(path));
+  await render(<SSLMonitor/>);
+  expect(container.textContent).toContain('连接超时，请检查 SSH 连接');
+  expect(container.textContent).not.toContain('监控尚未开启');
+  expect(container.querySelector('[aria-label="证书状态筛选"] option[value="stale"]')).toBeNull();
+  expect(http.post).not.toHaveBeenCalled();
 });
 
 test('renewal result explicitly reports local deployment, reload and public TLS separately', async () => {

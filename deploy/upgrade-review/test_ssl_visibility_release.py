@@ -29,15 +29,17 @@ def load(name):
 class SSLVisibilityReleaseTests(unittest.TestCase):
     def test_package_cli_expands_each_existing_tuple_profile_into_individual_copy_lines(self):
         package = load('package')
-        for profile in ('ssl-certificate-visibility', 'ssl-ssh-discovery', 'continuous-inspections'):
+        for profile in ('ssl-certificate-visibility', 'ssl-ssh-discovery', 'continuous-inspections', 'ssl-current-results'):
             with self.subTest(profile=profile), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder)
                 stage = load('test_package').PackagingTests().profile_stage(root)
                 repo = root / 'repo'
                 shutil.copytree(stage / 'source/spug_api', repo / 'spug_api')
                 shutil.copytree(stage / 'build', repo / 'spug_web/build')
-                modules = package.PROFILES[profile]
-                ui = UI if profile == PROFILE else package.CONTINUOUS_UI if profile == 'continuous-inspections' else set()
+                module = package.PROFILES[profile]
+                modules = module if isinstance(module, tuple) else (module,)
+                ui = (UI if profile == PROFILE else package.CONTINUOUS_UI if profile == 'continuous-inspections'
+                      else {'spug_web/src/pages/ssl-monitor/index.js'} if profile == 'ssl-current-results' else set())
                 names = ['spug_api/' + name for name in modules] + sorted(ui)
                 for name in names:
                     target = repo / name

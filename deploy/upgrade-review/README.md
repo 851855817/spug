@@ -4,6 +4,7 @@
 
 | 配置 | 允许覆盖 | 额外要求 |
 | --- | --- | --- |
+| `ssl-current-results` | 仅既有 `apps/monitor/ssl/service.py` 与 SSL 列表 `index.js` | 列表、隐藏视图和统计统一排除失效快照；启用来源的失败原因单独展示。旧 service 摘要必须存在，无迁移、权限或来源开关变化，完整 API 树保全；post-ssl、空闲门、新配对备份、双根原始收据和兼容回退 |
 | `ssl-ssh-discovery` | 仅既有 `apps/monitor/ssl/{remote_probe,collectors,service}.py` | 无 UI、schema、权限或开关变更；三个旧摘要必须存在，保全其余完整 API 树、PHP 和健康模块。post-ssl、业务空闲、新配对备份与两份 API 原始收据回退；探针读取范围不扩大 |
 | `ssl-ssh-python36` | 仅既有 `apps/monitor/ssl/remote_probe.py` | 修复 Python 3.6 分词和宝塔内联 Lua 兼容；无 UI、schema、权限或开关变更。旧探针摘要必须存在，完整 API 树仅允许该文件变化；保留 post-ssl、业务空闲、新配对备份、双根原始收据和失败恢复 |
 | `ssl-certificate-visibility` | 仅既有 SSL `service.py`、`views.py`、`urls.py` 与列表 `index.js`、`index.module.less` | 当前账号逐条隐藏／恢复过期证书，复用 UserSetting，无迁移；三个旧 API 摘要必须存在。完整 API 树、PHP／健康、用户偏好保全；post-ssl、新配对备份、双根部分失败恢复 |

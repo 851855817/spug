@@ -151,10 +151,10 @@ class SSLWorkflowTests(TransactionTestCase):
         service, cert, cycle = self.expired_visibility_fixture()
         service.set_visibility(self.admin, cert.pk, {'hidden': True, 'cycle': cycle})
         SSLSource.objects.filter(pk=self.key).update(enabled=False)
-        hidden = service.listing(self.admin, {'hidden': '1'})['items'][0]
-        self.assertTrue(hidden['stale'])
+        self.assertEqual(service.listing(self.admin, {'hidden': '1'})['total'], 0)
+        self.assertEqual(service.listing(self.admin, {})['hidden_count'], 0)
         service.set_visibility(self.admin, cert.pk, {'hidden': False, 'cycle': cycle})
-        self.assertEqual(service.listing(self.admin, {})['total'], 1)
+        self.assertEqual(service.listing(self.admin, {})['total'], 0)
 
     def test_visibility_get_does_not_create_preferences_or_contact_sources(self):
         from apps.setting.models import UserSetting
@@ -225,6 +225,7 @@ class SSLWorkflowTests(TransactionTestCase):
             remote.assert_not_called()
 
     def test_failed_collection_preserves_facts_marks_stale_and_sanitizes_errors(self):
+        from apps.monitor.ssl.models import SSLCertificate
         service, jobs, _ = self.modules()
         self.enable()
         self.assertEqual(self.check()['state'], 'success')
@@ -234,10 +235,54 @@ class SSLWorkflowTests(TransactionTestCase):
         with patch.object(jobs, 'discover', side_effect=RuntimeError('SECRET remote output')):
             jobs.run_pending()
         result = service.listing(self.admin, {})
-        self.assertTrue(result['items'][0]['stale'])
-        self.assertEqual(result['items'][0]['sampled_at'], old['sampled_at'])
+        self.assertEqual(result['items'], [])
+        self.assertEqual(service.iso(SSLCertificate.objects.get().sampled_at), old['sampled_at'])
         self.assertEqual(result['stats']['normal'], 0)
+        self.assertEqual(result['stats']['error'], 0)
+        self.assertEqual(result['sources'][0]['status'], 'stale')
+        self.assertTrue(result['sources'][0]['message'])
         self.assertNotIn('SECRET', json.dumps(result))
+
+    def test_stale_certificates_are_excluded_before_statistics_filters_and_pagination(self):
+        from apps.monitor.ssl.models import SSLCertificate, SSLSource
+        service, cert, cycle = self.expired_visibility_fixture()
+        second = SSLCertificate.objects.get(pk=cert.pk)
+        second.pk, second.identity, second.domain = None, 'b' * 64, 'second.example.com'
+        second.save()
+        before = list(SSLCertificate.objects.values())
+        now = timezone.now()
+        for changes in ({'enabled': False}, {'config_digest': 'c' * 64},
+                        {'last_success_at': now - timedelta(hours=7)},
+                        {'status': 'stale', 'message': '检查未完成，请核对来源连接和配置'}):
+            original = SSLSource.objects.get(pk=self.key)
+            with self.subTest(changes=changes), patch('apps.monitor.ssl.jobs.discover') as remote:
+                SSLSource.objects.filter(pk=self.key).update(**changes)
+                for query in ({}, {'state': 'stale'}, {'state': 'error'}, {'page_size': '1', 'page': '2'},
+                              {'q': 'example', 'source': self.key}, {'hidden': '1'}):
+                    listing = service.listing(self.admin, query)
+                    self.assertEqual(listing['items'], [])
+                    self.assertEqual(listing['total'], 0)
+                    self.assertEqual(listing['hidden_count'], 0)
+                    self.assertTrue(all(value == 0 for value in listing['stats'].values()))
+                remote.assert_not_called()
+                self.assertEqual(list(SSLCertificate.objects.values()), before)
+                original.save()
+        self.assertEqual(service.listing(self.admin, {'page_size': '1'})['total'], 2)
+
+    def test_old_snapshot_disappears_after_failed_check_and_returns_after_success(self):
+        from apps.monitor.ssl.models import SSLSource
+        service, jobs, _ = self.modules()
+        self.enable()
+        self.check()
+        self.expire_cooldown()
+        service.enqueue_checks(self.admin, {'source_keys': [self.key]})
+        with patch.object(jobs, 'discover', side_effect=RuntimeError('private failure')):
+            jobs.run_pending()
+        self.assertEqual(service.listing(self.admin, {})['total'], 0)
+        self.expire_cooldown()
+        self.check()
+        self.assertEqual(service.listing(self.admin, {})['total'], 1)
+        self.assertEqual(SSLSource.objects.get(pk=self.key).status, 'ok')
 
     def test_exact_expiry_and_cdn_are_independent(self):
         service, jobs, _ = self.modules()
@@ -868,7 +913,7 @@ class SSLWorkflowTests(TransactionTestCase):
         self.check()
         self.assertIsNotNone(service.listing(self.admin, {})['items'][0]['reminder'])
         SSLSource.objects.update(status='failed')
-        self.assertIsNone(service.listing(self.admin, {})['items'][0]['reminder'])
+        self.assertEqual(service.listing(self.admin, {})['items'], [])
 
     def test_certificate_list_reminder_resets_after_certificate_cycle_changes(self):
         service, _, _ = self.modules()

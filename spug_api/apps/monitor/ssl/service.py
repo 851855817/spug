@@ -352,8 +352,11 @@ def listing(user, query):
         src = by_key[cert.source_id]
         if q and q.lower() not in ' '.join((cert.domain, src['name'], src['address'])).lower():
             continue
+        row = certificate_view(cert, src)
+        if row['stale']:
+            continue
         cycle = certificate_cycle(cert)
-        rows.append({**certificate_view(cert, src), 'reminder': current_reminders.get(cert.pk),
+        rows.append({**row, 'reminder': current_reminders.get(cert.pk),
                      'cycle': cycle, 'hidden': hidden.get(str(cert.pk)) == cycle})
     hidden_count = sum(row['hidden'] for row in rows)
     rows = [row for row in rows if row['hidden'] == (query.get('hidden') == '1')]

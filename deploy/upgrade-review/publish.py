@@ -38,7 +38,7 @@ SSL_SSH_MODULES = ('apps/monitor/ssl/remote_probe.py', 'apps/monitor/ssl/collect
 SSL_VISIBILITY_MODULES = ('apps/monitor/ssl/service.py', 'apps/monitor/ssl/views.py', 'apps/monitor/ssl/urls.py')
 PROFILES = {'continuous-inspections': CONTINUOUS_MODULES, 'php-update': MODULE, 'host-report': HEALTH_MODULE, 'operations-ui': None, 'task-results-ui': None,
             'panel-login': LOGIN_MODULES, 'inventory-filters': 'apps/baota/inventory/service.py', 'workbench-ui': None, 'branding-ui': None, 'personal-reminders-ui': None, 'inventory-role-presets-ui': None,
-            'ssl-certificate-visibility': SSL_VISIBILITY_MODULES, 'ssl-ssh-discovery': SSL_SSH_MODULES, 'ssl-ssh-python36': 'apps/monitor/ssl/remote_probe.py', 'ssl-reminder-actions': 'apps/monitor/ssl/service.py', 'ssl-renew-diagnostics': 'apps/baota/operations/certificates.py', 'site-appearance': APPEARANCE_MODULES,
+            'ssl-certificate-visibility': SSL_VISIBILITY_MODULES, 'ssl-ssh-discovery': SSL_SSH_MODULES, 'ssl-ssh-python36': 'apps/monitor/ssl/remote_probe.py', 'ssl-current-results': 'apps/monitor/ssl/service.py', 'ssl-reminder-actions': 'apps/monitor/ssl/service.py', 'ssl-renew-diagnostics': 'apps/baota/operations/certificates.py', 'site-appearance': APPEARANCE_MODULES,
             'scheduled-panel-tasks': SCHEDULED_PANEL_MODULES,
             'refined-palettes': APPEARANCE_MODULE, 'branding-cleanup-ui': None, 'self-use-branding-ui': None, 'sidebar-collapse-ui': None, 'hide-first-batch-ui': None, 'panel-workspace-ui': None, 'hide-site-inventory-ui': None, 'login-warning-ui': None}
 MAINTENANCE = ('nginx', 'spug-api', 'spug-ws', 'spug-panel-worker',
@@ -253,7 +253,7 @@ def load_stage(stage, revision, previous):
     bind_stage_to_archive(stage, archive)
     profile = release.get('profile', 'php-update')
     require(isinstance(profile, str) and profile in PROFILES, 'release-profile-invalid')
-    if profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-reminder-actions', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
+    if profile in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-current-results', 'ssl-reminder-actions', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
         baseline_id = checks.get('baseline_image_id')
         require(isinstance(baseline_id, str) and re.fullmatch('sha256:[0-9a-f]{64}', baseline_id) and
                 baseline_id != checks['image_id'] and valid_sha(checks.get('unchanged_api_tree_sha256')),
@@ -281,7 +281,7 @@ def load_stage(stage, revision, previous):
             require(isinstance(hashes, dict) and set(hashes) == ({module} if module else set()) and
                     all(valid_sha(v) for v in hashes.values()), 'api-overlay-must-match-profile')
     preserved = release.get('preserved_api_sha256', {})
-    expected_preserved = ({MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-reminder-actions', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui') else
+    expected_preserved = ({MODULE, HEALTH_MODULE} if profile in ('operations-ui', 'task-results-ui', 'panel-login', 'inventory-filters', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'ssl-renew-diagnostics', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-current-results', 'ssl-reminder-actions', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui') else
                           {MODULE} if profile == 'host-report' else set())
     require(isinstance(preserved, dict) and set(preserved) == expected_preserved and
             all(valid_sha(value) for value in preserved.values()), 'preserved-api-manifest-invalid')
@@ -674,7 +674,7 @@ class DockerHost:
         require(label == revision, 'prepared-image-revision-mismatch')
         image_id = self.run(['docker', 'image', 'inspect', '--format', '{{.Id}}', self.release['image']])
         require(image_id == self.release['prepared_image_id'], 'prepared-image-id-mismatch')
-        if self.release.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-reminder-actions', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
+        if self.release.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-current-results', 'ssl-reminder-actions', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
             baseline_id = self.run(['docker', 'image', 'inspect', '--format', '{{.Id}}',
                                     'spug-baota:' + previous[:7]])
             require(baseline_id == self.release['prepared_baseline_image_id'], 'prepared-baseline-image-id-mismatch')

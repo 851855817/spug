@@ -245,7 +245,7 @@ def main():
         ['docker', 'image', 'inspect', image], text=True))[0], revision)
     source = stage / 'source'
     preservation = {}
-    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-reminder-actions', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
+    if manifest.get('profile') in ('operations-ui', 'task-results-ui', 'workbench-ui', 'branding-ui', 'personal-reminders-ui', 'inventory-role-presets-ui', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'continuous-inspections', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-current-results', 'ssl-reminder-actions', 'branding-cleanup-ui', 'self-use-branding-ui', 'sidebar-collapse-ui', 'hide-first-batch-ui', 'panel-workspace-ui', 'hide-site-inventory-ui', 'login-warning-ui'):
         # Read the fixed literal without importing staged Python: imports can
         # write unarchived __pycache__ files and invalidate the bundle binding.
         tree = ast.parse((source / 'deploy/upgrade-review/publish.py').read_text())
@@ -259,11 +259,11 @@ def main():
             raise ValueError('Invalid fixed API file probe')
         baseline_api = image_api_snapshot(baseline_id, probe)
         candidate_api = image_api_snapshot(image_id, probe)
-        if manifest.get('profile') in ('continuous-inspections', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-reminder-actions'):
+        if manifest.get('profile') in ('continuous-inspections', 'site-appearance', 'scheduled-panel-tasks', 'refined-palettes', 'ssl-ssh-discovery', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-current-results', 'ssl-reminder-actions'):
             compare = (ssl_visibility_api_digest if manifest['profile'] == 'ssl-certificate-visibility' else
                        ssl_python36_api_digest if manifest['profile'] == 'ssl-ssh-python36' else
                        ssl_ssh_discovery_api_digest if manifest['profile'] == 'ssl-ssh-discovery' else
-                       ssl_reminder_actions_api_digest if manifest['profile'] == 'ssl-reminder-actions' else
+                       ssl_reminder_actions_api_digest if manifest['profile'] in ('ssl-current-results', 'ssl-reminder-actions') else
                        continuous_inspections_api_digest if manifest['profile'] == 'continuous-inspections' else
                        scheduled_panel_tasks_api_digest if manifest['profile'] == 'scheduled-panel-tasks' else
                        appearance_api_digest if manifest['profile'] == 'site-appearance' else refined_palettes_api_digest)
@@ -294,7 +294,7 @@ def main():
     subprocess.run(['docker', 'run', '--rm', '--network', 'none', '--read-only', '--memory', '128m',
         '--pids-limit', '32', '-v', str(source / 'deploy/baota/test_image.py') + ':/test_image.py:ro',
         '--entrypoint', 'python3', image_id, '/test_image.py',
-        'post-ssl' if manifest.get('profile') in ('panel-workspace-ui', 'continuous-inspections', 'hide-site-inventory-ui', 'login-warning-ui', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-ssh-discovery') else 'expiry'], check=True, timeout=90)
+        'post-ssl' if manifest.get('profile') in ('panel-workspace-ui', 'continuous-inspections', 'hide-site-inventory-ui', 'login-warning-ui', 'ssl-current-results', 'ssl-reminder-actions', 'ssl-ssh-python36', 'ssl-certificate-visibility', 'ssl-ssh-discovery') else 'expiry'], check=True, timeout=90)
     current_id = image_identity(json.loads(subprocess.check_output(
         ['docker', 'image', 'inspect', image], text=True))[0], revision)
     if current_id != image_id:

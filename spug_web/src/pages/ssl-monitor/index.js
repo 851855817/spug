@@ -17,7 +17,7 @@ import styles from './index.module.less';
 const icons = [GlobalOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, SafetyCertificateOutlined];
 function initialFilters() {
   const query = new URLSearchParams(window.location.search), result = {};
-  if (Object.prototype.hasOwnProperty.call(states, query.get('state'))) result.state = query.get('state');
+  if (query.get('state') !== 'stale' && Object.prototype.hasOwnProperty.call(states, query.get('state'))) result.state = query.get('state');
   if (query.get('q')) result.q = query.get('q').slice(0, 200);
   return result;
 }
@@ -42,7 +42,7 @@ export default function SSLMonitor() {
     setLoading(true); setError('');
     http.get(API, {params: {...filters, page, page_size: pageSize}}).then(result => {
       if (valid && sameOwner()) {setData(result); setQueued([]); delay = result.active_jobs?.some(isPollingJob) ? 2500 : 30000;}
-    }, () => {if (valid && sameOwner()) {setData(null); setError('读取 SSL 巡检缓存失败，请刷新重试。');}}).finally(() => {
+    }, () => {if (valid && sameOwner()) {setData(null); setError('读取 SSL 巡检结果失败，请刷新重试。');}}).finally(() => {
       if (valid && sameOwner()) {
         setLoading(false);
         timer = window.setTimeout(() => setRevision(value => value + 1), delay);
@@ -86,6 +86,7 @@ export default function SSLMonitor() {
   const groups = [...new Map(sources.flatMap(source => source.groups || []).filter(group => group.key).map(group => [group.key, group])).values()];
   const targets = sources.filter(source => source.enabled && (!filters.source || source.key === filters.source) &&
     (!filters.group || source.groups?.some(group => group.key === filters.group)));
+  const sourceIssues = targets.filter(source => source.status && !['ok', 'never_checked'].includes(source.status));
   async function check(sourceKeys) {
     if (checkLock.current || !sourceKeys.length || !sameOwner()) return;
     if (sourceKeys.length > 10) {setActionError('每次最多检查 10 个来源，请通过分组或服务器筛选缩小范围。'); return;}
@@ -137,6 +138,8 @@ export default function SSLMonitor() {
       {targets.length > 10 && <Alert className={styles.message} type="info" showIcon message="每次最多检查 10 个来源，请通过分组或服务器筛选缩小范围。"/>}
       {error && <Alert className={styles.message} type="error" showIcon message={error}/>}
       {actionError && <Alert className={styles.message} type="warning" showIcon message={actionError}/>}
+      {sourceIssues.map(source => <Alert key={source.key} className={styles.message} type="warning" showIcon
+        message={`${text(source.name)}（${source.kind === 'panel' ? '宝塔' : 'SSH'}）：${text(source.message || '巡检未完成，请检查来源设置')}`}/>)}
       {!!jobs.length && <div className={styles.jobs}><b>巡检与续签进度</b>{jobs.map(job => <Button type="link" size="small" key={job.id} onClick={() => setJobId(job.id)}>#{job.id} · {jobStates[job.state] || '状态未知'} · {text(job.message || job.phase)}</Button>)}</div>}
       <section className={styles.panel}>
         <div className={styles.filters}>
@@ -145,19 +148,19 @@ export default function SSLMonitor() {
             options={groups.map(group => ({value: group.key, label: group.name}))}/>
           <Select aria-label="服务器筛选" allowClear showSearch optionFilterProp="label" placeholder="全部服务器" value={filters.source} onChange={value => filter('source', value)}
             options={sources.filter(source => !filters.group || source.groups?.some(group => group.key === filters.group)).map(source => ({value: source.key, label: `${source.name} · ${source.kind === 'panel' ? '宝塔' : 'SSH'}`}))}/>
-          <Select aria-label="证书状态筛选" allowClear placeholder="全部状态" value={filters.state} onChange={value => filter('state', value)} options={Object.entries(states).map(([value, label]) => ({value, label}))}/>
-          <Button icon={<ReloadOutlined/>} loading={loading} onClick={refresh}>刷新缓存</Button>
+          <Select aria-label="证书状态筛选" allowClear placeholder="全部状态" value={filters.state} onChange={value => filter('state', value)} options={Object.entries(states).filter(([value]) => value !== 'stale').map(([value, label]) => ({value, label}))}/>
+          <Button icon={<ReloadOutlined/>} loading={loading} onClick={refresh}>刷新列表</Button>
           <Checkbox aria-label="查看已隐藏证书" checked={filters.hidden === '1'} onChange={event => filter('hidden', event.target.checked ? '1' : undefined)}>
             查看已隐藏（{data?.hidden_count ?? 0}）</Checkbox>
         </div>
         <div className={styles.tableHeader}><h2>{filters.hidden === '1' ? '已隐藏证书' : '证书列表'} <span>共 {data?.total ?? '—'} 个域名</span></h2>
           <span>{filters.hidden === '1' ? '仅当前账号 · 可恢复显示' : '到期优先'} · 时间 UTC+8</span></div>
-        <ResizableTable className={styles.table} resizeKey="ssl-certificates" rowKey="id" loading={loading} columns={columns} dataSource={data?.items || []} scroll={{x: 1645}}
-          locale={{emptyText: error ? '缓存读取失败' : filters.hidden === '1' ? '当前筛选下没有已隐藏证书。' : data?.hidden_count ? '当前筛选下没有可见证书，可勾选“查看已隐藏”恢复显示。' : '当前筛选下没有证书，可调整筛选或在来源设置中开启巡检。'}}
+        <ResizableTable className={styles.table} resizeKey="ssl-certificates" rowKey="id" loading={loading} columns={columns} dataSource={(data?.items || []).filter(row => !row.stale && row.state !== 'stale')} scroll={{x: 1645}}
+          locale={{emptyText: error ? '巡检结果读取失败' : filters.hidden === '1' ? '当前筛选下没有已隐藏证书。' : data?.hidden_count ? '当前筛选下没有可见证书，可勾选“查看已隐藏”恢复显示。' : '当前筛选下没有有效巡检结果，可调整筛选或在来源设置中开启巡检。'}}
           pagination={{current: page, pageSize, total: data?.total || 0, showSizeChanger: true, showTotal: total => `共 ${total} 条`,
             onChange: (next, size) => {setPage(size === pageSize ? next : 1); setPageSize(size);}}}/>
       </section>
-      <p className={styles.footnote}>自动刷新仅读取本地缓存。立即巡检会连接已启用来源，手工巡检冷却 60 秒。公网 TLS 与源站证书独立验证；旧缓存和未知状态不计为正常。</p>
+      <p className={styles.footnote}>仅展示有效巡检结果。刷新列表不连接服务器；立即巡检会连接已启用来源，手工巡检冷却 60 秒。</p>
       {settings && <SourceSettings onClose={() => setSettings(false)} onSaved={refresh}/>}
       {detail && <CertificateDetail row={detail} onClose={() => setDetail(null)}/>}
       {jobId && <Renewal key={jobId} jobId={jobId} onClose={() => setJobId(null)} onUpdate={refresh}/>}

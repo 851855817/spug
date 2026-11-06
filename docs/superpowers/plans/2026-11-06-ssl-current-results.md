@@ -6,10 +6,12 @@
 
 **技术栈：** Django、React、unittest、Jest、固定范围增量发布。
 
-- [ ] 在 `spug_api/apps/monitor/ssl/tests.py` 先补关闭／配置变化／检查过期／失败／隐藏视图的排除回归，确认数据库原记录保全；更新旧的 stale 展示预期。运行 `manage.py test apps.monitor.ssl.tests --settings=spug.test_settings --noinput` 观察失败。
-- [ ] `service.py` 在构造行后、隐藏与统计前跳过 stale；重跑后端回归。
-- [ ] `index.test.js` 先写旧结果不展示、无旧筛选、刷新仅 GET、启用来源失败提示与关闭来源无提示的断言，观察失败；`index.js` 实现最小行为，重跑页面及全站前端。
-- [ ] `deploy/upgrade-review/{package,prepare,publish,check_image}.py` 添加严格 `ssl-current-results` 配置，仅一个既有 service 和一个列表 UI；新增合同及真实打包入口测试，确认其他 profile 范围不变。运行完整发布回归。
+- [x] 在 `spug_api/apps/monitor/ssl/tests.py` 先补关闭／配置变化／检查过期／失败／隐藏视图的排除回归，确认数据库原记录保全；更新旧的 stale 展示预期。运行 `manage.py test apps.monitor.ssl.tests --settings=spug.test_settings --noinput` 观察失败。
+- [x] `service.py` 在构造行后、隐藏与统计前跳过 stale；重跑后端回归。
+- [x] `index.test.js` 先写旧结果不展示、无旧筛选、刷新仅 GET、启用来源失败提示与关闭来源无提示的断言，观察失败；`index.js` 实现最小行为，重跑页面及全站前端。
+- [x] `deploy/upgrade-review/{package,prepare,publish,check_image}.py` 添加严格 `ssl-current-results` 配置，仅一个既有 service 和一个列表 UI；新增合同及真实打包入口测试，确认其他 profile 范围不变。运行完整发布回归。
 - [ ] 完整后端、前端、发布保护及代码审查通过后提交原分支，推送并等待 GitHub CI；更新 SSL 指南。
 - [ ] 重新核实现网与空闲，从干净提交打包，服务器隔离测试及生产构建模拟浏览器验收；建立新配对备份受控发布。只读检查实际旧结果不再返回、来源错误仍保留、用户偏好和全部业务数据保全。
 - [ ] 保存发布记录和证据、推送并更新现有草稿 PR；不合并主分支，告知用户使用结果。
+
+本地验证：后端719项（13条件跳过）、前端496项/50 suites、发布保护253项（1条件跳过）通过。后端新预期先复现7项失败，前端3项失败，新发布合同因配置缺失先复现3项拒绝。代码已实现，独立审查与候选验收进行中。重新只读核实现网ceba780、9服务、69项对象、业务空闲与资源余量正常；不复用旧备份。
