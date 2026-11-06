@@ -63,6 +63,28 @@ test('local list, auto refresh and statistic filters perform GET only', async ()
   await click('刷新列表'); expect(http.post).not.toHaveBeenCalled();
 });
 
+test('unconfigured statistic selects its own filter and details distinguish public mismatch', async () => {
+  const original = http.get.getMockImplementation();
+  const disabled = {...row, state: 'unconfigured', local_certificate: {},
+    message: '宝塔未开启 SSL，网站主配置未绑定证书',
+    renewal: {supported: false, reason: '请先申请并部署证书，再检查'},
+    public_tls: {verified: false, certificate: {domains: ['other.example.test']}, message: '公网证书域名不匹配'}};
+  http.get.mockImplementation((path, ...args) => path === '/api/monitor/ssl/' ? Promise.resolve({items: [disabled],
+    total: 1, stats: {total: 1, unconfigured: 1, error: 0}, sources: [source], active_jobs: []}) : original(path, ...args));
+  await render(<SSLMonitor/>);
+  const statistic = [...container.querySelectorAll('button')].find(button => button.textContent.startsWith('未配置 SSL'));
+  expect(statistic).toBeDefined();
+  await act(async () => {statistic.click(); await flush();});
+  expect(http.get).toHaveBeenLastCalledWith('/api/monitor/ssl/', {params: {state: 'unconfigured', page: 1, page_size: 20}});
+  await click('详情');
+  const dialog = container.querySelector('[role="dialog"]');
+  expect(dialog.textContent).toContain('宝塔未开启 SSL');
+  expect(dialog.textContent).toContain('公网证书域名不匹配');
+  expect(dialog.textContent).toContain('请先申请并部署');
+  expect(dialog.querySelectorAll('dl')).toHaveLength(1);
+  expect(http.post).not.toHaveBeenCalled();
+});
+
 test('ordinary accounts never request certificates, settings, jobs or reminders', async () => {
   hasPermission.mockReturnValue(false); await render(<SSLMonitor/>);
   expect(http.get).not.toHaveBeenCalled(); expect(http.post).not.toHaveBeenCalled();

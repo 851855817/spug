@@ -123,6 +123,9 @@ def safe_rows(payload):
             elif isinstance(value, str) and ('-----BEGIN' in value or '\n' in value or '\r' in value):
                 raise ValueError('续签计划包含非公开配置')
         clean_plan(plan)
+        if 'configuration_state' in plan and (not isinstance(plan['configuration_state'], str) or
+                plan['configuration_state'] not in s.CONFIGURATION_MESSAGES):
+            raise ValueError('SSL 配置诊断无效')
         rows.append({'identity': identity, 'site_id': site, 'site_name': name, 'domain': domain, 'port': port,
             'cert_path': path, 'local_certificate': s.safe_certificate(raw.get('certificate')),
             'deployment_verified': raw.get('deployment_verified') is True,

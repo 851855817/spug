@@ -124,16 +124,36 @@ def _discover_panel(panel):
                 if not isinstance(raw, dict):
                     raise CollectorError('invalid_response')
                 pem = raw.get('csr') or raw.get('cert', '')
-                certificate = public_certificate(pem) if pem else {}
+                try:
+                    certificate = public_certificate(pem) if pem else {}
+                except CollectorError:
+                    certificate = {}
                 cert_path, ports, supported = '', [443], False
                 configuration, configuration_verified = {}, False
+                configuration_state = 'configuration_unreadable'
                 try:
                     configuration = main_ssl_configuration(client, site, server)
-                    if configuration['enabled']:
+                    text = client.read_site_web_config(server, name)
+                    if not isinstance(text, str) or digest(text) != configuration['digest']:
+                        raise CollectorError('invalid_response')
+                    if type(raw.get('status')) is not bool:
+                        configuration_state = 'status_unknown'
+                    elif raw['status'] != configuration['enabled']:
+                        configuration_state = 'status_conflict'
+                    elif not configuration['enabled']:
+                        # This proves the panel switch and fixed main file only;
+                        # standard includes are recognized, never traversed.
+                        configuration_state = 'disabled'
+                        certificate = {}
+                    else:
+                        configuration_state = 'certificate_unreadable'
                         public = public_certificate(client.read_site_public_certificate(name))
                         canonical = certificate
+                        if public != canonical:
+                            raise CollectorError('invalid_response')
+                        configuration_state = 'configuration_unreadable'
                         text = client.read_site_web_config(server, name)
-                        if public != canonical or digest(text) != configuration['digest']:
+                        if not isinstance(text, str) or digest(text) != configuration['digest']:
                             raise CollectorError('invalid_response')
                         directives = _nginx_directives(text) if server == 'nginx' else _apache_directives(text)
                         ports = set()
@@ -156,6 +176,7 @@ def _discover_panel(panel):
                         certificate, cert_path = public, configuration['certificate_path']
                         configuration_verified = configuration['included_configuration_verified']
                         supported = configuration_verified
+                        configuration_state = 'verified' if supported else 'deployment_unverified'
                 except Exception:
                     warnings.append('宝塔网站部署位置或配置引用未能独立核实；未把 GetSSL 副本当作已部署证书')
                     ports = [443]
@@ -176,8 +197,9 @@ def _discover_panel(panel):
                         if len(items) >= MAX_ITEMS:
                             raise CollectorError('output_limit')
                         observed = supported
+                        row_configuration_state = configuration_state
                         evidence = '已核实网站配置中的公开证书' if observed else ''
-                        if certificate and configuration.get('enabled') and not configuration_verified and cert_path:
+                        if certificate and configuration_state == 'deployment_unverified' and cert_path:
                             # Default Baota includes cannot be enumerated through
                             # a strictly read-only API. Observe the managed source
                             # endpoint instead, without claiming a complete path
@@ -189,10 +211,12 @@ def _discover_panel(panel):
                                 observed = bool(origin.get('certificate', {}).get('fingerprint') == certificate['fingerprint'])
                                 if observed:
                                     evidence = '源站 TLS 证书与面板副本一致；未遍历引用'
+                                    row_configuration_state = 'verified'
                             if not observed:
                                 warnings.append('宝塔网站公开证书副本未与源站 SNI 握手证书匹配，部署尚未核实')
                         plan = {'engine': 'baota', 'site_id': site['id'], 'site_name': name,
                                 'main_configuration_digest': configuration.get('digest', ''),
+                                'configuration_state': row_configuration_state,
                                 'includes_verified': configuration_verified,
                                 'public_fingerprint': certificate.get('fingerprint', '')}
                         items.append({'domain': domain, 'port': port, 'site_id': str(site['id']), 'site_name': name,

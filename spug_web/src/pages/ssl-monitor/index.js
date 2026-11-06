@@ -14,7 +14,7 @@ import Guidance from './Guidance';
 import Reminders from './Reminders';
 import styles from './index.module.less';
 
-const icons = [GlobalOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, SafetyCertificateOutlined];
+const icons = [GlobalOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, SafetyCertificateOutlined, CloseCircleOutlined];
 function initialFilters() {
   const query = new URLSearchParams(window.location.search), result = {};
   if (query.get('state') !== 'stale' && Object.prototype.hasOwnProperty.call(states, query.get('state'))) result.state = query.get('state');

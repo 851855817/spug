@@ -583,6 +583,72 @@ class TLSTests(TestCase):
 
 
 class CollectorTests(TestCase):
+    def panel_status_fixture(self, enabled=False, pem='', config=None):
+        client = self.panel_include_fixture(pem)
+        original = client.request.side_effect
+        client.request.side_effect = lambda path, action, params=None, **kw: (
+            {'status': enabled, 'csr': pem, 'key': 'NEVER_EXPORT_KEY'} if action == 'GetSSL'
+            else original(path, action, params, **kw))
+        if config is not None:
+            client.read_site_web_config.return_value = config
+        return client
+
+    def test_disabled_panel_and_main_configuration_are_explicit_even_with_standard_include(self):
+        client = self.panel_status_fixture(config='''server {
+listen 80; server_name example.com;
+include /www/server/panel/vhost/rewrite/example.com.conf;
+}''')
+        with mock.patch.object(collectors, 'PanelClient', return_value=client), \
+                mock.patch.object(tls, '_check_tls') as check:
+            row = collectors._discover_panel(object())['items'][0]
+        self.assertEqual(row['renewal']['plan']['configuration_state'], 'disabled')
+        self.assertFalse(row['renewal']['plan']['includes_verified'])
+        self.assertFalse(row['certificate'])
+        self.assertFalse(row['renewal']['supported'])
+        self.assertFalse(row['deployment_verified'])
+        self.assertGreaterEqual(client.read_site_web_config.call_count, 2)
+        client.read_site_public_certificate.assert_not_called()
+        check.assert_not_called()
+
+    def test_configuration_and_certificate_read_errors_never_become_disabled(self):
+        for boundary, code in (('configuration', 'configuration_unreadable'),
+                               ('certificate', 'certificate_unreadable')):
+            with self.subTest(boundary=boundary):
+                client = self.panel_status_fixture(enabled=True, pem=public_pem())
+                target = client.read_site_web_config if boundary == 'configuration' else client.read_site_public_certificate
+                target.side_effect = RuntimeError('SECRET CONFIGURATION')
+                with mock.patch.object(collectors, 'PanelClient', return_value=client):
+                    result = collectors._discover_panel(object())
+                row = result['items'][0]
+                self.assertEqual(row['renewal']['plan']['configuration_state'], code)
+                self.assertFalse(row['renewal']['supported'])
+                self.assertNotIn('SECRET', json.dumps(result))
+
+    def test_panel_api_disagrees_with_main_config_or_missing_status_cannot_claim_disabled(self):
+        for status, code in ((False, 'status_conflict'), (None, 'status_unknown')):
+            with self.subTest(status=status):
+                client = self.panel_status_fixture(enabled=status)
+                with mock.patch.object(collectors, 'PanelClient', return_value=client):
+                    row = collectors._discover_panel(object())['items'][0]
+                self.assertEqual(row['renewal']['plan']['configuration_state'], code)
+                self.assertFalse(row['renewal']['supported'])
+
+    def test_disabled_configuration_drift_does_not_claim_disabled(self):
+        client = self.panel_status_fixture(config='server {listen 80; server_name example.com;}')
+        client.read_site_web_config.side_effect = [client.read_site_web_config.return_value, 'CHANGED']
+        with mock.patch.object(collectors, 'PanelClient', return_value=client):
+            row = collectors._discover_panel(object())['items'][0]
+        self.assertEqual(row['renewal']['plan']['configuration_state'], 'configuration_unreadable')
+
+    def test_disabled_panel_ignores_saved_certificate_copy(self):
+        client = self.panel_status_fixture(pem=public_pem(expired=True),
+            config='server {listen 80; server_name example.com;}')
+        with mock.patch.object(collectors, 'PanelClient', return_value=client):
+            row = collectors._discover_panel(object())['items'][0]
+        self.assertEqual(row['renewal']['plan']['configuration_state'], 'disabled')
+        self.assertEqual(row['certificate'], {})
+        self.assertEqual(row['renewal']['plan']['public_fingerprint'], '')
+
     def panel_include_fixture(self, pem):
         from apps.baota.test_ssl92 import nginx_config
         client = mock.MagicMock()

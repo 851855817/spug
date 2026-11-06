@@ -278,9 +278,31 @@ def certificate_covers(domain, domains):
                for san in domains)
 
 
+CONFIGURATION_MESSAGES = {
+    'disabled': '宝塔未开启 SSL，网站主配置未绑定证书',
+    'configuration_unreadable': '网站主配置无法完整核实，请检查读取权限和配置格式',
+    'certificate_unreadable': '网站已开启 SSL，但公开证书读取或摘要核对失败',
+    'status_conflict': '宝塔 SSL 开关与网站主配置不一致，请核对配置后重新巡检',
+    'status_unknown': '宝塔未返回有效的 SSL 开关状态，请检查 API 响应后重新巡检',
+    'deployment_unverified': '证书部署路径尚未完整核实，当前仅显示公开证书摘要',
+    'verified': '',
+}
+
+
+def configuration_state(cert):
+    plan = cert.plan if isinstance(cert.plan, dict) else {}
+    value = plan.get('configuration_state')
+    return value if isinstance(value, str) and value in CONFIGURATION_MESSAGES else ''
+
+
 def certificate_renewal(cert):
     renew = safe_renewal(cert.renewal)
-    if cert.domain.startswith('*.'):
+    configuration = configuration_state(cert)
+    if configuration == 'disabled':
+        renew.update(supported=False, reason='请先在宝塔申请并部署证书，再重新巡检')
+    elif configuration in ('configuration_unreadable', 'certificate_unreadable', 'status_conflict', 'status_unknown'):
+        renew.update(supported=False, reason=CONFIGURATION_MESSAGES[configuration])
+    elif cert.domain.startswith('*.'):
         renew.update(supported=False, reason='通配符域名无法进行公网握手核验，请选择证书 SAN 覆盖的具体域名续签')
     elif not cert.deployment_verified:
         renew.update(supported=False, reason='证书部署路径尚未完整核实，暂不支持续签')
@@ -294,10 +316,15 @@ def certificate_view(cert, source):
     expiry = local.get('expires_at')
     seconds = (instant(expiry) - utcnow()).total_seconds() if expiry else None
     days = seconds / 86400 if seconds is not None else None
+    configuration = configuration_state(cert)
     if stale:
         state, message = 'stale', source['message']
+    elif configuration == 'disabled':
+        state, message = 'unconfigured', CONFIGURATION_MESSAGES[configuration]
+    elif configuration in ('configuration_unreadable', 'certificate_unreadable', 'status_conflict', 'status_unknown'):
+        state, message = 'unknown', CONFIGURATION_MESSAGES[configuration]
     elif seconds is None:
-        state, message = 'unconfigured', '未找到可解析的本地部署证书'
+        state, message = 'unknown', '未读取到可解析证书，尚不能确认是否配置 SSL；请重新巡检核实'
     elif not cert.deployment_verified:
         state, message = 'unknown', '证书部署路径尚未完整核实，当前仅显示公开证书摘要'
     elif not certificate_covers(cert.domain, local.get('domains', [])):
@@ -361,11 +388,11 @@ def listing(user, query):
     hidden_count = sum(row['hidden'] for row in rows)
     rows = [row for row in rows if row['hidden'] == (query.get('hidden') == '1')]
     stats = {'total': len(rows), **{key: sum(r['state'] == key for r in rows)
-                                  for key in ('normal', 'expiring', 'expired')}}
-    stats['error'] = sum(r['state'] in ('error', 'stale', 'unknown', 'unconfigured') for r in rows)
+                                  for key in ('normal', 'expiring', 'expired', 'unconfigured')}}
+    stats['error'] = sum(r['state'] in ('error', 'stale', 'unknown') for r in rows)
     rows.sort(key=lambda r: (r['expires_at'] is None, r['expires_at'] or '', r['domain'], r['id']))
     rows = [r for r in rows if not state or r['state'] == state or state == 'error' and
-            r['state'] in ('stale', 'unknown', 'unconfigured')]
+            r['state'] in ('stale', 'unknown')]
     return {'items': rows[(page - 1) * size:page * size], 'total': len(rows), 'stats': stats, 'hidden_count': hidden_count,
             'sources': all_sources, 'active_jobs': [job_view(j) for j in SSLJob.objects.filter(owner_id=user.pk, state__in=ACTIVE)[:50]]}
 

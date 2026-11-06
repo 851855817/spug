@@ -1006,18 +1006,69 @@ class SSLWorkflowTests(TransactionTestCase):
         self.assertEqual(row['state'], 'error')
         self.assertIn('域名', row['message'])
 
-    def test_missing_certificate_is_unconfigured_and_san_wildcards_are_single_label(self):
+    def test_missing_certificate_without_configuration_evidence_is_unknown_and_sans_are_single_label(self):
         service, _, _ = self.modules()
         self.enable()
         data = self.fixture()
         data['items'][0].update(certificate={}, deployment_verified=False)
         self.check(data)
-        self.assertEqual(service.listing(self.admin, {})['items'][0]['state'], 'unconfigured')
+        self.assertEqual(service.listing(self.admin, {})['items'][0]['state'], 'unknown')
         self.assertTrue(callable(getattr(service, 'certificate_covers', None)), 'local SAN matcher missing')
         self.assertTrue(service.certificate_covers('www.example.com', ['*.example.com']))
         self.assertFalse(service.certificate_covers('a.b.example.com', ['*.example.com']))
         self.assertFalse(service.certificate_covers('example.com', ['*.example.com']))
         self.assertFalse(service.certificate_covers('*.example.com', ['example.com']))
+
+    def test_confirmed_disabled_ssl_is_independent_from_failures_and_keeps_public_mismatch(self):
+        service, jobs, _ = self.modules()
+        self.enable()
+        data = self.fixture()
+        raw = data['items'][0]
+        raw.update(certificate={}, deployment_verified=False, cert_path='')
+        raw['renewal']['plan']['configuration_state'] = 'disabled'
+        raw['renewal']['supported'] = False
+        self.check(data)
+        from apps.monitor.ssl.models import SSLCertificate
+        cert = SSLCertificate.objects.get(source_id=self.key)
+        cert.public_tls = {'verified': False, 'certificate': self.fixture()['items'][0]['certificate'],
+                           'message': '公网证书域名不匹配'}
+        cert.save()
+        listing = service.listing(self.admin, {})
+        row = listing['items'][0]
+        self.assertEqual(row['state'], 'unconfigured')
+        self.assertIn('未开启 SSL', row['message'])
+        self.assertEqual(row['public_tls']['message'], '公网证书域名不匹配')
+        self.assertEqual((listing['stats']['unconfigured'], listing['stats']['error']), (1, 0))
+        self.assertEqual(service.listing(self.admin, {'state': 'unconfigured'})['total'], 1)
+        self.assertEqual(service.listing(self.admin, {'state': 'error'})['total'], 0)
+        self.assertFalse(row['renewal']['supported'])
+        self.assertIn('申请', row['renewal']['reason'])
+
+    def test_configuration_diagnostics_survive_collection_and_cannot_claim_unconfigured(self):
+        service, _, _ = self.modules()
+        self.enable()
+        for code, reason in (('configuration_unreadable', '主配置'), ('certificate_unreadable', '公开证书'),
+                             ('status_conflict', '不一致'), ('status_unknown', '状态')):
+            with self.subTest(code=code):
+                self.expire_cooldown()
+                data = self.fixture()
+                raw = data['items'][0]
+                raw.update(certificate={}, deployment_verified=False)
+                raw['renewal']['plan']['configuration_state'] = code
+                self.check(data)
+                listing = service.listing(self.admin, {})
+                self.assertIn(listing['items'][0]['state'], ('error', 'unknown'))
+                self.assertIn(reason, listing['items'][0]['message'])
+                self.assertEqual((listing['stats']['unconfigured'], listing['stats']['error']), (0, 1))
+                self.assertEqual(service.listing(self.admin, {'state': 'error'})['total'], 1)
+
+    def test_configuration_diagnostic_rejects_untrusted_freeform_text(self):
+        _, jobs, _ = self.modules()
+        for value in ('SECRET', {}, True, None):
+            data = self.fixture()
+            data['items'][0]['renewal']['plan']['configuration_state'] = value
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                jobs.safe_rows(data)
 
     def test_missing_remote_python_has_specific_fixed_diagnostic(self):
         service, _, _ = self.modules()

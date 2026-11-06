@@ -6,6 +6,7 @@ export const statFilters = [
   {key: 'normal', state: 'normal', label: '证书正常', note: '证书在有效期内', tone: 'success'},
   {key: 'expiring', state: 'expiring', label: '即将到期', note: '10 天内到期', tone: 'warning'},
   {key: 'expired', state: 'expired', label: '已过期', note: '需要及时处理', tone: 'error'},
+  {key: 'unconfigured', state: 'unconfigured', label: '未配置 SSL', note: '网站未开启 SSL'},
   {key: 'error', state: 'error', label: '检查失败', note: '查看原因并处理', tone: 'error'},
 ];
 export const states = {normal: '正常', expiring: '即将到期', expired: '已过期', error: '检查失败',

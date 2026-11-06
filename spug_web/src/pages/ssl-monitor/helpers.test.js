@@ -2,7 +2,8 @@ import { certificateState, dateUTC8, remaining, sourceDefaults, statFilters, can
 
 test('statistics map to the exact server filters, including all and ten-day expiry', () => {
   expect(statFilters.map(({key, state}) => [key, state])).toEqual([
-    ['total', undefined], ['normal', 'normal'], ['expiring', 'expiring'], ['expired', 'expired'], ['error', 'error']]);
+    ['total', undefined], ['normal', 'normal'], ['expiring', 'expiring'], ['expired', 'expired'],
+    ['unconfigured', 'unconfigured'], ['error', 'error']]);
 });
 
 test('stale, unknown and unconfigured certificates can never display as normal', () => {
