@@ -187,11 +187,15 @@ class NotifyConsumer(BaseConsumer):
         if not self.check_access():
             return
         if not self.user.is_supper:
-            if event.get('resource_owner_id') != self.user.pk or 'resource_host_ids' not in event:
+            if (event.get('resource_owner_id') != self.user.pk or 'resource_host_ids' not in event or
+                    'resource_panel_ids' not in event):
                 return
             try:
-                access.require(self.user, event.get('resource_permission', 'notify.notify.view'))
+                permission = event.get('resource_permission')
+                if permission:
+                    access.require(self.user, permission)
                 access.require_resources(self.user, 'host', event['resource_host_ids'])
+                access.require_resources(self.user, 'panel', event['resource_panel_ids'])
             except ValueError:
                 return
         self.send(text_data=json.dumps(event))

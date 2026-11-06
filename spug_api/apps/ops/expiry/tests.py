@@ -585,6 +585,42 @@ class ExpiryConcurrencyTests(TransactionTestCase):
             self.assertEqual(ExpiryReminder.objects.count(), 0)
             self.assertEqual(ExpiryCheck.objects.get(pk=1).status, 'error')
 
+    def test_check_retries_changed_inventory_without_missing_current_reminder(self):
+        from . import assets, reminders
+        from .models import ExpiryMetadata, ExpiryReminder
+        key = 'host:%s' % self.host.pk
+        ExpiryMetadata.objects.create(asset_key=key, manual_expiry=date.today(), reminder_enabled=True)
+        inventory = assets.inventory
+        calls = []
+        def changed():
+            rows = inventory()
+            calls.append(1)
+            if len(calls) == 1:
+                rows[key]['version'] = 'stale-version-before-lock'
+            return rows
+        with patch.object(assets, 'inventory', side_effect=changed):
+            self.assertTrue(reminders.check_expiry())
+        self.assertEqual(list(ExpiryReminder.objects.values_list('asset_key', flat=True)), [key])
+        self.assertEqual(len(calls), 4)
+
+    def test_continuous_inventory_changes_are_bounded_and_report_failure(self):
+        from . import assets, reminders
+        from .models import ExpiryMetadata, ExpiryReminder, ExpiryCheck
+        key = 'host:%s' % self.host.pk
+        ExpiryMetadata.objects.create(asset_key=key, manual_expiry=date.today(), reminder_enabled=True)
+        inventory = assets.inventory
+        calls = []
+        def changed():
+            rows = inventory()
+            calls.append(1)
+            rows[key]['version'] = 'changing-version-%s' % len(calls)
+            return rows
+        with patch.object(assets, 'inventory', side_effect=changed):
+            self.assertFalse(reminders.check_expiry())
+        self.assertEqual(len(calls), 6)
+        self.assertEqual(ExpiryReminder.objects.count(), 0)
+        self.assertEqual(ExpiryCheck.objects.get(pk=1).status, 'error')
+
     def panel(self):
         group = PanelGroup.objects.create(name='并发面板组')
         return Panel.objects.create(name='并发面板', url='http://192.0.2.10:8888', username='fixture',

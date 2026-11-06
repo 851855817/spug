@@ -20,6 +20,12 @@ from apps.host.models import Group, Host
 class HostResourceTests(TestCase):
     def setUp(self):
         cache.clear()
+        # Inline WebSocket/worker fixtures share TestCase's outer transaction;
+        # production cleanup runs on the actual long-lived worker connection.
+        for target in ('consumer.utils.close_old_connections', 'apps.exec.transfer.close_old_connections'):
+            cleanup = patch(target)
+            cleanup.start()
+            self.addCleanup(cleanup.stop)
         self.admin = self.user('admin', True)
         self.a, self.b = self.user('a'), self.user('b')
         self.ga, self.gb = Group.objects.create(name='A'), Group.objects.create(name='B')
@@ -90,6 +96,11 @@ class HostResourceTests(TestCase):
         data = self.call('/host/group/?with_hosts=1').json()['data']
         self.assertNotIn('secret-', str(data))
         self.assertNotIn('B', [c['title'] for g in data['treeData'] for c in g['children']])
+
+    def test_group_tree_distinguishes_owned_and_readable_only_groups(self):
+        rows = self.call('/host/group/').json()['data']['treeData']
+        self.assertTrue(next(g for g in rows if g['key'] == self.ga.pk)['can_manage'])
+        self.assertFalse(next(g for g in rows if g['key'] == self.gb.pk)['can_manage'])
 
     @patch('apps.host.views._do_host_verify', return_value=True)
     def test_edit_other_host_is_rejected_before_saved_key_or_network(self, verify):
@@ -431,7 +442,10 @@ class HostResourceTests(TestCase):
         self.assertTrue(ws.closed)
         ws.chan.close.assert_called()
 
-    def test_download_stream_stops_before_next_chunk_after_grant_revocation(self):
+    # Direct response fixtures have no request lifecycle; emitting its finish
+    # signal here would close MariaDB's TestCase-owned outer transaction.
+    @patch('django.http.response.signals.request_finished.send')
+    def test_download_stream_stops_before_next_chunk_after_grant_revocation(self, finished):
         from apps.file.utils import FileResponseAfter
         grant = ResourceGrant.objects.create(user=self.a, host=self.hb, level='read')
         callback = MagicMock()
@@ -631,7 +645,8 @@ class HostResourceTests(TestCase):
             batch_sync_host('fixture', [self.ha, self.hb], user_id=self.a.pk)
         sync.assert_not_called()
 
-    def test_download_does_not_read_next_remote_chunk_after_revocation(self):
+    @patch('django.http.response.signals.request_finished.send')
+    def test_download_does_not_read_next_remote_chunk_after_revocation(self, finished):
         from apps.file.utils import FileResponseAfter
         reads = []
         def remote_chunks():

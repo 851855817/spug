@@ -61,7 +61,7 @@ def preflight(worker, target):
         s.configured(target.panel, target.panel_snapshot['api_config_revision'])
         if bundle.state != 'sealed':
             raise ValueError('源文件包不可用')
-        with worker.client(target.panel) as client:
+        with worker.client(target.panel, target.task) as client:
             info = resources.system_info(client)
             paths = RemotePaths(client)
             for source in bundle.files.order_by('id'):
@@ -133,7 +133,7 @@ def process(worker, target):
             if digest.hexdigest() != row.source.sha256 or length != row.source.size:
                 raise ValueError('源文件摘要变化')
             filename = destination(target.params['target_dir'], row.source)
-            with worker.client(target.panel) as client:
+            with worker.client(target.panel, target.task) as client:
                 info = resources.system_info(client)
                 current_before = RemotePaths(client).inspect(filename)
                 if (info['version'] != row.before.get('panel_version')
@@ -145,6 +145,7 @@ def process(worker, target):
                 # No automatic retry, redirect or fallback after this point.
                 try:
                     from apps.schedule.panel_tasks import authorized_client
+                    s.runtime_authorized(target.task_id, mutating=True)
                     authorized_client(client, target.task).upload_file(posixpath.dirname(filename), posixpath.basename(filename), stream)
                     evidence = verify_content(client, filename, row.source)
                     result = {'state': 'success', 'message': '上传完成，内容校验通过', 'evidence': evidence}
@@ -195,6 +196,7 @@ def begin(worker, target_id, result_id):
             s.refresh_task(task)
             return False
         s.configured(target.panel, target.panel_snapshot['api_config_revision'])
+        s.runtime_authorized(task.pk, mutating=True)
         if 'upload_overwrite' not in task.acknowledgements:
             raise ValueError('缺少覆盖确认')
         from apps.schedule.panel_tasks import before_mutation
@@ -235,7 +237,7 @@ def readback(worker, target, row):
     try:
         s.configured(target.panel, target.panel_snapshot['api_config_revision'])
         filename = destination(target.params['target_dir'], row.source)
-        with worker.client(target.panel) as client:
+        with worker.client(target.panel, target.task) as client:
             if resources.system_info(client)['version'] != row.before['panel_version']:
                 raise ValueError('面板版本变化')
             RemotePaths(client).inspect(filename)

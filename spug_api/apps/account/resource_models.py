@@ -3,6 +3,15 @@ from django.db import models
 from django.db.models import Q
 
 
+class ResourceQuotaLock(models.Model):
+    """Single short transaction lock for changes to the quota resource graph."""
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+
+    class Meta:
+        app_label = 'account'
+        db_table = 'account_resource_quota_lock'
+
+
 class AccountResourcePolicy(models.Model):
     user = models.OneToOneField('account.User', primary_key=True, on_delete=models.CASCADE,
                                 related_name='resource_policy')
@@ -65,4 +74,3 @@ class ResourceAccessAudit(models.Model):
     class Meta:
         app_label = 'account'
         db_table = 'account_resource_audit'
-

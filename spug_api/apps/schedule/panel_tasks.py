@@ -14,6 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.account.models import User
+from apps.account import access as resource_access
 from apps.baota import task_service as s
 from apps.baota.models import PanelTask, PanelUploadBinding, PanelUploadBundle
 from apps.baota.operations import get_operation
@@ -48,27 +49,27 @@ def decode(value):
 
 def permitted(user, *codes):
     """Read current roles directly: authorization must not use the login cache."""
-    if user is None or not user.is_active or user.is_deleted:
+    try:
+        current, granted = resource_access.permissions(user)
+    except PermissionError:
         return False
-    if user.is_supper:
-        return True
-    current = set()
-    for role in user.roles.all():
-        for module, pages in role.get_page_perms().items():
-            for page, actions in pages.items():
-                current.update(f'{module}.{page}.{action}' for action in actions)
-    return all(code in current for code in codes)
+    return current.is_supper or set(codes).issubset(granted)
 
 
 def require(user, *codes):
-    if not permitted(user, *codes):
-        raise PermissionError('权限拒绝')
+    return resource_access.require(user, *codes)
 
 
 def access(user, task, action='view'):
-    require(user, 'schedule.schedule.' + action, 'exec.panel.view')
-    if task.created_by_id != user.pk and not permitted(user, 'exec.panel.manage'):
+    user = require(user, 'schedule.schedule.' + action, 'exec.panel.view')
+    task = Task.objects.get(pk=task.pk)
+    if task.created_by_id != user.pk and not user.is_supper:
         raise PermissionError('权限拒绝或任务不存在')
+    value = definition(task)
+    resource_access.require_resources(user, 'panel', value['panel_ids'], manage=action != 'view')
+    if action != 'view':
+        s.action_permission(user, value['operation'])
+    return task
 
 
 def definition(task):
@@ -103,6 +104,8 @@ def projection(item):
 
 
 def frozen(source):
+    if any(a.get('action') == 'ssl_monitor' for a in source.audit):
+        raise ValueError('SSL 监控派生任务不能转换为普通计划，请在 SSL 监控管理续签来源')
     if source.state == 'preflight_queued':
         raise ValueError('预检尚未完成，请稍后刷新')
     if source.state not in ('prepared', 'completed') or source.cancel_requested:
@@ -175,6 +178,7 @@ def template(user, source_id):
     source = visible_sources(user).filter(pk=positive_id(source_id)).first()
     if not source:
         raise PermissionError('权限拒绝或任务不存在')
+    s.task_access(user, source, 'create')
     return public_plan(frozen(source))
 
 
@@ -185,15 +189,16 @@ def templates(user):
     items = []
     for source in visible_sources(user).filter(state__in=('prepared', 'completed'), cancel_requested=False)[:100]:
         try:
+            s.task_access(user, source, 'create')
             items.append(public_plan(frozen(source)))
-        except ValueError:
+        except (ValueError, PermissionError):
             continue
     return {'items': items}
 
 
 def visible_sources(user, queryset=None):
     queryset = PanelTask.objects.all() if queryset is None else queryset
-    return queryset if permitted(user, 'exec.panel.manage') else queryset.filter(owner_id=user.pk)
+    return s.visible(user, queryset)
 
 
 def validate_trigger(data):
@@ -258,6 +263,9 @@ def save(user, data):
         source = visible_sources(user, PanelTask.objects.select_for_update()).filter(pk=positive_id(plan['template_id'])).first()
         if not source:
             raise PermissionError('权限拒绝或任务不存在')
+        s.task_access(user, source, 'create')
+        if current:
+            s.task_access(current.created_by_id, source, 'create')
         value = frozen(source)
         if plan['template_token'] != value['template_token']:
             raise ValueError('预检模板已变化，请重新选择')
@@ -290,23 +298,26 @@ def save(user, data):
 def activate(user, task_id, enabled, confirmed=False):
     with transaction.atomic():
         task = Task.objects.select_for_update().get(pk=positive_id(task_id))
-        access(user, task, 'edit')
+        access(user, task, 'enable')
         if type(enabled) is not bool:
             raise ValueError('启用状态无效')
         value = definition(task)
         if enabled:
             require(user, 'exec.panel.create', 'exec.panel.execute')
+            creator = require(task.created_by_id, 'schedule.schedule.run', 'exec.panel.view', 'exec.panel.create', 'exec.panel.execute')
+            s.action_permission(creator, value['operation'])
+            resource_access.require_resources(creator, 'panel', value['panel_ids'], manage=True)
             if confirmed is not True:
                 raise ValueError('请确认固定目标及到点自动执行')
             if unresolved(task):
                 raise ValueError('上次运行尚未结束，请先核验结果')
-            source = visible_sources(user).filter(pk=value['template_id']).first()
+            source = visible_sources(creator).filter(pk=value['template_id']).first()
             if source is None or frozen(source)['template_token'] != value['template_token']:
                 raise ValueError('模板或 API 配置已变化，请重新配置计划')
             if value.get('bundle_id') and not PanelUploadBundle.objects.filter(pk=value['bundle_id'], owner=user).exists():
                 raise ValueError('上传计划须由源文件所属账号创建和启用')
             validate_trigger({'trigger': task.trigger, 'trigger_args': task.trigger_args})
-            value['authorized_by'] = user.pk
+            value['authorized_by'] = creator.pk
         task.is_active = enabled
         task.command = encode(value)
         task.updated_by, task.updated_at = user, human_datetime()
@@ -314,9 +325,13 @@ def activate(user, task_id, enabled, confirmed=False):
     return task
 
 
-def actor(value):
-    user = User.objects.filter(pk=value.get('authorized_by')).first()
-    require(user, 'schedule.schedule.edit', 'exec.panel.view', 'exec.panel.create', 'exec.panel.execute')
+def actor(value, task):
+    task = Task.objects.get(pk=task.pk)
+    user = require(task.created_by_id, 'schedule.schedule.run', 'exec.panel.view', 'exec.panel.create', 'exec.panel.execute')
+    if value.get('authorized_by') != user.pk:
+        raise PermissionError('计划授权账号与真实创建者不一致')
+    s.action_permission(user, value['operation'])
+    resource_access.require_resources(user, 'panel', value['panel_ids'], manage=True)
     return user
 
 
@@ -360,7 +375,7 @@ def dispatch(task_id):
                   'panel_task_id': None, 'message': '正在重新预检'}
         history = History.objects.create(task_id=task.pk, status=0, run_time=human_datetime(), output=encode(output))
         try:
-            user = actor(value)
+            user = actor(value, task)
             panel_task = new_preflight(user, value)
             s.audit(panel_task, user, 'schedule', schedule_id=task.pk, history_id=history.pk, revision=value['revision'])
             output['panel_task_id'] = panel_task.pk
@@ -413,8 +428,8 @@ def quarantine(task, message):
     return record
 
 
-def before_mutation(panel_task):
-    """Called inside the worker intent transaction; does no network/row locking."""
+def before_request(panel_task, mutating=False):
+    """Revalidate durable plan/creator/targets for both reads and writes."""
     link = next((a for a in panel_task.audit if a.get('action') == 'schedule'), None)
     if not link:
         return
@@ -423,18 +438,24 @@ def before_mutation(panel_task):
         raise ValueError('面板计划已停止，禁止继续发送')
     value = definition(task)
     try:
-        actor(value)
+        actor(value, task)
     except PermissionError:
         raise ValueError('面板计划授权已撤销，禁止继续发送') from None
     history = History.objects.filter(pk=link['history_id'], task_id=task.pk, status=0).first()
     envelope = decode(history.output) if history else {}
     if (value['revision'] != link['revision'] or history is None
-            or envelope.get('panel_task_id') != panel_task.pk or envelope.get('phase') != 'running'
-            or panel_task.owner_id != value['authorized_by']):
+            or envelope.get('panel_task_id') != panel_task.pk
+            or envelope.get('phase') not in (('running',) if mutating else ('preflight', 'running'))
+            or panel_task.owner_id != task.created_by_id
+            or set(panel_task.targets.values_list('panel_id', flat=True)) != set(value['panel_ids'])):
         raise ValueError('面板计划运行授权已变化')
-    if any(t.state in ('failed', 'uncertain', 'cancelled') or any(c['state'] in ('failed', 'uncertain', 'cancelled')
+    if mutating and any(t.state in ('failed', 'uncertain', 'cancelled') or any(c['state'] in ('failed', 'uncertain', 'cancelled')
            for c in t.children) for t in panel_task.targets.all()):
         raise ValueError('本次面板计划已有异常，已停止后续发送')
+
+
+def before_mutation(panel_task):
+    return before_request(panel_task, mutating=True)
 
 
 def lock_for_intent(panel_task_id):
@@ -550,10 +571,18 @@ def tick(limit=20):
             try:
                 output = decode(history.output)
                 panel_task = PanelTask.objects.select_for_update().filter(pk=output.get('panel_task_id')).first()
+                if panel_task is not None:
+                    link = next((a for a in panel_task.audit if a.get('action') == 'schedule'), {})
+                    if (link.get('schedule_id') != task.pk or link.get('history_id') != history.pk
+                            or panel_task.owner_id != task.created_by_id):
+                        # Never let corrupt historical IDs cancel or modify an
+                        # unrelated durable task when stop_run handles failure.
+                        panel_task = None
+                        raise ValueError('面板运行记录不属于此计划')
                 value = definition(task)
                 if not task.is_active or value['revision'] != output['revision']:
                     raise ValueError('计划已停止或配置已变化，未发送项目已取消')
-                actor(value)
+                actor(value, task)
                 if panel_task is None:
                     raise ValueError('面板运行记录缺失，请核对后重新配置计划')
                 targets = list(panel_task.targets.all())
@@ -569,7 +598,7 @@ def tick(limit=20):
                     check_configuration(value)
                     check_scope(value, panel_task)
                     if panel_task.state == 'prepared':
-                        s.start(actor(value), panel_task.pk, {'acknowledgements': s.required_acks(targets)}, scheduled=True)
+                        s.start(actor(value, task), panel_task.pk, {'acknowledgements': s.required_acks(targets)}, scheduled=True)
                         output.update(phase='running', message='预检通过，正在执行')
                     elif panel_task.state == 'completed':
                         output.update(phase='completed', message='预检通过，全部已符合目标')
@@ -622,19 +651,24 @@ def notify_pending(limit=5):
 
 
 def preview(user, task):
-    access(user, task, 'edit')
+    task = access(user, task, 'run')
     require(user, 'exec.panel.create')
     return new_preflight(user, definition(task))
 
 
 def history_detail(user, task, history):
-    access(user, task)
+    task = access(user, task)
+    history = History.objects.get(pk=history.pk)
     if history.task_id != task.pk:
         raise PermissionError('历史记录不属于此计划')
     output = decode(history.output)
     panel_task = PanelTask.objects.filter(pk=output.get('panel_task_id')).first()
     rows = []
     if panel_task:
+        s.task_access(user, panel_task)
+        link = next((a for a in panel_task.audit if a.get('action') == 'schedule'), {})
+        if link.get('schedule_id') != task.pk or link.get('history_id') != history.pk:
+            raise PermissionError('面板任务不属于此计划运行')
         for target in panel_task.targets.all():
             reasons = [c.get('result', {}).get('message') or c['snapshot'].get('message', '') for c in target.children]
             state = target.state

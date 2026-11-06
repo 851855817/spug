@@ -6,6 +6,7 @@ import re
 
 from django.db import transaction
 from django.utils import timezone
+from apps.account import access
 
 from .models import Panel, PanelGroup, PanelTask, PanelTaskTarget, PanelLock
 from .operations import get_operation
@@ -54,20 +55,76 @@ def check_preflight_size(targets):
 
 
 def permission(user, name):
-    if not user.has_perms(['exec.panel.' + name]):
-        raise PermissionError('权限拒绝')
+    return access.require(user, 'exec.panel.' + name)
+
+
+def action_permission(user, operation):
+    current, granted = access.permissions(user)
+    code = 'exec.panel_action.' + operation
+    if not current.is_supper and code not in granted:
+        access.reject(current, '缺少面板操作授权：' + code, codes=[code])
+    return current
+
+
+def task_access(user, task, action='view'):
+    user = permission(user, action)
+    # Always resolve the durable row, including callers holding an old object.
+    task = PanelTask.objects.get(pk=getattr(task, 'pk', task))
+    if not user.is_supper and task.owner_id != user.pk:
+        access.reject(user, '任务不存在或无权访问')
+    if action != 'view':
+        action_permission(user, task.operation)
+    access.require_resources(user, 'panel', list(task.targets.values_list('panel_id', flat=True)), manage=action != 'view')
+    return task
+
+
+def runtime_authorized(task_id, mutating=False):
+    task = PanelTask.objects.get(pk=task_id)
+    user = access.current_user(task.owner_id)
+    # Queued requests must hold the complete current scope before the first
+    # panel is contacted; a revoked sibling target cannot be silently skipped.
+    permission(user, 'create' if task.state == 'preflight_queued' else 'execute')
+    action_permission(user, task.operation)
+    targets = list(task.targets.select_related('panel'))
+    access.require_resources(user, 'panel', [target.panel_id for target in targets], manage=True)
+    for target in targets:
+        revision = target.panel_snapshot.get('api_config_revision')
+        if type(revision) is not int or target.panel.api_config_revision != revision:
+            raise ValueError('API 配置在预检后变化，未发送请求；请创建新预检')
+        # Empty targets validate their own configuration before opening a
+        # preflight client. An unconfigured sibling must fail independently;
+        # every target's frozen revision still participates in this guard.
+        if target.children:
+            configured(target.panel, revision)
+    if task.operation == 'file_upload':
+        from .models import PanelUploadBinding
+        bindings = list(PanelUploadBinding.objects.filter(target__task=task).select_related('bundle'))
+        if len(bindings) != task.targets.count() or any(b.bundle.owner_id != user.pk or b.bundle.state != 'sealed' for b in bindings):
+            raise ValueError('上传文件包归属或封存状态已变化，未发送请求')
+    from apps.schedule.panel_tasks import before_request
+    before_request(task, mutating=mutating)
+    if any(a.get('action') == 'ssl_monitor' for a in task.audit):
+        access.require(user, 'exec.panel.create', 'exec.panel.execute')
+        from apps.monitor.ssl.renewal import panel_runtime_authorized
+        if not panel_runtime_authorized(task.pk, mutating=mutating):
+            raise ValueError('SSL 来源或续签权限已变化，未发送请求')
+    return task
 
 
 def visible(user, queryset=None):
+    user = access.current_user(user)
     queryset = queryset if queryset is not None else PanelTask.objects.all()
-    return queryset if user.has_perms(['exec.panel.manage']) else queryset.filter(owner_id=user.pk)
+    if not user.is_supper:
+        queryset = queryset.filter(owner_id=user.pk)
+    denied = PanelTaskTarget.objects.exclude(panel_id__in=access.scope(user, 'panel').values('pk')).values('task_id')
+    return queryset.exclude(pk__in=denied)
 
 
 def owned(user, task_id, action, lock=False):
     permission(user, action)
     qs = PanelTask.objects.select_for_update() if lock else PanelTask.objects
     try:
-        return visible(user, qs).get(pk=positive_id(task_id))
+        return task_access(user, visible(user, qs).get(pk=positive_id(task_id)), action)
     except PanelTask.DoesNotExist:
         raise PermissionError('任务不存在或无权访问') from None
 
@@ -79,9 +136,10 @@ def configured(panel, revision=None):
         raise ValueError('API 配置在预检后变化，请创建新预检')
 
 
-def safe_panel(panel):
-    return {'id': panel.pk, 'name': panel.name, 'group_id': panel.group_id,
-            'group_name': panel.group.name, 'api_config_revision': panel.api_config_revision,
+def safe_panel(panel, user=None):
+    visible_group = user is None or panel.group_id in access.group_ids(user, 'panel')
+    return {'id': panel.pk, 'name': panel.name, 'group_id': panel.group_id if visible_group else None,
+            'group_name': panel.group.name if visible_group else '', 'api_config_revision': panel.api_config_revision,
             'api_configured': bool(panel.api_base_url and panel.api_key_ciphertext),
             'api_checked': bool(panel.api_checked_at), 'api_version': panel.api_version}
 
@@ -97,13 +155,14 @@ def preflight_prerequisite_error(panel):
     return ''
 
 
-def selected_panels(data):
+def selected_panels(data, user):
     panel_ids, group_ids = data.get('panel_ids', []), data.get('group_ids', [])
     if (not isinstance(panel_ids, list) or not isinstance(group_ids, list)
             or len(panel_ids) > MAX_PANELS or len(group_ids) > MAX_PANELS):
         raise ValueError('单次最多选择 50 个面板或分组')
     ids = {positive_id(v) for v in panel_ids}
     selected = {positive_id(v) for v in group_ids}
+    access.require_groups(user, 'panel', list(selected))
     groups = dict(PanelGroup.objects.values_list('id', 'parent_id'))
     if not selected.issubset(groups):
         raise ValueError('分组不存在')
@@ -117,15 +176,16 @@ def selected_panels(data):
     ids.update(Panel.objects.filter(group_id__in=selected).values_list('id', flat=True))
     if not 1 <= len(ids) <= MAX_PANELS:
         raise ValueError('请选择 1 至 50 个面板')
-    return list(Panel.objects.select_related('group').filter(pk__in=ids).order_by('id'))
+    return list(access.require_resources(user, 'panel', list(ids), manage=True).select_related('group').order_by('id'))
 
 
 def prepare(user, data, retry_parent=None):
-    permission(user, 'create')
+    user = permission(user, 'create')
     bounded(data)
     strict(data, ('operation', 'panel_ids', 'group_ids', 'params', 'params_by_panel'), ('operation',))
     operation = get_operation(data['operation'])
-    panels = selected_panels(data)
+    action_permission(user, operation.code)
+    panels = selected_panels(data, user)
     if operation.code == 'file_upload':
         return prepare_upload(user, data, panels, operation, retry_parent)
     if ('params' in data) == ('params_by_panel' in data):
@@ -550,7 +610,7 @@ def resolve(user, task_id, data):
         if not isinstance(data[name], str) or not data[name].strip() or len(data[name]) > 2000:
             raise ValueError('必须填写原因和核验依据')
     with transaction.atomic():
-        task = PanelTask.objects.select_for_update().get(pk=positive_id(task_id))
+        task = owned(user, task_id, 'manage', lock=True)
         target = task.targets.select_for_update().get(pk=positive_id(data['target_id']))
         if target.state in ACTIVE:
             raise ValueError('调用仍在执行，不能人工覆盖')
@@ -574,6 +634,8 @@ def resolve(user, task_id, data):
 
 def retry(user, task_id):
     source = owned(user, task_id, 'create')
+    if any(a.get('action') == 'ssl_monitor' for a in source.audit):
+        raise ValueError('SSL 监控派生任务请返回 SSL 监控重新预检，保留续签来源授权')
     if source.operation == 'file_upload':
         values = source.params_by_panel
         return prepare(user, {'operation': source.operation,
@@ -599,7 +661,9 @@ def safe_tree(value):
     return value if value is None or type(value) in (str, int, float, bool) else None
 
 
-def task_view(task, detail=True):
+def task_view(task, detail=True, user=None):
+    if user is not None:
+        task = task_access(user, task)
     data = {'id': task.pk, 'operation': task.operation, 'owner_id': task.owner_id, 'state': task.state,
             'retry_parent_id': task.retry_parent_id, 'cancel_requested': task.cancel_requested,
             'acknowledgements': task.acknowledgements, 'created_at': task.created_at.isoformat(),
@@ -608,8 +672,14 @@ def task_view(task, detail=True):
                                  if key in task.execution_policy}}
     if detail:
         targets = list(task.targets.all())
+        groups = access.group_ids(user, 'panel') if user is not None else None
+        def snapshot(target):
+            panel = copy.deepcopy(target.panel_snapshot)
+            if groups is not None and panel.get('group_id') not in groups:
+                panel.update(group_id=None, group_name='')
+            return panel
         data.update(required_acknowledgements=required_acks(targets), audit=task.audit,
-                    targets=[{'id': t.pk, 'panel': t.panel_snapshot, 'state': t.state,
+                    targets=[{'id': t.pk, 'panel': snapshot(t), 'state': t.state,
                               'message': t.message, 'summary': t.summary,
                               'children': t.children} for t in targets])
     return safe_tree(data)

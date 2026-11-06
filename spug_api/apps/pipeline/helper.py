@@ -46,6 +46,7 @@ class Helper(KitMixin):
         self.flags = defaultdict(bool)
         self.already_clear = False
         self.files = {}
+        self.authorize = lambda: None
 
     def __del__(self):
         self.clear()
@@ -57,6 +58,8 @@ class Helper(KitMixin):
 
     @classmethod
     def fill_outputs(cls, outputs, deploy_key):
+        for key in outputs:
+            cls.validate_key(deploy_key, key)
         rds = get_redis_connection()
         key_ttl = rds.ttl(deploy_key)
         counter, hit_keys = 0, set()
@@ -92,7 +95,15 @@ class Helper(KitMixin):
                     line = f.readline()
         return counter
 
+    @staticmethod
+    def validate_key(token, key):
+        if (not re.fullmatch(r'[A-Za-z0-9_.-]{1,160}', str(key)) or
+                any(not part for part in str(key).split('.')) or
+                not isinstance(token, str) or not re.fullmatch(r'[A-Za-z0-9_:-]{1,160}', token)):
+            raise ValueError('输出地址无效')
+
     def get_file(self, key):
+        self.validate_key(self.rds_key, key)
         if key in self.files:
             return self.files[key]
         os.makedirs(settings.DEPLOY_DIR, exist_ok=True)
@@ -101,24 +112,29 @@ class Helper(KitMixin):
         return file
 
     def get_cross_env(self, key):
-        file = os.path.join(settings.DEPLOY_DIR, key)
+        self.validate_key(self.rds_key, key)
+        file = os.path.join(settings.DEPLOY_DIR, f'{self.rds_key}:{key}.env')
         if os.path.exists(file):
             with open(file, 'r') as f:
                 return json.loads(f.read())
         return {}
 
     def set_cross_env(self, key, envs):
+        self.validate_key(self.rds_key, key)
         file_envs = {}
         for k, v in envs.items():
             if k == 'SPUG_SET':
                 try:
+                    from apps.account import access
+                    access.admin(self.authorize())
                     update_config_by_var(v)
                 except SpugError as e:
                     self.send_error(key, f'{e}')
             elif k.startswith('SPUG_GEV_'):
                 file_envs[k] = v
 
-        file = os.path.join(settings.DEPLOY_DIR, key)
+        os.makedirs(settings.DEPLOY_DIR, exist_ok=True)
+        file = os.path.join(settings.DEPLOY_DIR, f'{self.rds_key}:{key}.env')
         with open(file, 'w') as f:
             f.write(json.dumps(file_envs))
 

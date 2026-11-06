@@ -14,13 +14,14 @@ from apps.deploy.helper import Helper
 from apps.app.models import Deploy
 from threading import Thread
 import json
+from apps.deploy import resources
 
 
-class RepositoryView(View):
+class RepositoryView(resources.ResourceView):
     @auth('deploy.repository.view|deploy.request.add|deploy.request.edit')
     def get(self, request):
         app_id = request.GET.get('app_id')
-        data = Repository.objects.all()
+        data = resources.visible(request.user, Repository.objects.all(), owned=True)
         if not request.user.is_supper:
             data = data.filter(app_id__in=request.user.deploy_perms['apps'])
         data = data.annotate(
@@ -53,6 +54,7 @@ class RepositoryView(View):
             deploy = Deploy.objects.filter(pk=form.deploy_id).first()
             if not deploy:
                 return json_response(error='未找到指定发布配置')
+            resources.authorize(request.user, deploy, manage=True)
             form.extra = json.dumps(form.extra)
             form.spug_version = Repository.make_spug_version(deploy.id)
             rep = Repository.objects.create(
@@ -74,6 +76,7 @@ class RepositoryView(View):
             rep = Repository.objects.filter(pk=form.id).first()
             if not rep:
                 return json_response(error='未找到指定构建记录')
+            resources.authorize(request.user, rep, manage=True, owned=True)
             if form.action == 'rebuild':
                 Thread(target=dispatch, args=(rep, None, get_request_language(request))).start()
                 return json_response(rep.to_view())
@@ -89,6 +92,7 @@ class RepositoryView(View):
             repository = Repository.objects.filter(pk=form.id).first()
             if not repository:
                 return json_response(error='未找到指定构建记录')
+            resources.authorize(request.user, repository, manage=True, owned=True)
             if repository.deployrequest_set.exists():
                 return json_response(error='已关联发布申请无法删除')
             repository.delete()
@@ -96,13 +100,14 @@ class RepositoryView(View):
 
 
 @auth('deploy.repository.view')
+@resources.errors
 def get_requests(request):
     form, error = JsonParser(
         Argument('repository_id', type=int, help='参数错误')
     ).parse(request.GET)
     if error is None:
         requests = []
-        for item in DeployRequest.objects.filter(repository_id=form.repository_id):
+        for item in resources.visible(request.user, DeployRequest.objects.filter(repository_id=form.repository_id), owned=True):
             data = item.to_dict(selects=('id', 'name', 'created_at'))
             data['host_ids'] = json.loads(item.host_ids)
             data['status_alias'] = item.get_status_display()
@@ -112,10 +117,12 @@ def get_requests(request):
 
 
 @auth('deploy.repository.view')
+@resources.errors
 def get_detail(request, r_id):
     repository = Repository.objects.filter(pk=r_id).first()
     if not repository:
         return json_response(error='未找到指定构建记录')
+    resources.authorize(request.user, repository, owned=True)
     deploy_key = repository.deploy_key
     response = AttrDict(status=repository.status, token=deploy_key)
     output = {'data': ''}
@@ -126,4 +133,5 @@ def get_detail(request, r_id):
     elif not output['data']:
         output['data'] = Helper.term_message('未读取到数据，可能已被清理', 'warn', with_time=False)
     response.output = output
+    resources.authorize(request.user, repository, owned=True)
     return json_response(response)

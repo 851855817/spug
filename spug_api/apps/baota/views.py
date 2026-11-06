@@ -3,6 +3,9 @@ from django.db.models.deletion import ProtectedError
 from django.views import View
 
 from libs import auth, json_response
+from apps.account import access
+from apps.account.models import ResourceGroupOwner
+from .authorization import panel_view
 from .models import Panel, PanelGroup
 from .security import encrypt_secret, SecretError
 from .validation import api_configuration, parse_body, positive_id, text, panel_url
@@ -11,30 +14,40 @@ from .validation import api_configuration, parse_body, positive_id, text, panel_
 class PanelView(View):
     @auth('baota.panel.view')
     def get(self, request):
-        return json_response([panel.to_view() for panel in Panel.objects.all()])
+        return json_response([panel_view(request.user, panel) for panel in access.scope(request.user, 'panel')])
 
     def post(self, request):
         try:
             data = parse_body(request)
             record_id = positive_id(data.get('id'), required=False)
             permission = 'baota.panel.edit' if record_id else 'baota.panel.add'
-            if not request.user.has_perms([permission]):
-                return json_response(error='权限拒绝')
+            user = access.require(request.user, permission)
+            if record_id:
+                access.require_resources(user, 'panel', [record_id], manage=True)
             values = {
                 'name': text(data, 'name', '面板名称', 100),
                 'url': panel_url(text(data, 'url', '面板地址', 2048)),
                 'username': text(data, 'username', '登录账户', 100),
                 'desc': text(data, 'desc', '备注', 500, required=False),
             }
-            group_id = positive_id(data.get('group_id'))
+            group_id = positive_id(data.get('group_id'), required=not record_id)
             password = text(data, 'password', '登录密码', 4096, required=not record_id, strip=False)
             if password:
                 values['password_ciphertext'] = encrypt_secret(password)
-            with transaction.atomic():
+            affected = lambda: access.affected_accounts('panel', [record_id]) if record_id else {user.pk}
+            with access.quota_guard(affected, actor=user):
+                panel = (Panel.objects.select_for_update().get(pk=record_id) if record_id
+                         else Panel(created_by=user))
+                group_id = panel.group_id if group_id is None else group_id
                 group = PanelGroup.objects.select_for_update().get(pk=group_id)
                 values['group'] = group
-                panel = (Panel.objects.select_for_update().get(pk=record_id) if record_id
-                         else Panel(created_by=request.user))
+                user = access.require(user.pk, permission)
+                if record_id:
+                    access.require_resources(user, 'panel', [record_id], manage=True)
+                if not record_id or group_id != panel.group_id:
+                    if record_id and not user.is_supper and access.owner_id('panel', panel) != user.pk:
+                        access.reject(user, '仅资源归属账号或管理员可移动面板分组')
+                    access.require_groups(user, 'panel', [group_id], manage=True)
                 api_values, api_key, clear_api_key = api_configuration(data, panel)
                 if api_key:
                     api_values['api_key_ciphertext'] = encrypt_secret(api_key)
@@ -46,8 +59,11 @@ class PanelView(View):
                 values.update(api_values)
                 for key, value in values.items():
                     setattr(panel, key, value)
+                access.require(user.pk, permission)
+                if record_id:
+                    access.require_resources(user, 'panel', [record_id], manage=True)
                 panel.save()
-            return json_response(panel.to_view())
+            return json_response(panel_view(user, panel))
         except (ValueError, SecretError) as exc:
             return json_response(error=str(exc))
         except (Panel.DoesNotExist, PanelGroup.DoesNotExist):
@@ -57,8 +73,12 @@ class PanelView(View):
     def delete(self, request):
         try:
             record_id = positive_id(request.GET.get('id'))
-            panel = Panel.objects.get(pk=record_id)
-            panel.delete()
+            access.require_resources(request.user, 'panel', [record_id], manage=True)
+            with access.quota_guard(lambda: access.affected_accounts('panel', [record_id]), actor=request.user):
+                panel = Panel.objects.select_for_update().get(pk=record_id)
+                access.require(request.user.pk, 'baota.panel.del')
+                access.require_resources(request.user.pk, 'panel', [record_id], manage=True)
+                panel.delete()
             return json_response()
         except ValueError as exc:
             return json_response(error=str(exc))
@@ -71,7 +91,9 @@ class PanelView(View):
 class GroupView(View):
     @auth('baota.panel.view|baota.group.manage')
     def get(self, request):
-        return json_response([group.to_view() for group in PanelGroup.objects.all()])
+        managed_ids = access.group_ids(request.user, 'panel', manage=True)
+        return json_response([dict(group.to_view(), can_manage=group.pk in managed_ids)
+            for group in PanelGroup.objects.filter(pk__in=access.group_ids(request.user, 'panel'))])
 
     @auth('baota.group.manage')
     def post(self, request):
@@ -80,6 +102,10 @@ class GroupView(View):
             record_id = positive_id(data.get('id'), required=False)
             name = text(data, 'name', '分组名称', 50)
             parent_id = positive_id(data.get('parent_id'), required=False)
+            if record_id:
+                access.require_groups(request.user, 'panel', [record_id], manage=True)
+            if parent_id:
+                access.require_groups(request.user, 'panel', [parent_id], manage=True)
             with transaction.atomic():
                 # Group updates are small; lock the tree to prevent concurrent cycles.
                 groups = {group.id: group for group in PanelGroup.objects.select_for_update()}
@@ -97,6 +123,8 @@ class GroupView(View):
                     return json_response(error='同一层级已存在该名称的分组')
                 group.name, group.parent_id = name, parent_id
                 group.save()
+                if not record_id:
+                    access.own_group(request.user, 'panel', group.pk)
             return json_response(group.to_view())
         except ValueError as exc:
             return json_response(error=str(exc))
@@ -107,11 +135,13 @@ class GroupView(View):
     def delete(self, request):
         try:
             record_id = positive_id(request.GET.get('id'))
+            access.require_groups(request.user, 'panel', [record_id], manage=True)
             with transaction.atomic():
                 group = PanelGroup.objects.select_for_update().get(pk=record_id)
                 if group.panels.exists() or group.children.exists():
                     return json_response(error='分组包含面板或子分组，请先移动面板并处理子分组')
                 group.delete()
+                ResourceGroupOwner.objects.filter(kind='panel', group_id=record_id).delete()
             return json_response()
         except ValueError as exc:
             return json_response(error=str(exc))

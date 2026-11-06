@@ -6,12 +6,14 @@ from django.db import close_old_connections
 from apps.credential.models import Credential
 from apps.host.models import Host
 from libs.utils import AttrDict, human_datetime, render_str, remove_mount_dir
-from libs.executor import Executor
+from libs.executor import Executor, run_authorized
 from libs.gitlib import RemoteGit
 from libs.push import send_message
 from libs import webhook
 from apps.pipeline.helper import Helper
 from apps.pipeline.models import PipeHistory
+from apps.pipeline import resources
+from apps.account import access
 from apps.setting.utils import AppSetting
 from functools import partial
 from threading import Thread, Lock
@@ -24,6 +26,8 @@ import shutil
 import shlex
 import time
 import os
+import json
+import re
 
 
 def resource_host_ids(record):
@@ -103,6 +107,9 @@ def fill_node_targets(nodes):
 
 class NodeExecutor:
     def __init__(self, rds, token, nodes, params=None, pipe_name=None, language='zh', history_id=None):
+        resources.validate_nodes(nodes)
+        if not isinstance(token, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', token):
+            raise ValueError('流水线执行票据无效')
         self.rds = rds
         self.token = token
         self.pipe_name = pipe_name or ''
@@ -115,9 +122,24 @@ class NodeExecutor:
             self.env.update({k: str(v) for k, v in params.items()})
         # 流水线是多分支并行，没有单一结束点：用在途分支计数归零来判定整体结束
         self.history_id = history_id
+        self.execution_digest = resources.execution_digest(nodes)
+        self.helper.authorize = self._authorize
         self.states = {}
         self.pending = 0
         self.lock = Lock()
+
+    def _authorize(self):
+        record = PipeHistory.objects.filter(pk=self.history_id).first()
+        if record is None:
+            access.reject(None, '流水线执行身份已失效')
+        if resources.execution_digest(record.nodes) != self.execution_digest:
+            access.reject(record.created_by_id, '执行节点与已确认的任务快照不一致')
+        return resources.authorize(record.created_by_id, record, manage=True, code='pipeline.pipeline.do')
+
+    def _host(self, host):
+        self._authorize()
+        host.resource_guard = self._authorize
+        return host
 
     def run(self, node=None, state=None):
         if node:
@@ -173,6 +195,7 @@ class NodeExecutor:
             self._leave()
 
     def _do_dispatch(self, node, state=None):
+        self._authorize()
         if node.module == 'build':
             self._do_build(node)
         elif node.module == 'ssh_exec':
@@ -238,6 +261,7 @@ class NodeExecutor:
         content = render_str(body, env)
         at_all = bool(node.get('at_all'))
         warning = None
+        self._authorize()
 
         if mode == 'push_spug':
             targets = node.get('targets') or []
@@ -308,10 +332,10 @@ class NodeExecutor:
                         return self.run(node, 'error')
                     marker = f'origin/{node.git_branch}'
 
-            host = Host.objects.get(pk=node.target)
+            host = self._host(Host.objects.get(pk=node.target))
             credential = None
             if node.get('credential_id'):
-                credential = Credential.objects.get(pk=node.credential_id)
+                credential = resources.credential(self._authorize(), node.credential_id)
             self.helper.send_info(node.id, '同步并检出Git仓库\r\n', 'processing')
             with RemoteGit(host, node.git_url, node.workspace, credential) as git:
                 pid_key = f'{self.token}.{node.id}.{host.id}'
@@ -354,6 +378,7 @@ class NodeExecutor:
         pid_key = f'{self.token}.{node.id}.{host.id}'
         self.helper.send_info(key, '开始执行\r\n', 'processing')
         try:
+            host = self._host(host)
             with host.get_ssh() as ssh:
                 pid = ssh.get_pid()
                 if pid:
@@ -374,7 +399,7 @@ class NodeExecutor:
         node.destination = destination = AttrDict(node.destination)
         local_dir = os.path.join(settings.TRANSFER_DIR, uuid4().hex)
         try:
-            host = Host.objects.get(pk=source.target)
+            host = self._host(Host.objects.get(pk=source.target))
             os.makedirs(local_dir)
             remote_dir = f'{host.username}@{host.hostname}:{source.path}'
             with host.get_ssh() as ssh:
@@ -386,11 +411,13 @@ class NodeExecutor:
                 local_path = local_dir + '/'
 
             with tempfile.NamedTemporaryFile(mode='w') as fp:
-                fp.write(host.pkey or AppSetting.get('private_key'))
+                fp.write(host.private_key)
                 fp.flush()
 
                 command = ['sshfs', '-o', 'ro', '-o', f'ssh_command=ssh -p {host.port} -i {fp.name}', remote_dir, local_dir]
-                task = subprocess.run(command, capture_output=True)
+                self._authorize()
+                task = run_authorized(command, self._authorize, timeout=30)
+                self._authorize()
                 if task.returncode != 0:
                     raise Exception(task.stderr.decode())
         except Exception as e:
@@ -401,12 +428,15 @@ class NodeExecutor:
             return self.run(node, 'error')
 
         threads = []
-        with futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            for host in Host.objects.filter(id__in=destination.targets):
-                t = executor.submit(self._data_transfer, node, host, local_path, destination.path)
-                threads.append(t)
-            results = [x.result() for x in futures.as_completed(threads)]
-        remove_mount_dir(local_dir)
+        try:
+            self._authorize()
+            with futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                for host in Host.objects.filter(id__in=destination.targets):
+                    t = executor.submit(self._data_transfer, node, host, local_path, destination.path)
+                    threads.append(t)
+                results = [x.result() for x in futures.as_completed(threads)]
+        finally:
+            remove_mount_dir(local_dir)
         state = 'success' if all(results) else 'error'
         self.helper.send_status(node.id, state)
         self.run(node, state)
@@ -417,8 +447,9 @@ class NodeExecutor:
         pid_key = f'{self.token}.{node.id}.{host.id}'
         self.helper.send_info(key, '开始传输数据\r\n', 'processing')
         try:
+            host = self._host(host)
             with tempfile.NamedTemporaryFile(mode='w') as fp:
-                fp.write(host.pkey or AppSetting.get('private_key'))
+                fp.write(host.private_key)
                 fp.write('\n')
                 fp.flush()
 
@@ -427,7 +458,7 @@ class NodeExecutor:
                 argument = f'{shlex.quote(local_path)} {shlex.quote(f"{host.username}@{host.hostname}:{remote_path}")}'
                 ssh_command = shlex.quote(f'ssh -p {host.port} -o StrictHostKeyChecking=no -i {fp.name}')
                 command = f'rsync {options} -e {ssh_command} {argument}'
-                with Executor() as et:
+                with Executor(authorize=self._authorize) as et:
                     self.rds.set(pid_key, f'local.{et.pid}', 3600)
                     is_success = self.helper.local_exec(key, et, command)
         except Exception as e:

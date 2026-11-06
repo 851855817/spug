@@ -46,10 +46,12 @@ class GroupView(View):
     def get(self, request):
         with_hosts = request.GET.get('with_hosts')
         ids = access.group_ids(request.user, 'host')
+        managed_ids = access.group_ids(request.user, 'host', manage=True)
         host_ids = access.allowed_ids(request.user, 'host')
         data, data2, parents = {}, {}, {}
         for item in Group.objects.filter(pk__in=ids):
             entry = item.to_view(False)
+            entry['can_manage'] = item.pk in managed_ids
             if with_hosts:
                 entry['children'] = [dict(title=h.name, hostname=h.hostname,
                     key=f'{item.id}_{h.id}', id=h.id, isLeaf=True)
@@ -58,6 +60,7 @@ class GroupView(View):
         if not data and request.user.is_supper:
             grp = Group.objects.create(name='Default', sort_id=1)
             data[grp.id] = grp.to_view()
+            data[grp.id]['can_manage'] = True
         tree_data = []
         for pk, entry in data.items():
             if parents.get(pk) in data and parents.get(pk) != pk:

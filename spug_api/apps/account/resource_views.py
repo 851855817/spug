@@ -26,7 +26,8 @@ def effective(user, administrator=False):
                                  'level': g.level})
     for kind, plural in (('host', 'hosts'), ('panel', 'panels')):
         managed = access.allowed_ids(current, kind, manage=True)
-        result[plural] = [resource_row(obj, kind, 'manage' if obj.pk in managed else 'read')
+        result[plural] = [dict(resource_row(obj, kind, 'manage' if obj.pk in managed else 'read'),
+                              source='owned' if access.owner_id(kind, obj) == current.pk else 'assigned')
                           for obj in access.scope(current, kind).order_by('pk')]
         if administrator:
             result['available_' + plural] = [resource_row(obj, kind, '')
@@ -59,6 +60,7 @@ def update_policy(actor, user, data):
     # User row locks serialize edits with concurrent additions. quota_guard
     # encloses both replacement and limit changes, so failure rolls both back.
     with access.quota_guard([user.pk], actor=actor):
+        actor, user = access.admin(actor), access.current_user(user)
         if 'limit' in data:
             access.set_policy(actor, user, data['limit'])
         if grants is not None:

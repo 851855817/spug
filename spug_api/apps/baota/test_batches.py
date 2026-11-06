@@ -215,11 +215,14 @@ class PanelBatchTests(TransactionTestCase):
         with CaptureQueriesContext(connection) as queries:
             s.continue_batch(self.admin, task.pk, {'acknowledge': True})
         selects = [q['sql'].lower() for q in queries if q['sql'].lower().startswith('select')]
-        self.assertIn('baota_tasks', selects[0])
-        self.assertIn('baota_task_targets', selects[1])
+        # Fresh account/resource reads may precede locks. Check the two actual
+        # lock tables in order rather than assuming every SELECT takes a lock.
         if connection.vendor == 'mysql':
-            self.assertIn('for update', selects[0])
-            self.assertIn('for update', selects[1])
+            selects = [sql for sql in selects if 'for update' in sql]
+        tables = [sql.split(' from ', 1)[1].split()[0] for sql in selects]
+        task_index = tables.index(connection.ops.quote_name('baota_tasks'))
+        target_index = tables.index(connection.ops.quote_name('baota_task_targets'))
+        self.assertLess(task_index, target_index)
 
     def test_final_failure_finishes_with_failure_evidence_and_no_stuck_pause(self):
         task = self.prepared_panels(1)

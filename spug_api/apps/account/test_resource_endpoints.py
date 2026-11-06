@@ -34,6 +34,13 @@ class ResourceEndpointTests(TestCase):
         self.assertEqual([row['id'] for row in data['hosts']], [self.host.pk])
         self.assertNotIn('pkey', str(data))
 
+    def test_effective_resource_rows_distinguish_ownership_from_assignment(self):
+        access.set_policy(self.admin, self.a, 3)
+        access.assign(self.admin, self.a, 'host', [self.other.pk], 'manage')
+        rows = self.request(self.a)['data']['hosts']
+        self.assertEqual(next(row for row in rows if row['id'] == self.host.pk).get('source'), 'owned')
+        self.assertEqual(next(row for row in rows if row['id'] == self.other.pk).get('source'), 'assigned')
+
     def test_other_account_requires_admin(self):
         self.assertTrue(self.request(self.a, query='?user_id=%s' % self.b.pk)['error'])
 

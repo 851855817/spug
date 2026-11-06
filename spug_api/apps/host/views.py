@@ -187,7 +187,7 @@ class HostView(View):
                 tpl = ExecTemplate.objects.filter(host_ids__regex=regex).first()
                 if tpl:
                     return json_response(error=f'执行模板【{tpl.name}】关联了该主机，请解除关联后再尝试删除该主机')
-            with access.quota_guard(access.affected_accounts('host', host_ids), actor=request.user):
+            with access.quota_guard(lambda: access.affected_accounts('host', host_ids), actor=request.user):
                 access.require(request.user, 'host.host.del')
                 access.require_resources(request.user, 'host', host_ids, manage=True)
                 Host.objects.filter(pk__in=host_ids).delete()

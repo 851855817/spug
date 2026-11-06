@@ -12,7 +12,7 @@ from django.db import transaction
 from django.db.models import Q
 
 from .models import (User, AccountResourcePolicy, ResourceOwnership, ResourceGrant,
-                     ResourceGroupOwner, ResourceAccessAudit)
+                     ResourceGroupOwner, ResourceAccessAudit, ResourceQuotaLock)
 
 
 logger = logging.getLogger('spug.resource_access')
@@ -173,13 +173,24 @@ def quota_usage(user):
 
 
 @contextmanager
+def quota_transaction():
+    # A stable graph lock comes first. Grants and links can change the affected
+    # account set while another transaction waits; row locks alone cannot cover
+    # a set calculated before that wait. No network work belongs in this block.
+    with transaction.atomic():
+        ResourceQuotaLock.objects.get_or_create(pk=1)
+        ResourceQuotaLock.objects.select_for_update().get(pk=1)
+        yield
+
+
+@contextmanager
 def quota_guard(user_ids, actor=None):
     # Lock the durable User row, including accounts without a policy record.
     # All resource additions/assignments/transfers/link changes use this order.
-    selected = sorted(identifiers(list(user_ids)))
     denied = None
     try:
-        with transaction.atomic():
+        with quota_transaction():
+            selected = sorted(identifiers(list(user_ids() if callable(user_ids) else user_ids)))
             users = list(User.objects.select_for_update().filter(pk__in=selected).order_by('pk'))
             if len(users) != len(selected):
                 raise ValueError('账号不存在')
@@ -215,7 +226,8 @@ def set_policy(actor, user, limit):
     actor, user = admin(actor), current_user(user)
     if limit is not None and (type(limit) is not int or limit < 0 or limit > 2147483647):
         raise ValueError('服务器上限必须为非负整数或显式不限')
-    with transaction.atomic():
+    with quota_transaction():
+        actor, user = admin(actor), current_user(user)
         User.objects.select_for_update().get(pk=user.pk)
         AccountResourcePolicy.objects.update_or_create(user=user, defaults={'server_limit': limit})
         audit(actor, user, 'quota_changed', limit=limit)
@@ -229,6 +241,7 @@ def assign(actor, user, kind, ids, level):
         raise ValueError('资源授权级别无效')
     require_resources(actor, kind, list(selected))
     with quota_guard([user.pk], actor=actor):
+        actor, user = admin(actor), current_user(user)
         for pk in sorted(selected):
             lookup = {'user': user, kind + '_id': pk}
             if level == 'none':
@@ -259,8 +272,8 @@ def affected_accounts(kind, ids):
 def transfer(actor, kind, resource_id, user):
     actor, user = admin(actor), current_user(user)
     require_resources(actor, kind, [resource_id])
-    affected = affected_accounts(kind, [resource_id]) | {user.pk}
-    with quota_guard(affected, actor=actor):
+    with quota_guard(lambda: affected_accounts(kind, [resource_id]) | {user.pk}, actor=actor):
+        actor, user = admin(actor), current_user(user)
         ResourceOwnership.objects.update_or_create(**{kind + '_id': resource_id}, defaults={'owner': user})
         audit(actor, user, 'resource_transfer', kind=kind, id=resource_id)
 

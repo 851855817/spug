@@ -559,6 +559,18 @@ class PanelTaskTests(TransactionTestCase):
         self.worker.run_once()
         self.assertEqual(len(self.op.sent), 1)
 
+    def test_concurrent_unconfigured_sibling_does_not_block_valid_preflight(self):
+        self.services()
+        valid = self.configured()
+        invalid = self.panel(name='missing api', group_id=models.PanelGroup.objects.first().pk)
+        task = self.prepare(valid, panel_ids=[valid['id'], invalid['id']])
+        first = self.worker.claim_next()
+        second = self.worker.claim_next()
+        self.worker.process_target(first.pk)
+        self.worker.process_target(second.pk)
+        states = dict(task.targets.values_list('panel_id', 'state'))
+        self.assertEqual(states, {valid['id']: 'prepared', invalid['id']: 'failed'})
+
     def test_success_releases_lock_after_all_children_terminal(self):
         self.services()
         task = self.prepared()
@@ -694,7 +706,9 @@ class PanelTaskTests(TransactionTestCase):
         self_test = self
         panel = self.configured()
         user = self.make_user('creator')
-        user.roles.create(name='create only', page_perms={'exec': {'panel': ['create', 'view']}})
+        user.roles.create(name='create only', page_perms={'exec': {'panel': ['create', 'view'], 'panel_action': ['site_rewrite']}})
+        from apps.account.models import ResourceGrant
+        ResourceGrant.objects.create(user=user, panel_id=panel['id'], level='manage')
         self.authenticate(user)
         created = self.request('post', '/baota/tasks/', {'operation': 'site_rewrite',
                                'panel_ids': [panel['id']], 'params': {'sites': [1], 'webserver': 'nginx',

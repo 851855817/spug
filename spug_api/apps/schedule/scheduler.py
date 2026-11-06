@@ -105,6 +105,12 @@ class Scheduler:
         if interpreter not in ('sh', 'python'):
             connections.close_all()
             return
+        from . import resources
+        try:
+            resources.runtime(task.pk, interpreter, command, targets)
+        except (ValueError, PermissionError):
+            connections.close_all()
+            return
         output = {x: None for x in targets}
         history = History.objects.create(
             task_id=task_id,
@@ -113,10 +119,17 @@ class Scheduler:
             output=json.dumps(output)
         )
         Task.objects.filter(pk=task_id).update(latest_id=history.id)
-        rds_cli = get_redis_connection()
-        for t in targets:
-            rds_cli.rpush(SCHEDULE_WORKER_KEY, json.dumps([history.id, t, interpreter, command]))
-        connections.close_all()
+        try:
+            rds_cli = get_redis_connection()
+            for t in targets:
+                resources.runtime(task.pk, interpreter, command, targets)
+                rds_cli.rpush(SCHEDULE_WORKER_KEY, json.dumps([history.id, t, interpreter, command]))
+        except Exception:
+            # A prefix may already be queued. Its workers observe the terminal
+            # history and cannot admit more commands after this failure.
+            resources.fail_history(history.pk, '计划授权、配置或队列状态已变化，未继续执行；已有调用需核验')
+        finally:
+            connections.close_all()
 
     def _init_builtin_jobs(self):
         from apps.ops.expiry.reminders import scheduled_check_expiry

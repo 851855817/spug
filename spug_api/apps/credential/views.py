@@ -6,6 +6,7 @@ from django.db.models import Q
 from libs import JsonParser, Argument, json_response, auth
 from libs.gitlib import RemoteGit
 from apps.credential.models import Credential
+from apps.account import access
 
 
 class CredView(View):
@@ -59,6 +60,15 @@ def handle_check(request):
             if not credential:
                 return json_response(error='未找到指定凭据')
         if form.type == 'git':
-            is_pass, message = RemoteGit.check_auth(form.data, credential)
+            def authorize():
+                current, granted = access.permissions(request.user)
+                codes = {'deploy.app.add', 'deploy.app.edit', 'config.app.add', 'config.app.edit',
+                         'pipeline.pipeline.add', 'pipeline.pipeline.edit'}
+                if not current.is_supper and not codes.intersection(granted):
+                    access.reject(current, '权限拒绝')
+                if credential:
+                    from apps.pipeline.resources import credential as require_credential
+                    require_credential(current, credential.pk)
+            is_pass, message = RemoteGit.check_auth(form.data, credential, authorize=authorize)
             return json_response({'is_pass': is_pass, 'message': message})
     return json_response(error=error)

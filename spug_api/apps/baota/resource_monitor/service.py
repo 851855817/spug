@@ -160,8 +160,12 @@ def link(user, data):
     if 'host_id' not in data or (data['host_id'] is not None and type(data['host_id']) is not int):
         raise ValueError('请选择有效主机或取消关联')
     host = _source(access, 'host', data['host_id'], edit=True) if data['host_id'] is not None else None
-    affected = resources.affected_accounts('panel', [panel.pk])
+    affected = lambda: resources.affected_accounts('panel', [panel.pk])
     with resources.quota_guard(affected, actor=user):
+        resources.admin(user)
+        access = Access(user)
+        panel = _source(access, 'panel', panel.pk, edit=True)
+        host = _source(access, 'host', host.pk, edit=True) if host else None
         preference, _ = Preference.objects.get_or_create(panel=panel)
         preference = Preference.objects.select_for_update().get(pk=preference.pk)
         if preference.linked_host_id:

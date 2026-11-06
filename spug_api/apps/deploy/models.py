@@ -11,6 +11,18 @@ from pathlib import Path
 import json
 
 
+class DeployUpload(models.Model):
+    """Persistent attribution for files used by later release requests."""
+    deploy = models.ForeignKey(Deploy, on_delete=models.CASCADE)
+    owner = models.ForeignKey(User, on_delete=models.PROTECT)
+    path = models.CharField(max_length=80, unique=True)
+    name = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'deploy_resource_uploads'
+
+
 class DeployRequest(models.Model, ModelMixin):
     STATUS = (
         ('-3', '发布异常'),

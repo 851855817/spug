@@ -139,6 +139,11 @@ class MonitorResourceTests(TestCase):
         self.assertEqual(ssl.jobs_listing(self.admin, {})['total'], 1)
         self.assertEqual(ssl.get_job(self.admin, job.pk)['id'], job.pk)
 
+    def test_ssl_job_returns_only_authorized_source_keys_for_action_controls(self):
+        key = 'host:%s' % self.host.pk
+        job = SSLJob.objects.create(owner=self.a, kind='check', source_keys=[key])
+        self.assertEqual(ssl.get_job(self.a, job.pk)['source_keys'], [key])
+
     def test_readonly_ssl_view_cannot_cancel_a_renewal(self):
         job = SSLJob.objects.create(owner=self.a, kind='renew', state='prepared', source_keys=['host:%s' % self.host.pk])
         with self.assertRaises(ValueError):

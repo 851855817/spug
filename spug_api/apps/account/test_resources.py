@@ -2,6 +2,7 @@
 from django.core.cache import cache
 from django.test import TestCase
 from unittest.mock import patch
+from contextlib import contextmanager
 
 from apps.account import access
 from apps.account.models import User, Role
@@ -31,6 +32,42 @@ class ResourceAccessTests(TestCase):
         self.assertEqual(access.allowed_ids(self.a, 'host'), {self.host.pk})
         self.assertEqual(access.allowed_ids(self.a, 'panel'), {self.panel.pk})
         self.assertEqual(access.allowed_ids(self.admin, 'host'), {self.host.pk, self.other.pk})
+
+    def test_guard_resolves_affected_accounts_inside_serialized_change(self):
+        calls = []
+        def affected():
+            calls.append('resolved')
+            return {self.a.pk}
+        with access.quota_guard(affected):
+            self.assertEqual(calls, ['resolved'])
+        self.assertEqual(calls, ['resolved'])
+
+    def test_link_and_unlink_recheck_admin_after_waiting_for_quota_lock(self):
+        from apps.baota.resource_monitor import service
+        from apps.account.models import AccountResourcePolicy
+        role = Role.objects.create(name='all-source-actions', page_perms={
+            'host': {'host': ['view', 'edit']}, 'baota': {'panel': ['view', 'edit']}})
+        self.admin.roles.add(role)
+        Host.objects.filter(pk=self.host.pk).update(created_by=self.admin)
+        Panel.objects.filter(pk=self.panel.pk).update(created_by=self.admin)
+        AccountResourcePolicy.objects.create(user=self.admin, server_limit=None)
+        original_guard = access.quota_guard
+        @contextmanager
+        def revoke_while_waiting(*args, **kwargs):
+            User.objects.filter(pk=self.admin.pk).update(is_supper=False)
+            with original_guard(*args, **kwargs):
+                yield
+        for linked_host_id, target_host_id in ((None, self.host.pk), (self.host.pk, None)):
+            with self.subTest(unlink=target_host_id is None):
+                User.objects.filter(pk=self.admin.pk).update(is_supper=True)
+                Preference.objects.filter(panel=self.panel).delete()
+                pref = Preference.objects.create(panel=self.panel, linked_host_id=linked_host_id, revision='original')
+                with patch.object(service.resources, 'quota_guard', side_effect=revoke_while_waiting):
+                    with self.assertRaises(ValueError):
+                        service.link(self.admin, {'panel_id': self.panel.pk, 'host_id': target_host_id})
+                pref.refresh_from_db()
+                self.assertEqual((pref.linked_host_id, pref.revision), (linked_host_id, 'original'))
+                self.assertFalse(ResourceAccessAudit.objects.filter(event='resource_link_changed').exists())
 
     def test_mixed_target_request_is_wholly_rejected(self):
         with self.assertRaisesRegex(ValueError, '权限|无权'):

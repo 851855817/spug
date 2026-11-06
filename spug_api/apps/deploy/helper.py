@@ -7,6 +7,7 @@ from django_redis import get_redis_connection
 from libs.utils import SpugError, human_datetime, render_str, str_decode
 from libs.spug import Notification
 from libs.locale import translate_console, translate_choice
+from libs.executor import Executor
 from apps.host.models import Host
 from apps.config.utils import update_config_by_var
 from functools import partial
@@ -19,7 +20,7 @@ import re
 
 class NotifyMixin:
     @classmethod
-    def _make_dd_notify(cls, url, action, req, version, host_str):
+    def _make_dd_notify(cls, url, action, req, version, host_str, send=None):
         texts = [
             f'**申请标题：** {req.name}',
             f'**应用名称：** {req.deploy.app.name}',
@@ -71,10 +72,10 @@ class NotifyMixin:
                 'isAtAll': True
             }
         }
-        Notification.handle_request(url, data, 'dd')
+        (send or Notification.handle_request)(url, data, 'dd')
 
     @classmethod
-    def _make_wx_notify(cls, url, action, req, version, host_str):
+    def _make_wx_notify(cls, url, action, req, version, host_str, send=None):
         texts = [
             f'申请标题： {req.name}',
             f'应用名称： {req.deploy.app.name}',
@@ -123,10 +124,10 @@ class NotifyMixin:
                 'content': '\n'.join(texts)
             }
         }
-        Notification.handle_request(url, data, 'wx')
+        (send or Notification.handle_request)(url, data, 'wx')
 
     @classmethod
-    def _make_fs_notify(cls, url, action, req, version, host_str):
+    def _make_fs_notify(cls, url, action, req, version, host_str, send=None):
         texts = [
             f'申请标题： {req.name}',
             f'应用名称： {req.deploy.app.name}',
@@ -177,13 +178,48 @@ class NotifyMixin:
                 }
             }
         }
-        Notification.handle_request(url, data, 'fs')
+        (send or Notification.handle_request)(url, data, 'fs')
 
     @classmethod
-    def send_deploy_notify(cls, req, action=None):
+    def send_deploy_notify(cls, req, action=None, actor_id=None, permission=None):
+        from apps.deploy import resources
+        from apps.account import access
+        from apps.deploy.models import DeployRequest
+        req = DeployRequest.objects.filter(pk=req.pk).first()
+        if req is None:
+            return
+        if action == 'approve_rst':
+            bound_actor = req.approve_by_id
+            permission = permission or 'deploy.request.approve'
+        elif action == 'approve_req':
+            bound_actor = req.created_by_id
+            permission = permission or 'deploy.request.add'
+        else:
+            bound_actor = req.do_by_id or req.created_by_id
+            permission = permission or 'deploy.request.do'
+        actor_id = bound_actor if actor_id is None else actor_id
+        signature = resources._signature(req)
+        def authorize():
+            current = DeployRequest.objects.get(pk=req.pk)
+            actual = (current.approve_by_id if action == 'approve_rst' else current.created_by_id
+                      if action == 'approve_req' else current.do_by_id or current.created_by_id)
+            if actual != actor_id or resources._signature(current) != signature:
+                access.reject(actor_id, '通知来源或执行配置已变化')
+            return resources.authorize(actor_id, current, manage=True, code=permission, owned=True)
+        def send(url, data, mode=None):
+            try:
+                actor = authorize()
+            except (ValueError, PermissionError, DeployRequest.DoesNotExist):
+                return
+            Notification.handle_request(url, data, mode, scope={
+                'user': actor, 'permission': permission, 'host_ids': host_ids})
+        try:
+            authorize()
+        except (ValueError, PermissionError, DeployRequest.DoesNotExist):
+            return
         rst_notify = json.loads(req.deploy.rst_notify)
         host_ids = json.loads(req.host_ids) if isinstance(req.host_ids, str) else req.host_ids
-        if rst_notify['mode'] != '0' and rst_notify.get('value'):
+        if rst_notify.get('mode', '0') != '0' and rst_notify.get('value'):
             url = rst_notify['value']
             version = req.version
             hosts = [{'id': x.id, 'name': x.name} for x in Host.objects.filter(id__in=host_ids)]
@@ -191,7 +227,7 @@ class NotifyMixin:
             if len(hosts) > 2:
                 host_str += f'等{len(hosts)}台主机'
             if rst_notify['mode'] == '1':
-                cls._make_dd_notify(url, action, req, version, host_str)
+                cls._make_dd_notify(url, action, req, version, host_str, send=send)
             elif rst_notify['mode'] == '2':
                 data = {
                     'action': action,
@@ -208,11 +244,11 @@ class NotifyMixin:
                     'is_success': req.status in ('3', '4'),
                     'created_at': human_datetime()
                 }
-                Notification.handle_request(url, data)
+                send(url, data)
             elif rst_notify['mode'] == '3':
-                cls._make_wx_notify(url, action, req, version, host_str)
+                cls._make_wx_notify(url, action, req, version, host_str, send=send)
             elif rst_notify['mode'] == '4':
-                cls._make_fs_notify(url, action, req, version, host_str)
+                cls._make_fs_notify(url, action, req, version, host_str, send=send)
             else:
                 raise NotImplementedError
 
@@ -250,6 +286,7 @@ class Helper(NotifyMixin, KitMixin):
         self.deploy_host_ids = []
         self.files = {}
         self.already_clear = False
+        self.authorize = lambda: None
 
     def __del__(self):
         self.clear()
@@ -331,6 +368,8 @@ class Helper(NotifyMixin, KitMixin):
         for k, v in envs.items():
             if k == 'SPUG_SET':
                 try:
+                    from apps.account import access
+                    access.admin(self.authorize())
                     update_config_by_var(v)
                 except SpugError as e:
                     self.send_error('local', f'{e}')
@@ -436,6 +475,7 @@ class Helper(NotifyMixin, KitMixin):
         return partial(func, key)
 
     def local(self, executor, command):
+        self.authorize()
         code = -1
         for code, out in executor.exec_command_with_stream(command):
             self._send('local', out)
@@ -443,33 +483,12 @@ class Helper(NotifyMixin, KitMixin):
             self.send_error('local', f'exit code: {code}')
 
     def local_raw(self, command, env=None):
-        if env:
-            # the caller's variables must win over the inherited environment
-            merged = dict(os.environ)
-            merged.update({k: str(v) for k, v in env.items()})
-            env = merged
-        task = subprocess.Popen(
-            command,
-            env=env,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT)
-        message = b''
-        while True:
-            output = task.stdout.read(1)
-            if not output:
-                break
-            if output in (b'\r', b'\n'):
-                message += b'\r\n' if output == b'\n' else b'\r'
-                message = str_decode(message)
-                self._send('local', message)
-                message = b''
-            else:
-                message += output
-        if task.wait() != 0:
-            self.send_error('local', f'exit code: {task.returncode}')
+        with Executor(env, authorize=self.authorize) as executor:
+            self.local(executor, command)
 
     def remote(self, key, ssh, command, env=None):
+        self.authorize()
+        ssh.authorize = self.authorize
         code = -1
         for code, out in ssh.exec_command_with_stream(command, environment=env):
             self._send(key, out)
@@ -477,6 +496,8 @@ class Helper(NotifyMixin, KitMixin):
             self.send_error(key, f'exit code: {code}')
 
     def remote_raw(self, key, ssh, command):
+        self.authorize()
+        ssh.authorize = self.authorize
         code, out = ssh.exec_command_raw(command)
         if code != 0:
             self.send_error(key, f'exit code: {code}, {out}')

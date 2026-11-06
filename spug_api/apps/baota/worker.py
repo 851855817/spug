@@ -15,6 +15,8 @@ from .client import PanelClient
 from .models import Panel, PanelTask, PanelTaskTarget, PanelLock
 from .operations import get_operation
 from . import task_service as s
+from .authorization import AuthorizedClient
+from libs.worker_authorization import guard
 
 
 POLL_INTERVAL_SECONDS = 5
@@ -211,9 +213,10 @@ class PanelWorker:
         return True
 
     @contextmanager
-    def client(self, panel):
-        with self.client_factory(panel) as client:
-            yield StopAwareClient(client, self.stop_event)
+    def client(self, panel, task, mutating=False):
+        authorize = lambda: s.runtime_authorized(task.pk, mutating=mutating)
+        with guard(authorize), self.client_factory(panel) as client:
+            yield AuthorizedClient(StopAwareClient(client, self.stop_event), authorize)
 
     def process_target(self, target_id):
         target = PanelTaskTarget.objects.select_related('task', 'panel').get(pk=target_id)
@@ -250,7 +253,7 @@ class PanelWorker:
     def preflight(self, target):
         try:
             s.configured(target.panel, target.panel_snapshot['api_config_revision'])
-            with self.client(target.panel) as client:
+            with self.client(target.panel, target.task) as client:
                 if any(a.get('action') == 'ssl_monitor' for a in target.task.audit):
                     client = SSLAuthorizedClient(client, target.task)
                 preview = get_operation(target.task.operation).preflight(client, copy.deepcopy(target.params))
@@ -337,6 +340,7 @@ class PanelWorker:
                 s.refresh_task(task)
                 return None
             try:
+                s.runtime_authorized(task.pk, mutating=True)
                 from apps.schedule.panel_tasks import before_mutation
                 before_mutation(task)
                 if any(a.get('action') == 'ssl_monitor' for a in task.audit):
@@ -379,7 +383,7 @@ class PanelWorker:
             return
         child = target.children[index]
         try:
-            with self.client(target.panel) as client:
+            with self.client(target.panel, target.task, mutating=True) as client:
                 from apps.schedule.panel_tasks import authorized_client
                 client = authorized_client(client, target.task)
                 if any(a.get('action') == 'ssl_monitor' for a in target.task.audit):
@@ -416,7 +420,7 @@ class PanelWorker:
         try:
             # Never use edited API credentials/base URL to infer the old request's outcome.
             s.configured(target.panel, target.panel_snapshot['api_config_revision'])
-            with self.client(target.panel) as client:
+            with self.client(target.panel, target.task) as client:
                 result = get_operation(task.operation).reconcile(
                     client, copy.deepcopy(child['snapshot']), copy.deepcopy(child.get('result', {}).get('remote', {})))
             result = self.result(result)

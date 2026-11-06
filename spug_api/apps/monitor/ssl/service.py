@@ -502,7 +502,7 @@ def safe_result(value):
 
 def job_view(job):
     return {key: getattr(job, key) for key in ('id', 'kind', 'state', 'phase', 'message', 'revision',
-            'certificate_id', 'panel_task_id', 'acknowledgements')} | {
+            'certificate_id', 'panel_task_id', 'acknowledgements', 'source_keys')} | {
                 'result': safe_result(job.result), 'summary': safe_summary(job.summary),
                 'created_at': iso(job.created_at), 'updated_at': iso(job.updated_at)}
 

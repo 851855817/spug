@@ -10,6 +10,8 @@ from .upload_store import (limits, create_bundle, owned_bundle, receive_file,
 def _permission(user):
     from .task_service import permission
     permission(user, 'create')
+    from .task_service import action_permission
+    action_permission(user, 'file_upload')
 
 
 class UploadBundlesView(TaskBaseView):

@@ -40,7 +40,7 @@ def ext2_deploy(req, helper, env, with_local):
             break
 
     if with_local:
-        with Executor(env) as et:
+        with Executor(env, authorize=helper.authorize) as et:
             helper.save_pid(et.pid, 'local')
             helper.set_deploy_process('local')
             helper.send_success('local', '', status='doing')
@@ -128,12 +128,14 @@ def ext2_deploy(req, helper, env, with_local):
 
 
 def _deploy_ext2_host(helper, h_id, actions, env, spug_version):
+    helper.authorize()
     flag = time.time()
     helper.set_deploy_process(h_id)
     host = Host.objects.filter(pk=h_id).first()
     if not host:
         helper.send_error(h_id, 'no such host')
     env.update({'SPUG_HOST_ID': h_id, 'SPUG_HOST_NAME': host.hostname})
+    host.resource_guard = helper.authorize
     with host.get_ssh(default_env=env) as ssh:
         helper.send_clear(h_id)
         pid = ssh.get_pid()

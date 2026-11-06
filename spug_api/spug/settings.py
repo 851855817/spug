@@ -150,3 +150,16 @@ try:
     from spug.overrides import *
 except ImportError:
     pass
+
+# Per-worker append writes remain available when a quota transaction rolls back.
+# Production sets KOPS_RESOURCE_AUDIT_LOG to a persistent /data path and rotates
+# it with logrotate; WatchedFileHandler reopens the replacement automatically.
+LOGGING = globals().get('LOGGING', {'version': 1, 'disable_existing_loggers': False})
+LOGGING.setdefault('handlers', {})['resource_audit'] = {
+    'class': 'libs.resource_logging.ResourceAuditHandler',
+    'filename': os.environ.get('KOPS_RESOURCE_AUDIT_LOG', str(BASE_DIR / 'storage/audit/resource-access.log')),
+    'level': 'WARNING',
+}
+LOGGING.setdefault('loggers', {})['spug.resource_access'] = {
+    'handlers': ['resource_audit'], 'level': 'WARNING', 'propagate': False,
+}

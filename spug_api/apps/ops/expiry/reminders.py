@@ -4,7 +4,7 @@ from django.utils import timezone
 
 from . import assets, dates, service
 from .models import ExpiryReminder, ExpiryReminderRead, ExpiryCheck
-from .transactions import retry_lock_conflicts
+from .transactions import InventoryChanged, retry_lock_conflicts
 
 
 def unread_count(user_id):
@@ -88,21 +88,21 @@ def generate_reminders():
         service.lock_decisions()
         # Only enabled canonical rows are candidates; linked panel metadata is paused.
         candidates = [row for row in assets.inventory().values() if row['reminder_enabled'] and not row['exempt']]
-        locked = []
         for candidate in candidates:
             try:
                 service.lock_asset(candidate['key'], resolve=False)
-            except ValueError:
-                continue
-            locked.append(candidate)
+            except ValueError as error:
+                raise InventoryChanged('资产在锁定前已变化') from error
         # Resolve once after acquiring the relevant source/association locks.
         current = assets.inventory()
-        for candidate in locked:
-            row = current.get(candidate['key'])
-            if row is None:
-                continue
-            if row['version'] != candidate['version'] or not row['reminder_enabled'] or row['exempt']:
-                continue
+        eligible = {key: row['version'] for key, row in current.items()
+                    if row['reminder_enabled'] and not row['exempt']}
+        if eligible != {row['key']: row['version'] for row in candidates}:
+            # Restart discovery outside this transaction so a newly canonical
+            # host is locked and checked, rather than silently missing its run.
+            raise InventoryChanged('资产关联或到期设置在锁定期间已变化')
+        for candidate in candidates:
+            row = current[candidate['key']]
             stage = dates.reminder_stage(row['days_remaining'])
             if stage is None or row['expires_on'] is None:
                 continue

@@ -14,6 +14,9 @@ import shlex
 import json
 import time
 import re
+from apps.account import access
+from apps.monitor.models import Detection
+from apps.monitor import resources
 
 logging.captureWarnings(True)
 regex = re.compile(r'Failed to establish a new connection: (.*)\'\)+')
@@ -95,18 +98,40 @@ def build_process_command(extra):
 
 def host_executor(host, command):
     try:
+        guard = getattr(host, 'resource_guard', lambda: None)
+        guard()
         with host.get_ssh() as ssh:
             exit_code, out = ssh.exec_command_raw(command)
         if exit_code == 0:
             return True, out or '检测状态正常'
         else:
             return False, out or f'退出状态码：{exit_code}'
+    except PermissionError:
+        raise
     except Exception as e:
         return False, f'异常信息：{e}'
 
 
 def monitor_worker_handler(job):
+    try:
+        return _authorized_monitor_job(job)
+    except access.AccessDenied:
+        return
+
+
+def _authorized_monitor_job(job):
     task_id, tp, addr, extra, threshold, quiet = json.loads(job)
+    det = Detection.objects.filter(pk=task_id, is_active=True).first()
+    if det is None or str(addr) not in {str(x) for x in json.loads(det.targets)}:
+        return
+    signature = (det.created_by_id, det.type, det.targets, det.extra)
+    def authorize():
+        current = Detection.objects.filter(pk=task_id, is_active=True).first()
+        if current is None or (current.created_by_id, current.type, current.targets, current.extra) != signature:
+            access.reject(det.created_by_id, '监控配置已变化，旧任务已停止')
+        resources.runtime(current.created_by_id, current)
+    authorize()
+    tp, extra, threshold, quiet = det.type, det.extra, det.threshold, det.quiet
     target = addr
     if tp == '1':
         is_ok, message = site_check(addr, extra)
@@ -122,9 +147,11 @@ def monitor_worker_handler(job):
         if not host:
             is_ok, message = False, f'unknown host id for {addr!r}'
         else:
+            host.resource_guard = authorize
             is_ok, message = host_executor(host, command)
-        target = f'{host.name}({host.hostname})'
+        target = f'{host.name}({host.hostname})' if host else str(addr)
 
+    authorize()
     rds, key, f_count, f_time = get_redis_connection(), f'spug:det:{task_id}', f'c_{addr}', f't_{addr}'
     v_count, v_time = rds.hmget(key, f_count, f_time)
     if is_ok:
@@ -143,7 +170,7 @@ def monitor_worker_handler(job):
             handle_notify(task_id, target, is_ok, message, v_count)
 
 
-def dispatch(tp, addr, extra):
+def dispatch(tp, addr, extra, user=None):
     if tp == '1':
         return site_check(addr, extra)
     elif tp == '2':
@@ -156,5 +183,14 @@ def dispatch(tp, addr, extra):
         command = extra
     else:
         raise TypeError(f'invalid monitor type: {tp!r}')
-    host = Host.objects.filter(pk=addr).first()
+    def authorize():
+        current, granted = access.permissions(user)
+        if not current.is_supper and not {'monitor.monitor.add', 'monitor.monitor.edit'}.intersection(granted):
+            access.reject(current, '权限拒绝')
+        access.require_resources(current, 'host', [int(addr)], manage=True)
+        if tp == '4':
+            access.require(current, 'exec.task.do')
+    authorize()
+    host = Host.objects.get(pk=addr)
+    host.resource_guard = authorize
     return host_executor(host, command)

@@ -6,6 +6,7 @@ from apps.setting.utils import AppSetting
 from apps.deploy.models import Deploy, DeployRequest
 from apps.repository.models import Repository
 from apps.deploy.utils import dispatch_all as deploy_dispatch
+from apps.deploy import resources
 from libs.utils import human_datetime
 from threading import Thread
 import hashlib
@@ -100,6 +101,9 @@ def _dispatch(deploy_id, ref, commit_id=None, message=None):
     deploy = Deploy.objects.filter(pk=deploy_id).first()
     if not deploy:
         raise Exception(f'no such deploy id for {deploy_id}')
+    resources.authorize(deploy.created_by_id, deploy, manage=True, code='deploy.request.add')
+    if not deploy.is_audit:
+        resources.authorize(deploy.created_by_id, deploy, manage=True, code='deploy.request.do')
 
     req = DeployRequest(
         type='3',

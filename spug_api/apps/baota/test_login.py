@@ -51,6 +51,8 @@ class PanelLoginTests(TestCase):
         record = self.configured(server)
         for index, permissions in enumerate((['view'], ['edit'], ['login'], ['view', 'login'])):
             user = self.make_user('role' + str(index), perms={'panel': permissions})
+            from apps.account.models import ResourceGrant
+            ResourceGrant.objects.create(user=user, panel_id=record['id'], level='manage')
             self.authenticate(user)
             response = self.login(record)
             self.assertEqual(response.status_code, 200)
@@ -94,6 +96,8 @@ class PanelLoginTests(TestCase):
     def test_configuration_and_permission_changes_during_remote_call_reject_token(self):
         record = self.configured()
         user = self.make_user('operator', perms={'panel': ['view', 'login']})
+        from apps.account.models import ResourceGrant
+        ResourceGrant.objects.create(user=user, panel_id=record['id'], level='manage')
         self.authenticate(user)
         for change in ('config', 'url', 'key', 'permission', 'inactive', 'deleted', 'session'):
             with self.subTest(change=change):

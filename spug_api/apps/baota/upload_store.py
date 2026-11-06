@@ -95,6 +95,8 @@ def _permission(user):
     if user is None or not getattr(user, 'pk', None):
         raise PermissionError('权限拒绝')
     permission(user, 'create')
+    from .task_service import action_permission
+    action_permission(user, 'file_upload')
 
 
 def _identifier(value):

@@ -318,12 +318,17 @@ class ScheduledPanelTests(TransactionTestCase):
 
     def test_original_monitor_trigger_preserves_resolved_host(self):
         from .scheduler import Scheduler
+        from apps.host.models import Host
+        from apps.monitor.models import Detection
+        host = Host.objects.create(name='resolved', hostname='192.0.2.81', username='root', created_by=self.admin)
+        detection = Detection.objects.create(name='process', type='3', targets=json.dumps([host.pk]),
+            created_by=self.admin, notify_grp='[]', notify_mode='[]')
         task = Task.objects.create(name='monitor shell', type='shell', interpreter='sh', command='echo safe',
-            targets='["monitor"]', trigger='monitor', trigger_args='[1]', is_active=True, created_by=self.admin)
+            targets='["monitor"]', trigger='monitor', trigger_args=json.dumps([detection.pk]), is_active=True, created_by=self.admin)
         with patch('apps.schedule.scheduler.get_redis_connection') as redis:
-            Scheduler.dispatch(task.pk, 'sh', 'echo safe', [81])
+            Scheduler.dispatch(task.pk, 'sh', 'echo safe', [host.pk])
         payload = json.loads(redis.return_value.rpush.call_args[0][1])
-        self.assertEqual(payload[1], 81)
+        self.assertEqual(payload[1], host.pk)
 
     def test_corrupt_definition_stops_only_its_run(self):
         service = self.module()

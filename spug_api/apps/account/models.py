@@ -159,4 +159,4 @@ class History(models.Model, ModelMixin):
 
 
 from .resource_models import (AccountResourcePolicy, ResourceOwnership, ResourceGrant,
-                              ResourceGroupOwner, ResourceAccessAudit)  # noqa: E402,F401
+                              ResourceGroupOwner, ResourceAccessAudit, ResourceQuotaLock)  # noqa: E402,F401

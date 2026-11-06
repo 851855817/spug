@@ -49,7 +49,10 @@ class UserView(AdminView):
             role_ids, password = form.pop('role_ids'), form.pop('password')
             raw = json.loads(request.body)
             try:
-                with transaction.atomic():
+                from .access import quota_transaction
+                with quota_transaction():
+                    from .access import admin
+                    request.user = admin(request.user)
                     if form.id:
                         user = User.objects.get(pk=form.id, is_deleted=False)
                         user.update_by_dict(form)

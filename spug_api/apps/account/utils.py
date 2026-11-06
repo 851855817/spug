@@ -99,7 +99,9 @@ def require_stream(user, token, rds, module=None):
         from apps.pipeline.models import PipeHistory
         from apps.pipeline.utils import resource_host_ids
         task = PipeHistory.objects.filter(token=token).first()
-        access.require(current, 'pipeline.pipeline.view')
+        current, codes = access.permissions(current)
+        if not current.is_supper and not codes.intersection({'pipeline.pipeline.view', 'pipeline.pipeline.edit', 'pipeline.pipeline.do'}):
+            access.reject(current, '权限拒绝')
         if not task or (not current.is_supper and task.created_by_id != current.pk):
             access.reject(current, '输出不存在或无权访问')
         ids = list(resource_host_ids(task))

@@ -4,10 +4,20 @@
 from django.views.generic import View
 from libs import json_response, JsonParser, Argument
 from apps.home.models import Navigation
+from apps.account import access
 import json
 
 
 class NavView(View):
+    def dispatch(self, request, *args, **kwargs):
+        try:
+            access.current_user(request.user)
+            if request.method != 'GET':
+                access.admin(request.user)
+            return super().dispatch(request, *args, **kwargs)
+        except access.AccessDenied as error:
+            return json_response(error=str(error))
+
     def get(self, request):
         navs = Navigation.objects.all()
         return json_response([x.to_view() for x in navs])
