@@ -2,6 +2,7 @@
 import configparser
 from pathlib import Path
 import sys
+import subprocess
 import unittest
 
 
@@ -108,6 +109,35 @@ class PostSSLImageTests(ExpiryImageTests):
         self.assertTrue((root / 'migrations/0002_ssl_monitor.py').is_file())
 
 
+class AccountResourcesImageTests(ExpiryImageTests):
+    def test_django_and_all_http_websocket_dependencies_import_from_installed_image(self):
+        # No checkout is mounted at /opt: missing image dependencies must fail.
+        script = '''import os,sys
+sys.path.insert(0, '/opt/spug/spug_api')
+os.environ['DJANGO_SETTINGS_MODULE'] = 'spug.settings'
+from django.conf import settings
+settings.DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}}
+settings.CACHES = {'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'}}
+settings.CHANNEL_LAYERS = {'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}}
+import django
+django.setup()
+from django.urls import get_resolver
+assert not get_resolver('spug.urls').check()
+import spug.asgi
+import libs.executor, libs.gitlib, libs.resource_logging
+from django.apps import apps
+from apps.account.resource_migration import ADDITIVE_MODELS
+assert len(ADDITIVE_MODELS) == 9
+assert all(apps.get_model(app, model) for app, model in ADDITIVE_MODELS)
+assert all(module.__file__.startswith('/opt/spug/spug_api/') for module in
+           (spug.asgi, libs.executor, libs.gitlib, libs.resource_logging))
+print('Installed image Django/HTTP/WebSocket and nine additive models imported.')
+'''
+        result = subprocess.run([sys.executable, '-c', script], stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, timeout=45)
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+
 class UploadRollbackImageTests(ImageTests):
     def test_no_reverse_schema_generation_with_existing_worker_wiring(self):
         self.assertEqual(self.programs(), ORIGINAL_PROGRAMS | {'spug-panel-worker', 'spug-ops-worker'})
@@ -125,6 +155,7 @@ class UploadRollbackImageTests(ImageTests):
 
 if __name__ == '__main__':
     cases = {'worker': WorkerImageTests, 'expiry': ExpiryImageTests, 'post-ssl': PostSSLImageTests,
+             'account-resources': AccountResourcesImageTests,
              'rollback': RollbackImageTests, 'upload-rollback': UploadRollbackImageTests}
     case = cases[sys.argv.pop(1)]
     unittest.main(defaultTest=case.__name__)

@@ -442,14 +442,16 @@ class ScheduledPanelTasksReleaseTests(unittest.TestCase):
         repo = HERE.parents[1]
         workflow = (repo / '.github/workflows/baota-checks.yml').read_text()
         self.assertIn("'spug_api/apps/schedule/**'", workflow)
+        selector = load_selector = importlib.util.spec_from_file_location(
+            'scheduled_complete_ci', repo / 'deploy/account-resources/ci_tests.py')
+        selector = importlib.util.module_from_spec(load_selector)
+        load_selector.loader.exec_module(selector)
+        self.assertIn('apps.schedule.test_panel_tasks', selector.discover(repo / 'spug_api'))
         for line in (line for line in workflow.splitlines() if 'manage.py test ' in line):
-            self.assertIn('apps.schedule.test_panel_tasks', line)
-            self.assertIn('apps.schedule.test_urls', line)
+            self.assertIn('"${backend_test_modules[@]}"', line)
         dockerfile = (repo / 'deploy/baota/Dockerfile').read_text()
-        for name in MODULES:
-            if name.startswith('apps/schedule/'):
-                self.assertIn('COPY spug_api/' + name + ' /opt/spug/spug_api/' + name, dockerfile)
-        self.assertIn('cp spug_api/apps/schedule/*.py', workflow)
+        self.assertIn('COPY spug_api/ /opt/spug/spug_api/', dockerfile)
+        self.assertIn('cp -a spug_api "$baota_context/"', workflow)
 
 
 if __name__ == '__main__':

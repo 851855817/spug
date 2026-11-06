@@ -3,18 +3,7 @@ ARG SOURCE_REVISION
 LABEL org.opencontainers.image.source="https://github.com/851855817/spug" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
       org.opencontainers.image.version="4.1.1-baota.2"
-COPY spug_api/apps/baota /opt/spug/spug_api/apps/baota
-COPY spug_api/apps/setting /opt/spug/spug_api/apps/setting
-COPY spug_api/apps/ops /opt/spug/spug_api/apps/ops
-COPY spug_api/apps/monitor /opt/spug/spug_api/apps/monitor
-COPY spug_api/apps/schedule/panel_tasks.py /opt/spug/spug_api/apps/schedule/panel_tasks.py
-COPY spug_api/apps/schedule/views.py /opt/spug/spug_api/apps/schedule/views.py
-COPY spug_api/apps/schedule/urls.py /opt/spug/spug_api/apps/schedule/urls.py
-COPY spug_api/apps/schedule/models.py /opt/spug/spug_api/apps/schedule/models.py
-COPY spug_api/apps/schedule/executors.py /opt/spug/spug_api/apps/schedule/executors.py
-COPY spug_api/apps/schedule/scheduler.py /opt/spug/spug_api/apps/schedule/scheduler.py
-COPY spug_api/apps/schedule/builtin.py /opt/spug/spug_api/apps/schedule/builtin.py
-COPY spug_api/spug/settings.py spug_api/spug/urls.py /opt/spug/spug_api/spug/
+COPY spug_api/ /opt/spug/spug_api/
 COPY spug_web/build/ /opt/spug/spug_web/build/
 COPY deploy/baota/entrypoint.sh /baota-entrypoint.sh
 COPY deploy/baota/panel-worker.ini /tmp/panel-worker.ini
