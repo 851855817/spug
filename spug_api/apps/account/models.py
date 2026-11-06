@@ -156,3 +156,7 @@ class History(models.Model, ModelMixin):
     class Meta:
         db_table = 'login_histories'
         ordering = ('-id',)
+
+
+from .resource_models import (AccountResourcePolicy, ResourceOwnership, ResourceGrant,
+                              ResourceGroupOwner, ResourceAccessAudit)  # noqa: E402,F401
