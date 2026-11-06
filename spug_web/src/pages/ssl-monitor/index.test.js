@@ -81,6 +81,8 @@ test('unconfigured statistic selects its own filter and details distinguish publ
   expect(dialog.textContent).toContain('宝塔未开启 SSL');
   expect(dialog.textContent).toContain('公网证书域名不匹配');
   expect(dialog.textContent).toContain('请先申请并部署');
+  expect(dialog.textContent.match(/宝塔未开启 SSL/g)).toHaveLength(1);
+  expect(dialog.textContent).toContain('处理建议：');
   expect(dialog.querySelectorAll('dl')).toHaveLength(1);
   expect(http.post).not.toHaveBeenCalled();
 });

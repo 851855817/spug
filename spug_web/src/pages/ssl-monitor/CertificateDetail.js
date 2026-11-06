@@ -29,7 +29,6 @@ export default function CertificateDetail({row, onClose}) {
     <Facts certificate={remote}/>
     {differs && <Alert type="info" showIcon message="公网与源站证书不同，可能由 CDN 或反向代理提供。"
       description="源站续签完成后，仍需确认公网证书是否更新；两者独立展示。"/>}
-    <p>巡检说明：{text(row.message || '—')}</p>
-    <p>续签支持：{text(row.renewal?.reason || (row.renewal?.supported ? '可创建只读预检' : '需先检查来源和客户端配置'))}</p>
+    <p>{row.state === 'unconfigured' ? '处理建议' : '续签支持'}：{text(row.renewal?.reason || (row.renewal?.supported ? '可创建只读预检' : '需先检查来源和客户端配置'))}</p>
   </Modal>;
 }
