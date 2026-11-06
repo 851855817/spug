@@ -79,7 +79,7 @@ test('unauthorized visitors do not fetch either API', async () => {
 });
 
 test('inspection-only authorization selects inspections without loading panel data', async () => {
-  hasPermission.mockImplementation(code => code === 'admin');
+  hasPermission.mockImplementation(code => code === 'ops.job.view');
   await render('/exec/panel');
   expect(container.querySelector('select').value).toBe('inspection');
   expect(http.get).toHaveBeenCalledWith('/api/ops/catalog/');

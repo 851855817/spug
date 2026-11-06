@@ -5,7 +5,7 @@
  */
 import React, { useState, useEffect, useRef } from 'react';
 import { observer } from 'mobx-react';
-import { Drawer, Descriptions, List, Button, Input, Select, DatePicker, Tag, message } from 'antd';
+import { Drawer, Descriptions, List, Input, Select, DatePicker, Tag, message } from 'antd';
 import { EditOutlined, SaveOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
 import { AuthButton } from 'components';
 import { http, t } from 'libs';
@@ -13,8 +13,10 @@ import store from './store';
 import lds from 'lodash';
 import moment from 'moment';
 import styles from './index.module.less';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 export default observer(function () {
+  const access = useResourceAccess();
   const [edit, setEdit] = useState(false);
   const [host, setHost] = useState(store.record);
   const diskInput = useRef();
@@ -43,6 +45,7 @@ export default observer(function () {
   }, [inputVisible])
 
   function handleSubmit() {
+    if (!access.canManage('host', host.id, 'host.host.edit')) return;
     setLoading(true)
     if (host.created_time) host.created_time = moment(host.created_time).format('YYYY-MM-DD')
     if (host.expired_time) host.expired_time = moment(host.expired_time).format('YYYY-MM-DD')
@@ -57,6 +60,7 @@ export default observer(function () {
   }
 
   function handleFetch() {
+    if (!access.canManage('host', host.id, 'host.host.verify')) return;
     setFetching(true);
     http.get('/api/host/extend/', {params: {host_id: host.id}})
       .then(res => {
@@ -141,12 +145,18 @@ export default observer(function () {
         className={edit ? styles.hostExtendEdit : null}
         labelStyle={{width: 150}}
         style={{marginTop: 24}}
-        extra={edit ? ([
-          <Button key="1" type="link" loading={fetching} icon={<SyncOutlined/>} onClick={handleFetch}>{t('同步')}</Button>,
-          <Button key="2" type="link" loading={loading} icon={<SaveOutlined/>} onClick={handleSubmit}>{t('保存')}</Button>
-        ]) : (
-          <AuthButton auth="host.host.edit" type="link" icon={<EditOutlined/>} onClick={() => setEdit(true)}>{t('编辑')}</AuthButton>
-        )}
+        extra={<>
+          <AuthButton auth="host.host.verify" disabled={!access.canManage('host', host.id, 'host.host.verify')}
+                      type="link" loading={fetching} icon={<SyncOutlined/>} onClick={handleFetch}>{t('同步')}</AuthButton>
+          {edit ? (
+            <AuthButton auth="host.host.edit" disabled={!access.canManage('host', host.id, 'host.host.edit')}
+                        type="link" loading={loading} icon={<SaveOutlined/>} onClick={handleSubmit}>{t('保存')}</AuthButton>
+          ) : (
+            <AuthButton auth="host.host.edit" disabled={!access.canManage('host', host.id, 'host.host.edit')}
+                        type="link" icon={<EditOutlined/>}
+                        onClick={() => access.canManage('host', host.id, 'host.host.edit') && setEdit(true)}>{t('编辑')}</AuthButton>
+          )}
+        </>}
         title={<span style={{fontWeight: 500}}>{t('扩展信息')}</span>}>
         <Descriptions.Item label={t('实例ID')}>
           {edit ? (

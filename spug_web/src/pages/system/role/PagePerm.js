@@ -96,7 +96,7 @@ class PagePerm extends React.Component {
             <details><summary>查看模板全部权限</summary>{summary.labels.map(label => <div key={label}>{label}</div>)}</details>
           </>}/>}
         <div style={{marginBottom: 12}}>套用只替换当前功能权限草稿，核对下方勾选后保存。SSH 主机组、发布应用和环境需另行授权。
-          宝塔权限覆盖全部面板，不按 SSH 主机组隔离；网站与证书、运维作业、到期管理等仍仅超级管理员可用。</div>
+          SSH 与宝塔均仅限本人或管理员明确分配的资源；只读分配限制写操作。创建、执行和具体面板动作分别授权。</div>
         <table border="1" bordercolor="#dfdfdf" className={styles.table}>
           <thead>
           <tr>

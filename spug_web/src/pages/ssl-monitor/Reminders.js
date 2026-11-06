@@ -6,11 +6,11 @@ import { API, dateUTC8, text } from './helpers';
 import styles from './index.module.less';
 
 export default function Reminders({revision: externalRevision = 0, onChanged}) {
-  const allowed = hasPermission('admin'), visible = usePageVisibility();
+  const allowed = hasPermission('monitor.ssl.view'), visible = usePageVisibility();
   const [data, setData] = useState(null), [error, setError] = useState(''), [muted, setMuted] = useState(false);
   const [page, setPage] = useState(1), [revision, setRevision] = useState(0), [pending, setPending] = useState(null);
   const mounted = useRef(false), locked = useRef(false), owner = useRef(localStorage.getItem('id'));
-  const sameOwner = () => owner.current === localStorage.getItem('id') && hasPermission('admin');
+  const sameOwner = () => owner.current === localStorage.getItem('id') && hasPermission('monitor.ssl.view');
   useEffect(() => {mounted.current = true; return () => {mounted.current = false;};}, []);
   useEffect(() => {
     if (!allowed || !visible || !sameOwner()) return;

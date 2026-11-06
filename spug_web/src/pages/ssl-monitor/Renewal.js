@@ -7,9 +7,11 @@ import Guidance from './Guidance';
 import Status from './Status';
 import PanelPreview from '../schedule/PanelPreview';
 import styles from './index.module.less';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 const planFields = {source: '来源', domain: '域名', domains: '影响域名', cert_path: '公开证书部署位置', engine: '续签客户端', validation: '验证方式', reload: '固定服务重载', impacts: '全部影响'};
 export default function Renewal({jobId, onClose, onUpdate = () => {}}) {
+  const access = useResourceAccess();
   const [job, setJob] = useState(null), [error, setError] = useState(''), [accepted, setAccepted] = useState([]);
   const [revision, setRevision] = useState(0), [pending, setPending] = useState(false), [attempted, setAttempted] = useState(false);
   const [guidance, setGuidance] = useState(false);
@@ -17,7 +19,7 @@ export default function Renewal({jobId, onClose, onUpdate = () => {}}) {
   const updateRef = useRef(onUpdate); updateRef.current = onUpdate;
   useEffect(() => {mounted.current = true; return () => {mounted.current = false;};}, []);
   useEffect(() => {
-    if (!hasPermission('admin') || !visible) return;
+    if (!hasPermission('monitor.ssl.view') || !visible) return;
     let valid = true, timer;
     async function read() {
       try {
@@ -32,7 +34,7 @@ export default function Renewal({jobId, onClose, onUpdate = () => {}}) {
     read(); return () => {valid = false; window.clearTimeout(timer);};
   }, [jobId, visible, revision]);
   async function mutate(action) {
-    if (locked.current || !hasPermission('admin') || !job || (action === 'start' && (attempted || !canStart(job, accepted)))) return;
+    if (locked.current || !hasPermission('monitor.ssl.renew') || !canRenew || !job || (action === 'start' && (attempted || !canStart(job, accepted)))) return;
     locked.current = true; setPending(true); setError('');
     if (action === 'start') setAttempted(true);
     try {
@@ -47,11 +49,12 @@ export default function Renewal({jobId, onClose, onUpdate = () => {}}) {
       }
     } finally {locked.current = false; if (mounted.current) setPending(false);}
   }
+  const canRenew = access.is_supper || (!!job?.source_keys?.length && job.source_keys.every(key => access.canSource(key, 'monitor.ssl.renew')));
   return <Modal visible width={760} title={job?.kind === 'check' ? '巡检任务结果' : 'SSL 续签预检与结果'} onCancel={onClose} footer={<>
     <Button onClick={onClose}>关闭</Button><Button disabled={pending} onClick={() => setRevision(value => value + 1)}>刷新结果</Button>
-    {job?.state === 'prepared' && !attempted && <Button disabled={pending} onClick={() => mutate('cancel')}>放弃预检</Button>}
-    {job?.state === 'uncertain' && <Button loading={pending} onClick={() => mutate('verify')}>只读核验结果</Button>}
-    {job?.state === 'prepared' && <Button type="primary" loading={pending} disabled={attempted || !canStart(job, accepted)} onClick={() => mutate('start')}>确认并开始续签</Button>}
+    {job?.state === 'prepared' && !attempted && <Button disabled={pending || !canRenew} onClick={() => mutate('cancel')}>放弃预检</Button>}
+    {job?.state === 'uncertain' && <Button disabled={!canRenew} loading={pending} onClick={() => mutate('verify')}>只读核验结果</Button>}
+    {job?.state === 'prepared' && <Button type="primary" loading={pending} disabled={!canRenew || attempted || !canStart(job, accepted)} onClick={() => mutate('start')}>确认并开始续签</Button>}
   </>}>
     {error && <Alert type="error" message={error}/>}
     {!job ? <p>正在读取本地任务…</p> : <>

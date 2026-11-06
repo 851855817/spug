@@ -3,6 +3,7 @@ import { Alert, Button, Card, Modal, Select, Space, Spin, Tag, Typography } from
 import Table from 'components/ResizableTable';
 import { hasPermission, http } from 'libs';
 import { ACTIVE_STATES, CATEGORY_LABELS, RUN_LABELS, displayValue, downloadReport, failureHint, hostName } from './helpers';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 const POLL_INTERVAL = 5000;
 const MAX_POLLS = 60;
@@ -87,7 +88,9 @@ function Checks({checks, run}) {
 }
 
 export default function RunDetail({runId}) {
-  const allowed = hasPermission('admin');
+  const access = useResourceAccess();
+  const allowed = hasPermission('ops.job.view');
+  const canAct = (kind, current) => access.canAll('host', (current?.targets || []).map(target => target.host?.id), `ops.job.${kind}`);
   const [run, setRun] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -147,7 +150,7 @@ export default function RunDetail({runId}) {
 
   async function performAction(kind, expectedState) {
     const current = latest.current;
-    if (!mounted.current || !hasPermission('admin') || actionPending.current || !current.allowed) return;
+    if (!mounted.current || !hasPermission(`ops.job.${kind}`) || !canAct(kind, current.run) || actionPending.current || !current.allowed) return;
     if (current.error || current.run?.state !== expectedState) {setNotice('作业状态已变化，请刷新后重新确认。'); return;}
     actionPending.current = true; revision.current += 1; readPending.current = false;
     setLoading(false); setAction(kind); setNotice('');
@@ -176,7 +179,7 @@ export default function RunDetail({runId}) {
     });
   }
 
-  if (!allowed) return <Alert type="warning" message="仅超级管理员可访问运维作业。"/>;
+  if (!allowed) return <Alert type="warning" message="没有查看运维作业的权限。"/>;
   if (!run) return <Card title={`作业 #${runId}`}>{error ? <Alert type="error" message="作业读取失败。"/> : <Spin/>}<Button onClick={refresh} loading={loading}>刷新详情</Button></Card>;
   const targets = run.targets || [];
   const counts = targets.reduce((result, target) => {
@@ -189,8 +192,8 @@ export default function RunDetail({runId}) {
       <State value={run.state} labels={RUN_LABELS}/>
       <Button loading={loading} disabled={busy} onClick={() => {pollCount.current = 0; setPollStopped(false); setPollRevision(value => value + 1); refresh();}}>刷新详情</Button>
       <Button disabled={loading || busy} onClick={() => downloadReport(run, null, error)}>下载 JSON 报告</Button>
-      {['paused', 'tripped'].includes(run.state) && <Button type="primary" disabled={error || busy || loading} loading={action === 'continue'} onClick={() => confirmAction('continue')}>继续下一批</Button>}
-      {['queued', 'running', 'paused', 'tripped'].includes(run.state) && <Button danger disabled={error || busy} loading={action === 'cancel'} onClick={() => confirmAction('cancel')}>取消未执行项</Button>}
+      {['paused', 'tripped'].includes(run.state) && <Button type="primary" disabled={!canAct('continue', run) || error || busy || loading} loading={action === 'continue'} onClick={() => confirmAction('continue')}>继续下一批</Button>}
+      {['queued', 'running', 'paused', 'tripped'].includes(run.state) && <Button danger disabled={!canAct('cancel', run) || error || busy} loading={action === 'cancel'} onClick={() => confirmAction('cancel')}>取消未执行项</Button>}
     </Space>
     {error && <Alert showIcon type="error" message="最新读取失败，当前显示上次快照；请刷新后操作。"/>}
     {notice && <Alert showIcon type="info" message={notice}/>}

@@ -3,13 +3,17 @@ import { Alert, Button, Empty, Input, Pagination, Select, Spin, Switch } from 'a
 import { ReloadOutlined } from '@ant-design/icons';
 import { AuthDiv, Breadcrumb } from 'components';
 import { hasPermission } from 'libs';
+import {useResourceAccess} from 'resources/ResourceAccess';
 import ResourceCard, { statusLabels, statusOf } from './ResourceCard';
 import LinkSettings from './LinkSettings';
 import useServerMonitor, { usePageVisibility } from './useServerMonitor';
 import styles from './index.module.less';
 
 export default function ServerMonitor({embedded = false}) {
-  const allowed = hasPermission('monitor.monitor.view');
+  const access = useResourceAccess();
+  const allowed = hasPermission('monitor.server.view');
+  const canCollect = cards => access.has('monitor.server.collect') && cards.length > 0 && cards.every(card =>
+    card.sources.length > 0 && card.sources.every(item => access.canManage(item.kind, item.id)));
   const monitor = useServerMonitor(allowed);
   const visible = usePageVisibility();
   const [automatic, setAutomatic] = useState(!embedded);
@@ -61,7 +65,9 @@ export default function ServerMonitor({embedded = false}) {
   const keys = JSON.stringify(shown.map(card => card.key));
   const batchActive = !!batchRound;
   const samplingKeys = batchRound ? JSON.stringify(batchRound.keys) : keys;
-  const active = allowed && monitor.ready && !monitor.loading && !batchRound?.preparing && (batchActive || automatic || manualRound) && visible;
+  const samplingCards = batchActive ? monitor.cards.filter(card => batchRound.keys.includes(card.key)) : shown;
+  const canSample = samplingCards.length ? canCollect(samplingCards) : access.has('monitor.server.collect');
+  const active = allowed && canSample && monitor.ready && !monitor.loading && !batchRound?.preparing && (batchActive || automatic || manualRound) && visible;
   const sampler = monitor.sampler;
   useEffect(() => {
     sampler.update({keys: JSON.parse(samplingKeys), interval: batchActive ? 30 : interval, active,
@@ -88,35 +94,35 @@ export default function ServerMonitor({embedded = false}) {
     cancelManual(); setAutomatic(value);
   }
   async function collectAll() {
-    if (batchPending.current || monitor.loading || !visible) return;
+    if (!canCollect(monitor.cards) || batchPending.current || monitor.loading || !visible) return;
     const version = ++manualRequest.current;
     batchPending.current = true;
     sampler.stop(); setManualRound(false); setBatchStatus('');
     setBatchRound({keys: [], completed: 0, preparing: true});
     const latest = await monitor.refresh();
     if (version !== manualRequest.current || !controls.current.visible) return;
-    if (latest) setBatchRound({keys: latest.map(card => card.key), completed: 0, preparing: false});
+    if (latest && canCollect(latest)) setBatchRound({keys: latest.map(card => card.key), completed: 0, preparing: false});
     else {batchPending.current = false; setBatchRound(null);}
   }
   async function manualRefresh() {
     const version = ++manualRequest.current;
     setManualRound(false);
     const success = await monitor.refresh();
-    if (success && version === manualRequest.current && controls.current.visible) setManualRound(true);
+    if (success && canCollect(success) && version === manualRequest.current && controls.current.visible) setManualRound(true);
   }
   if (!allowed) return null;
   const Container = embedded ? 'section' : 'main';
-  return <AuthDiv auth="monitor.monitor.view">
+  return <AuthDiv auth="monitor.server.view">
     {!embedded && <Breadcrumb><Breadcrumb.Item>首页</Breadcrumb.Item><Breadcrumb.Item>监控中心</Breadcrumb.Item><Breadcrumb.Item>服务器监控</Breadcrumb.Item></Breadcrumb>}
     <Container className={styles.layout} aria-label="服务器监控">
       <div className={styles.heading}><div><h2>服务器监控</h2><span>当前页 {shown.length} 台 / 共 {rows.length} 台 · {visible && automatic ? '自动采集' : embedded && visible ? '每 60 秒刷新缓存' : '采集已暂停'}</span></div>
         <div className={styles.controls}>
           <label>隐藏 IP <Switch size="small" aria-label="隐藏 IP" checked={hideIP} onChange={value => filter(setHideIP, value)}/></label>
-          <label>{embedded ? '自动采集' : '自动刷新'} <Switch size="small" aria-label="自动刷新" checked={automatic} onChange={toggleAutomatic}/></label>
+          <label>{embedded ? '自动采集' : '自动刷新'} <Switch size="small" aria-label="自动刷新" disabled={!canSample} checked={automatic && canSample} onChange={toggleAutomatic}/></label>
           <Select aria-label="采集间隔" value={String(interval)} disabled={batchActive} onChange={value => setInterval(Number(value))}
             options={[30, 60, 300].map(value => ({value: String(value), label: value === 300 ? '5 分钟' : `${value} 秒`}))}/>
           <Button type="primary" icon={<ReloadOutlined/>} loading={batchActive}
-            disabled={!visible || !monitor.ready || monitor.loading || !monitor.cards.length}
+            disabled={!canCollect(monitor.cards) || !visible || !monitor.ready || monitor.loading || !monitor.cards.length}
             title="采集所有已开启监控的服务器，包含其他分页；保留缓存和重试限制" onClick={collectAll}>全部采集</Button>
           {(batchActive || batchStatus) && <span role="status">{batchRound?.preparing ? '读取列表…'
             : batchRound ? `${batchRound.completed} / ${batchRound.keys.length}` : batchStatus}</span>}

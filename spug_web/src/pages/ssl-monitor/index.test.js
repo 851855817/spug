@@ -1,3 +1,4 @@
+jest.mock('resources/ResourceAccess', () => ({useResourceAccess: jest.fn()}));
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { act, Simulate } from 'react-dom/test-utils';
@@ -5,6 +6,8 @@ import { hasPermission, http } from 'libs';
 import SSLMonitor from './index';
 import Renewal from './Renewal';
 import SourceSettings from './SourceSettings';
+import {useResourceAccess} from 'resources/ResourceAccess';
+import {createResourceAccess} from 'resources/access';
 
 jest.mock('libs', () => ({hasPermission: jest.fn(), http: {get: jest.fn(), post: jest.fn()}}));
 jest.mock('components', () => ({Breadcrumb: Object.assign(({children}) => <div>{children}</div>, {Item: ({children}) => <span>{children}</span>})}));
@@ -41,6 +44,7 @@ let container;
 const render = async element => act(async () => {ReactDOM.render(element, container); await flush();});
 const click = async text => act(async () => {const button = [...container.querySelectorAll('button')].find(item => item.textContent === text); expect(button).toBeDefined(); button.click(); await flush();});
 beforeEach(() => {
+  useResourceAccess.mockReturnValue(createResourceAccess({is_supper: true}));
   jest.useFakeTimers(); hasPermission.mockReturnValue(true);
   Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'visible'});
   container = document.createElement('div'); document.body.appendChild(container);
@@ -61,6 +65,15 @@ test('local list, auto refresh and statistic filters perform GET only', async ()
   await act(async () => {jest.advanceTimersByTime(30000); await flush();});
   expect(http.post).not.toHaveBeenCalled();
   await click('刷新列表'); expect(http.post).not.toHaveBeenCalled();
+});
+
+test('readonly SSL resources remain visible but cannot collect or renew with granted feature codes', async () => {
+  useResourceAccess.mockReturnValue(createResourceAccess({permissions: ['monitor.ssl.view', 'monitor.ssl.collect', 'monitor.ssl.renew'], hosts: [{id: 1, level: 'read'}]}));
+  await render(<SSLMonitor/>);
+  expect(container.textContent).toContain('app.example.test');
+  for (const label of ['立即巡检', '续签']) expect([...container.querySelectorAll('button')].find(button => button.textContent === label).disabled).toBe(true);
+  expect(container.textContent).toContain('包含只读来源');
+  expect(http.post).not.toHaveBeenCalled();
 });
 
 test('unconfigured statistic selects its own filter and details distinguish public mismatch', async () => {

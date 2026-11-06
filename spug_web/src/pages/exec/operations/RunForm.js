@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Form, Select, Typography } from 'antd';
 import { hasPermission, http } from 'libs';
 import { groupName, hostName, previewHosts } from './helpers';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 export default function RunForm({catalog, onCreated}) {
+  const access = useResourceAccess();
   const jobs = catalog.jobs || [];
   const [job, setJob] = useState(jobs[0]?.code);
   const [hostIds, setHostIds] = useState([]);
@@ -16,10 +18,10 @@ export default function RunForm({catalog, onCreated}) {
   useEffect(() => () => {mounted.current = false;}, []);
   const selectedJob = jobs.find(item => item.code === job);
   const targets = previewHosts(catalog, hostIds, groupIds);
-  const valid = selectedJob && targets.length > 0 && targets.length <= 50;
+  const valid = selectedJob && targets.length > 0 && targets.length <= 50 && access.canAll('host', targets.map(host => host.id), 'ops.job.create');
 
   async function confirm() {
-    if (!mounted.current || !valid || pending.current || !hasPermission('admin')) return;
+    if (!mounted.current || !valid || pending.current || !hasPermission('ops.job.create')) return;
     const payload = {job, host_ids: [...hostIds], group_ids: [...groupIds], params: job === 'php_environment' ? {php_version: phpVersion} : {},
       execution_mode: 'continuous', confirmed: true};
     pending.current = true; setBusy(true); setError('');
@@ -36,10 +38,11 @@ export default function RunForm({catalog, onCreated}) {
       options={jobs.map(item => ({value: item.code, label: `${item.name} · v${item.version}`}))}/></Form.Item>
     {selectedJob && <Typography.Paragraph type="secondary">{selectedJob.description}</Typography.Paragraph>}
     <Form.Item label="选择主机"><Select placeholder="选择主机" mode="multiple" showSearch optionFilterProp="label" style={{width: '100%'}} disabled={busy}
-      value={hostIds} onChange={setHostIds} options={(catalog.hosts || []).map(host => ({value: host.id, label: hostName(host)}))}/></Form.Item>
+      value={hostIds} onChange={setHostIds} options={(catalog.hosts || []).map(host => ({value: host.id, disabled: !access.canManage('host', host.id), label: `${hostName(host)}${access.canManage('host', host.id) ? '' : ' · 只读'}`}))}/></Form.Item>
     <Form.Item label="选择分组（包含子组）"><Select placeholder="选择分组" mode="multiple" showSearch optionFilterProp="label" style={{width: '100%'}} disabled={busy}
       value={groupIds} onChange={setGroupIds} options={(catalog.groups || []).map(group => ({value: group.id, label: groupName(group, catalog.groups)}))}/></Form.Item>
     <Typography.Paragraph>预估 {targets.length} 台 · 以服务器冻结结果为准</Typography.Paragraph>
+    {targets.some(host => !access.canManage('host', host.id)) && <Alert type="warning" message="范围包含只读或未授权主机，请调整选择；不会自动跳过。"/>}
     {targets.length > 50 && <Alert type="error" message="最多选择 50 台主机，请缩小范围。"/>}
     {job === 'php_environment' && <Form.Item label="宝塔 PHP 分支"><Select placeholder="PHP分支" value={phpVersion} disabled={busy} onChange={setPhpVersion} style={{width: 200}}
       options={['74', '80', '81', '82', '83', '84', '85'].map(version => ({value: version, label: `PHP ${version[0]}.${version.slice(1)}`}))}/></Form.Item>}

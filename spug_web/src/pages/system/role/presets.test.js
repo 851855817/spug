@@ -38,3 +38,14 @@ test('privileged operations are explicit, separate release approval, and never c
   expect(flatten(buildPresetPermissions('lead'))).not.toContain('baota.panel.del');
   expect(()=>buildPresetPermissions('invalid')).toThrow();
 });
+
+test('granular resource features are selectable and job drafts never imply a blanket panel action grant', () => {
+  const available = codes.flatMap(mod => mod.pages.flatMap(page => page.perms.map(perm => `${mod.key}.${page.key}.${perm.key}`)));
+  for (const code of ['host.host.verify','host.host.import','host.host.export','host.group.move','baota.panel.test',
+    'exec.panel_action.panel_upgrade','exec.panel_action.site_add','exec.panel_action.software_uninstall',
+    'monitor.server.collect','monitor.server.configure','monitor.ssl.renew','ops.inventory.collect',
+    'ops.job.continue','ops.expiry.edit','schedule.schedule.run','schedule.schedule.enable']) expect(available).toContain(code);
+  for (const role of ROLE_PRESETS) expect(role.limits).not.toContain('执行权限同时覆盖');
+  expect(flatten(buildPresetPermissions('lead'))).not.toContain('exec.panel_action.panel_upgrade');
+  expect(flatten(buildPresetPermissions('lead'))).not.toContain('exec.panel_action.software_uninstall');
+});

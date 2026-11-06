@@ -1,3 +1,4 @@
+jest.mock('resources/ResourceAccess', () => ({useResourceAccess: () => require('resources/access').createResourceAccess({is_supper: true})}));
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { act, Simulate } from 'react-dom/test-utils';
@@ -62,10 +63,10 @@ beforeEach(() => {
 });
 afterEach(() => {act(() => {ReactDOM.unmountComponentAtNode(container);}); container.remove(); jest.clearAllMocks(); jest.useRealTimers();});
 
-test('operations is admin-only and denied visitors never fetch job or run data', async () => {
+test('operations view permission gates reads and actions', async () => {
   hasPermission.mockReturnValue(false);
   await act(async () => {ReactDOM.render(<Operations/>, container);});
-  expect(container.textContent).toContain('仅超级管理员');
+  expect(container.textContent).toContain('没有查看运维作业的权限');
   expect(http.get).not.toHaveBeenCalled();
 });
 

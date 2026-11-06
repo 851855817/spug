@@ -8,7 +8,7 @@ const Reminders = lazy(() => import('./Reminders'));
 // when an administrator opens this independent, account-scoped reminder view.
 export default function ReminderEntry({compact = false}) {
   const [open, setOpen] = useState(false);
-  if (typeof hasPermission !== 'function' || !hasPermission('admin')) return null;
+  if (typeof hasPermission !== 'function' || !hasPermission('monitor.ssl.view')) return null;
   return <>
     <Button type="link" size="small" aria-label="查看 SSL 到期提醒" onClick={() => setOpen(true)}>{compact ? 'SSL 提醒' : '查看 SSL 到期提醒'}</Button>
     {open && <Modal visible title="SSL 到期提醒" width={720} onCancel={() => setOpen(false)} footer={<Button onClick={() => setOpen(false)}>关闭</Button>}>

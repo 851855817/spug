@@ -23,6 +23,9 @@ function handleResponse(response) {
     if (response.data.error) {
       result = response.data.error
     } else if (response.data.hasOwnProperty('data')) {
+      if (['post', 'put', 'patch', 'delete'].includes(response.config?.method) &&
+        /^\/api\/(host\/(import\/(cloud\/)?)?|baota\/(monitor\/link\/)?|account\/(user|resources)\/)$/
+          .test((response.config?.url || '').split('?')[0])) window.dispatchEvent(new Event('resource-access-changed'));
       return Promise.resolve(response.data.data)
     } else if (response.headers['content-type'] === 'application/octet-stream') {
       return Promise.resolve(response)

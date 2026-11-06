@@ -1,6 +1,6 @@
 export function buildGroupTree(groups) {
   const nodes = new Map(groups.map(group => [group.id, {
-    key: group.id, value: group.id, title: group.name, name: group.name, children: [],
+    key: group.id, value: group.id, title: group.name, name: group.name, can_manage: group.can_manage, children: [],
   }]));
   const roots = [];
   groups.forEach(group => {

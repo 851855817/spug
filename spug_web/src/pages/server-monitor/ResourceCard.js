@@ -2,6 +2,7 @@ import React from 'react';
 import { Button, Progress, Tag } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import styles from './index.module.less';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 const number = value => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 export function bytes(value) {
@@ -39,6 +40,8 @@ function Disk({disk}) {
 }
 
 export default function ResourceCard({card, hideIP, onLink, onCollect, collecting, collectDisabled, collectionResult, interval = 60, now}) {
+  const access = useResourceAccess();
+  const canCollect = access.has('monitor.server.collect') && card.sources.length > 0 && card.sources.every(source => access.canManage(source.kind, source.id));
   const snapshot = card.snapshot;
   const metrics = snapshot?.metrics;
   const disks = metrics?.disks || [];
@@ -48,7 +51,7 @@ export default function ResourceCard({card, hideIP, onLink, onCollect, collectin
       <div className={styles.identity}><h3 title={card.name}>{card.name}</h3>
         <span className={styles.address}>{hideIP ? '地址已隐藏' : card.address || '—'}</span></div>
       <div className={styles.cardActions}>
-        <Button size="small" icon={<ReloadOutlined/>} loading={collecting} disabled={collectDisabled}
+        <Button size="small" icon={<ReloadOutlined/>} loading={collecting} disabled={!canCollect || collectDisabled}
           onClick={() => onCollect(card.key)}>立即采集</Button>
         <Tag color={{ok: 'green', stale: 'orange', error: 'red'}[status]}>{statusLabels[status] || '未知状态'}</Tag>
       </div>

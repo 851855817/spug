@@ -5,7 +5,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { observer } from 'mobx-react';
-import { Input, Card, Tree, Dropdown, Switch, Tooltip, Spin, Modal } from 'antd';
+import { Input, Button, Card, Tree, Dropdown, Switch, Tooltip, Spin, Modal } from 'antd';
 import {
   FolderOutlined,
   FolderAddOutlined,
@@ -23,8 +23,11 @@ import { hasPermission, http, t } from 'libs';
 import styles from './index.module.less';
 import store from './store';
 import lds from 'lodash';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 export default observer(function () {
+  const access = useResourceAccess();
+  const canGroup = node => access.is_supper || node?.can_manage === true;
   const [isReady, setIsReady] = useState(false);
   const [loading, setLoading] = useState();
   const [visible, setVisible] = useState(false);
@@ -52,15 +55,15 @@ export default observer(function () {
   const menus = {
     onClick: () => setVisible(false),
     items: [
-      {key: '0', icon: <FolderOutlined/>, label: t('新建根分组'), onClick: handleAddRoot},
-      {key: '1', icon: <FolderAddOutlined/>, label: t('新建子分组'), onClick: handleAdd},
-      {key: '2', icon: <EditOutlined/>, label: t('重命名'), onClick: () => setAction('edit')},
+      {key: '0', disabled: !hasPermission('host.group.add'), icon: <FolderOutlined/>, label: t('新建根分组'), onClick: handleAddRoot},
+      {key: '1', disabled: !hasPermission('host.group.add') || !canGroup(store.group), icon: <FolderAddOutlined/>, label: t('新建子分组'), onClick: handleAdd},
+      {key: '2', disabled: !hasPermission('host.group.edit') || !canGroup(store.group), icon: <EditOutlined/>, label: t('重命名'), onClick: () => setAction('edit')},
       {type: 'divider'},
-      {key: '3', icon: <CopyOutlined/>, label: t('添加主机'), onClick: () => store.showSelector(true)},
-      {key: '4', icon: <ScissorOutlined/>, label: t('移动主机'), onClick: () => store.showSelector(false)},
-      {key: '5', icon: <CloseOutlined/>, label: t('删除主机'), danger: true, onClick: handleRemoveHosts},
+      {key: '3', disabled: !hasPermission('host.group.move') || !canGroup(store.group), icon: <CopyOutlined/>, label: t('添加主机'), onClick: () => store.showSelector(true)},
+      {key: '4', disabled: !hasPermission('host.group.move') || !canGroup(store.group), icon: <ScissorOutlined/>, label: t('移动主机'), onClick: () => store.showSelector(false)},
+      {key: '5', disabled: !hasPermission('host.host.del') || !canGroup(store.group) || !access.canAll('host', [...(store.counter[store.group.key] || [])]), icon: <CloseOutlined/>, label: t('删除主机'), danger: true, onClick: handleRemoveHosts},
       {type: 'divider'},
-      {key: '6', icon: <DeleteOutlined/>, label: t('删除此分组'), danger: true, onClick: handleRemove}
+      {key: '6', disabled: !hasPermission('host.group.del') || !canGroup(store.group), icon: <DeleteOutlined/>, label: t('删除此分组'), danger: true, onClick: handleRemove}
     ]
   }
 
@@ -127,6 +130,7 @@ export default observer(function () {
   }
 
   function handleDrag(v) {
+    if (!hasPermission('host.group.move') || !canGroup(v.dragNode) || !canGroup(v.node)) return;
     setLoading(true);
     const pos = v.node.pos.split('-');
     const dropPosition = v.dropPosition - Number(pos[pos.length - 1]);
@@ -135,7 +139,7 @@ export default observer(function () {
   }
 
   function handleRightClick(v) {
-    if (hasPermission('admin')) {
+    if (hasPermission('host.group.add|host.group.edit|host.group.move|host.group.del')) {
       store.group = v.node;
       setVisible(true)
     }
@@ -180,7 +184,9 @@ export default observer(function () {
       title={t('分组列表')}
       className={styles.group}
       extra={(
-        <AuthFragment auth="admin">
+        <>
+        {hasPermission('host.group.add') && <Button type="link" size="small" onClick={handleAddRoot}>新建根分组</Button>}
+        <AuthFragment auth="host.group.move">
           <Switch
             checked={draggable}
             onChange={setDraggable}
@@ -189,7 +195,7 @@ export default observer(function () {
           <Tooltip title={t('排版模式下，可通过拖拽分组实现快速排序，右键点击分组进行分组管理。')}>
             <QuestionCircleOutlined style={{marginLeft: 8, color: 'var(--kops-muted)'}}/>
           </Tooltip>
-        </AuthFragment>)}>
+        </AuthFragment></>)}>
       <Spin spinning={store.grpFetching}>
         <Dropdown
           menu={menus}

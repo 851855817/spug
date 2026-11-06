@@ -5,32 +5,36 @@
  */
 import React, { useState } from 'react';
 import { observer } from 'mobx-react';
-import { Modal, Form, Input, Select, Button, Steps, Cascader, Radio, message } from 'antd';
+import { Modal, Form, Input, Select, Button, Steps, TreeSelect, Radio, message } from 'antd';
 import http from 'libs/http';
 import { t } from 'libs';
 import store from './store';
 import styles from './index.module.less';
+import {useResourceAccess} from 'resources/ResourceAccess';
+import {canManageGroup, manageableGroupTree} from 'resources/groupAccess';
 
 export default observer(function () {
+  const access = useResourceAccess();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0);
   const [ak, setAK] = useState();
   const [ac, setAC] = useState();
   const [regionId, setRegionId] = useState();
-  const [groupId, setGroupId] = useState([]);
+  const [groupId, setGroupId] = useState();
   const [regions, setRegions] = useState([]);
   const [username, setUsername] = useState('root');
   const [port, setPort] = useState('22');
   const [host_type, setHostType] = useState('private');
 
   function handleSubmit() {
+    if (!canManageGroup(store.treeData, groupId, access)) return message.error(t('请选择可管理的导入分组'));
     setLoading(true);
     const formData = {
       ak,
       ac,
       type: store.cloudImport,
       region_id: regionId,
-      group_id: groupId[groupId.length - 1],
+      group_id: groupId,
       username,
       port,
       host_type
@@ -85,11 +89,10 @@ export default observer(function () {
           </Select>
         </Form.Item>
         <Form.Item hidden={step === 0} required label={t('选择分组')} tooltip={t('将主机导入指定分组。')}>
-          <Cascader
+          <TreeSelect
             value={groupId}
             onChange={setGroupId}
-            options={store.treeData}
-            fieldNames={{label: 'title'}}
+            treeData={manageableGroupTree(store.treeData, access)}
             placeholder={t('请选择')}/>
         </Form.Item>
         <Form.Item hidden={step === 0} label={t('基础信息')} tooltip={t('以下信息用于进行SSH验证，导入完成后通过点击批量验证按钮进行批量验证并同步主机扩展信息。')}/>
@@ -114,7 +117,7 @@ export default observer(function () {
               key="1"
               type="primary"
               loading={loading}
-              disabled={!regionId || !groupId}
+              disabled={!regionId || !canManageGroup(store.treeData, groupId, access)}
               onClick={handleSubmit}>{t('同步导入')}</Button>,
             <Button key="2" style={{marginLeft: 24}} onClick={() => setStep(0)}>{t('上一步')}</Button>
           ])}

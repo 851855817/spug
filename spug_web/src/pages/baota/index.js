@@ -10,8 +10,11 @@ import Group from './Group';
 import PanelForm from './PanelForm';
 import { filterPanels } from './helpers';
 import styles from './index.module.less';
+import {useResourceAccess} from 'resources/ResourceAccess';
+import {quotaText} from 'resources/access';
 
 export default function BaotaIndex() {
+  const access = useResourceAccess();
   const [panels, setPanels] = useState([]);
   const [groups, setGroups] = useState([]);
   const [selected, setSelected] = useState(0);
@@ -128,7 +131,7 @@ export default function BaotaIndex() {
       render: url => {try {return new URL(url).hostname.replace(/^\[|\]$/g, '');} catch (_) {return '—';}}},
     {title: '监控', key: 'monitor', width: 110, render: (_, panel) =>
       <Space size={8}><ResourceMonitorButton id={panel.id} name={panel.name}/>
-        <ResourceMonitorSwitch id={panel.id} name={panel.name} canEdit={hasPermission('baota.panel.edit')}/></Space>},
+        <ResourceMonitorSwitch id={panel.id} name={panel.name} canEdit={hasPermission('monitor.server.configure') && access.canManage('panel', panel.id, 'monitor.server.configure')}/></Space>},
     {title: '密码', dataIndex: 'has_password', width: 100,
       render: value => <Tag color={value ? 'green' : 'default'}>{value ? '已加密保存' : '未设置'}</Tag>},
     {title: 'API 连接', key: 'api', width: 190, render: (_, panel) => <div>
@@ -144,12 +147,12 @@ export default function BaotaIndex() {
     {title: '操作', key: 'actions', width: 280, fixed: 'right', render: (_, panel) => (
       <Space size={4} wrap>
         {hasPermission('baota.panel.login') && <Button type="link" size="small" icon={<ExportOutlined/>}
-          loading={!!openingIds[panel.id]} onClick={() => openPanel(panel)}>打开</Button>}
+          disabled={!access.canManage('panel', panel.id, 'baota.panel.login')} loading={!!openingIds[panel.id]} onClick={() => openPanel(panel)}>打开</Button>}
         <a href={panel.url} target="_blank" rel="noopener noreferrer">登录页</a>
-        {hasPermission('baota.panel.edit') && <Button type="link" size="small" onClick={() => setRecord(panel)}>编辑</Button>}
-        {hasPermission('baota.panel.edit') && <Button type="link" size="small" loading={!!checkingIds[panel.id]}
-          disabled={!panel.api_base_url || !panel.has_api_key} onClick={() => checkPanel(panel)}>测试连接</Button>}
-        {hasPermission('baota.panel.del') && <Button type="link" danger size="small" onClick={() => remove(panel)}>删除</Button>}
+        {hasPermission('baota.panel.edit') && <Button type="link" size="small" disabled={!access.canManage('panel', panel.id, 'baota.panel.edit')} onClick={() => setRecord(panel)}>编辑</Button>}
+        {hasPermission('baota.panel.test') && <Button type="link" size="small" loading={!!checkingIds[panel.id]}
+          disabled={!access.canManage('panel', panel.id, 'baota.panel.test') || !panel.api_base_url || !panel.has_api_key} onClick={() => checkPanel(panel)}>测试连接</Button>}
+        {hasPermission('baota.panel.del') && <Button type="link" danger size="small" disabled={!access.canManage('panel', panel.id, 'baota.panel.del')} onClick={() => remove(panel)}>删除</Button>}
       </Space>
     )},
   ];
@@ -169,9 +172,10 @@ export default function BaotaIndex() {
               <Space>
                 <Button icon={<ReloadOutlined/>} onClick={refresh} loading={loading}>刷新</Button>
                 {hasPermission('baota.panel.add') && <Button type="primary" icon={<PlusOutlined/>}
-                  disabled={!ready || !groups.length} onClick={() => setRecord({})}>添加面板</Button>}
+                  disabled={!access.canAdd || !ready || !groups.length} onClick={() => setRecord({})}>添加面板</Button>}
               </Space>
             </div>
+            <Typography.Paragraph type="secondary">{quotaText(access.quota)} · SSH 与明确关联宝塔共享额度</Typography.Paragraph>
             {ready && !groups.length && <Typography.Paragraph type="secondary">
               {hasPermission('baota.group.manage') ? '先点击左侧“＋”新建分组，再添加宝塔面板。' : '请联系管理员创建分组后再添加面板。'}
             </Typography.Paragraph>}

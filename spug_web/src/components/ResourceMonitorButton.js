@@ -12,7 +12,7 @@ export default function ResourceMonitorButton({id, name}) {
   function open() {
     if (!source || monitor.loadError) {message.info('监控状态加载失败，请刷新列表'); return;}
     if (!source.enabled) {message.info('未开启监控'); return;}
-    if (!hasPermission('monitor.monitor.view')) {message.info('没有查看监控的权限'); return;}
+    if (!hasPermission('monitor.server.view')) {message.info('没有查看监控的权限'); return;}
     setOpened(true);
   }
   return <>

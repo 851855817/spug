@@ -7,11 +7,13 @@ import TaskItem from './TaskItem';
 import UploadResults from './UploadResults';
 import { OPERATION_LABELS, SSL_ACK, startPayload, summarizeTask } from './helpers';
 import styles from './TaskDetail.module.css';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 const COUNT_LABELS = {success: '成功', already: '已满足', failed: '失败', uncertain: '待核实', remote: '处理中',
   ready: '待执行', skipped: '已跳过', cancelled: '已取消', pending: '等待中'};
 
 export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange, onRetry}) {
+  const access = useResourceAccess();
   const [task, setTask] = useState(null);
   const [acknowledged, setAcknowledged] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -58,6 +60,7 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
   async function command(action, values = {}) {
     const permission = {start: 'execute', continue: 'execute', cancel: 'cancel', reconcile: 'view', retry: 'create'}[action];
     if (!mounted.current || !task || !permission || !hasPermission(`exec.panel.${permission}`) || actionPending.current) return;
+    if (action !== 'reconcile' && !canAct(permission)) return;
     const token = generation.current;
     actionPending.current = true;
     actionRevision.current++;
@@ -80,6 +83,9 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
     dialog.current = Modal.confirm({...config, onOk: () => {
       if (mounted.current && generation.current === token) return config.onOk();
     }});
+  }
+  function canAct(permission) {
+    return access.canAll('panel', (task?.targets || []).map(target => target.panel?.id), `exec.panel.${permission}&exec.panel_action.${task?.operation}`);
   }
   if (!task) return error ? <Alert type="error" message={error}/> : <Spin/>;
   const counts = summarizeTask(task);
@@ -105,21 +111,21 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
     {batch.enabled && batch.state !== 'completed' && batch.pause_reason && <Alert showIcon type="warning" message={batch.pause_reason}/>}
     {ready && task.operation.startsWith('ssl_') && <Alert showIcon type="warning" message="SSL 可能同步未选网站和面板证书，并重载 Web 服务。"/>}
     <Space wrap style={{margin: '16px 0'}}>
-      {batch.enabled && !batch.active && !batch.deployment_pending && hasPermission('exec.panel.execute') &&
+      {batch.enabled && !batch.active && !batch.deployment_pending && hasPermission('exec.panel.execute') && canAct('execute') &&
         (batch.deployable || []).map(item => <Button key={`${item.target_id}:${item.child_key}`} loading={busy}
           onClick={() => confirmAction({title: '确认继续当前证书部署阶段？',
             content: `${item.panel_name || '当前面板'} · ${item.label || item.child_key}：只读核验已确认可部署。确认将保存证书并可能重载 Web 服务；其它面板和后续批次仍暂停。`,
             okText: '确认部署此证书', onOk: () => command('continue', {acknowledge: true,
               deploy: {target_id: item.target_id, child_key: item.child_key}})})}>确认继续当前证书部署阶段</Button>)}
-      {canContinue && hasPermission('exec.panel.execute') && <Button type="primary" loading={busy}
+      {canContinue && hasPermission('exec.panel.execute') && <Button type="primary" disabled={!canAct('execute')} loading={busy}
         onClick={() => confirmAction({title: batch.requires_acknowledgement ? '确认已核对本批异常并继续？' : '核对本批结果并继续？',
           content: batch.requires_acknowledgement ? '本批已熔断。继续只放行尚未下发的项目，已下发项目不会重发。' : '继续放行下一批尚未下发的面板。',
           okText: '确认继续', onOk: () => command('continue', batch.requires_acknowledgement ? {acknowledge: true} : {})})}>核对结果并继续</Button>}
       {hasPermission('exec.panel.view') && <Button loading={busy} onClick={() => command('reconcile')}>只读核验</Button>}
-      {hasPermission('exec.panel.cancel') && !['completed', 'cancelled'].includes(task.state) && <Button danger loading={busy}
+      {hasPermission('exec.panel.cancel') && !['completed', 'cancelled'].includes(task.state) && <Button danger disabled={!canAct('cancel')} loading={busy}
         onClick={() => confirmAction({title: '取消尚未下发的项目？', content: '已发送的远端操作可能继续运行，请查看结果并只读核验。',
           okText: '取消未下发项', onOk: () => command('cancel')})}>取消未下发项</Button>}
-      {hasPermission('exec.panel.create') && ['completed', 'uncertain', 'remote', 'cancelled'].includes(task.state) && <Button loading={busy}
+      {hasPermission('exec.panel.create') && ['completed', 'uncertain', 'remote', 'cancelled'].includes(task.state) && <Button disabled={!canAct('create')} loading={busy}
         onClick={() => command('retry')}>关联新预检重试</Button>}
     </Space>
     {!(task.targets || []).length && <Empty description="暂无目标，等待预检"/>}
@@ -129,10 +135,10 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
           <Alert type={target.state === 'failed' ? 'error' : 'warning'} message={target.message}/>}
         {(target.children || []).map(child => <div key={child.snapshot.key} className={styles.entry}>
             <TaskItem operation={task.operation} child={child}/>
-            {task.operation !== 'file_upload' && hasPermission('exec.panel.manage') && ['uncertain', 'remote'].includes(child.state) && <Button style={{marginTop: 8}}
+            {task.operation !== 'file_upload' && hasPermission('exec.panel.manage') && ['uncertain', 'remote'].includes(child.state) && <Button disabled={!canAct('manage')} style={{marginTop: 8}}
               onClick={() => setResolution({target, child})}>人工判定</Button>}
           </div>)}
-        {task.operation === 'file_upload' && <UploadResults taskId={task.id} targetId={target.id} summary={target.summary?.upload}
+        {task.operation === 'file_upload' && <UploadResults taskId={task.id} targetId={target.id} panelId={target.panel?.id} canResolve={canAct('manage')} summary={target.summary?.upload}
           active={!['prepared', 'completed', 'cancelled'].includes(task.state)} refreshKey={`${task.state}:${target.state}`}
           onResolved={result => {actionRevision.current++; setTask(result); if (onTaskChange) onTaskChange(result);}}/>}
       </Collapse.Panel>)}
@@ -148,7 +154,7 @@ export default function TaskDetail({taskId, acknowledgements = {}, onTaskChange,
         <Typography.Text>失败熔断阈值</Typography.Text><InputNumber aria-label="失败熔断阈值" min={1} max={batchSize || 1} precision={0}
           value={failureThreshold} onChange={setFailureThreshold}/>
       </Space>}
-      <div>{hasPermission('exec.panel.execute') && <Button type="primary" disabled={!confirmed || !validPolicy} loading={busy} onClick={() => command('start')}>确认并开始执行</Button>}</div>
+      <div>{hasPermission('exec.panel.execute') && <Button type="primary" disabled={!canAct('execute') || !confirmed || !validPolicy} loading={busy} onClick={() => command('start')}>确认并开始执行</Button>}</div>
     </div>}
     {resolution && <ResolveForm taskId={task.id} {...resolution} onClose={() => setResolution(null)} onSaved={result => {
       actionRevision.current++; setTask(result);

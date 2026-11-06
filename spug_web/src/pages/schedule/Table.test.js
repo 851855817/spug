@@ -1,3 +1,4 @@
+jest.mock('resources/ResourceAccess', () => ({useResourceAccess: jest.fn()}));
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { act } from 'react-dom/test-utils';
@@ -5,6 +6,8 @@ import { Modal } from 'antd';
 import { hasPermission, http } from 'libs';
 import store from './store';
 import ScheduleTable from './Table';
+import {useResourceAccess} from 'resources/ResourceAccess';
+import {createResourceAccess} from 'resources/access';
 
 jest.mock('mobx-react', () => ({observer: item => item}));
 jest.mock('libs', () => ({http: {post: jest.fn(), patch: jest.fn()}, hasPermission: jest.fn(), t: value => value}));
@@ -31,6 +34,7 @@ const button = text => [...container.querySelectorAll('button')].find(item => it
 const plan = {template_id: 7, operation_label: '防跨站', panels: [{id: 2, name: '客户面板'}],
   scope: [{panel_id: 2, name: '客户面板', items: ['example.com']}], required_acknowledgements: []};
 beforeEach(() => {
+  useResourceAccess.mockReturnValue(createResourceAccess({is_supper: true}));
   container = document.createElement('div'); document.body.appendChild(container); hasPermission.mockReturnValue(true);
   store.dataSource = [{id: 5, name: '定时任务', interpreter: 'baota', is_active: false, panel_plan: plan}];
   http.patch.mockResolvedValue({}); http.post.mockResolvedValue({panel_task_id: 42, mode: 'preflight'});
@@ -81,4 +85,15 @@ test('an automatically stopped panel plan keeps its latest failure visible', asy
   store.dataSource[0].latest_status = 2; store.dataSource[0].latest_status_alias = '失败';
   await act(async () => ReactDOM.render(<ScheduleTable/>, container));
   expect(container.textContent).toContain('失败'); expect(container.textContent).toContain('未激活');
+});
+
+test('edit permission cannot run or enable schedules, and readonly resources cannot edit', async () => {
+  hasPermission.mockImplementation(code => ['schedule.schedule.view', 'schedule.schedule.edit'].includes(code));
+  useResourceAccess.mockReturnValue(createResourceAccess({permissions: ['schedule.schedule.view', 'schedule.schedule.edit'], panels: [{id: 2, level: 'read'}]}));
+  store.dataSource[0].can_manage = false;
+  await act(async () => {ReactDOM.render(<ScheduleTable/>, container);});
+  expect(button('激活任务')).toBeUndefined();
+  expect(button('重新预检')).toBeUndefined();
+  expect(button('编辑').disabled).toBe(true);
+  expect(http.post).not.toHaveBeenCalled();
 });

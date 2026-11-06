@@ -64,17 +64,17 @@ export default [
     component: DashboardIndex
   },
   {icon: <CloudServerOutlined/>, title: t('主机管理'), auth: 'host.host.view', path: '/host', component: HostIndex},
-  {path: '/host/expiry', auth: 'admin', component: ServerExpiry},
+  {path: '/host/expiry', auth: 'ops.expiry.view', component: ServerExpiry},
   {icon: <CloudServerOutlined/>, title: t('宝塔面板管理'), auth: 'baota.panel.view', path: '/baota', component: BaotaIndex},
   {
-    icon: <CodeOutlined/>, title: t('批量执行'), auth: 'exec.task.do|exec.template.view|exec.panel.view|admin', child: [
+    icon: <CodeOutlined/>, title: t('批量执行'), auth: 'exec.task.do|exec.transfer.do|exec.template.view|exec.panel.view|ops.job.view|ops.inventory.view', child: [
       {title: t('执行任务'), auth: 'exec.task.do', path: '/exec/task', component: ExecTask},
       {title: t('模板管理'), auth: 'exec.template.view', path: '/exec/template', component: ExecTemplate},
       {title: t('文件分发'), auth: 'exec.transfer.do', path: '/exec/transfer', component: ExecTransfer},
-      {title: t('面板任务'), auth: 'exec.panel.view|admin', path: '/exec/panel', component: ExecPanel},
-      {hidden: true, auth: 'admin', path: '/exec/operations', component: LegacyOperations},
-      {hidden: true, title: t('网站与证书'), auth: 'admin', path: '/exec/sites', component: SiteInventory},
-      {title: t('备份检查台'), auth: 'admin', path: '/exec/backups', component: BackupInventory},
+      {title: t('面板任务'), auth: 'exec.panel.view|ops.job.view', path: '/exec/panel', component: ExecPanel},
+      {hidden: true, auth: 'ops.job.view', path: '/exec/operations', component: LegacyOperations},
+      {hidden: true, title: t('网站与证书'), auth: 'ops.inventory.view', path: '/exec/sites', component: SiteInventory},
+      {title: t('备份检查台'), auth: 'ops.inventory.view', path: '/exec/backups', component: BackupInventory},
     ]
   },
   {
@@ -101,9 +101,9 @@ export default [
       {path: '/config/setting/:type/:id', component: ConfigSetting},
     ]
   },
-  {icon: <MonitorOutlined/>, title: t('监控中心'), auth: 'monitor.monitor.view|admin', child: [
-    {title: t('服务器监控'), auth: 'monitor.monitor.view', path: '/monitor/servers', component: ServerMonitor},
-    {title: 'SSL监控', auth: 'admin', path: '/monitor/ssl', component: SSLMonitor},
+  {icon: <MonitorOutlined/>, title: t('监控中心'), auth: 'monitor.monitor.view|monitor.server.view|monitor.ssl.view', child: [
+    {title: t('服务器监控'), auth: 'monitor.server.view', path: '/monitor/servers', component: ServerMonitor},
+    {title: 'SSL监控', auth: 'monitor.ssl.view', path: '/monitor/ssl', component: SSLMonitor},
     {title: t('监控任务'), auth: 'monitor.monitor.view', path: '/monitor', component: MonitorIndex},
   ]},
   {

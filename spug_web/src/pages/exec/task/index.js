@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { observer } from 'mobx-react';
 import { PlusOutlined, ThunderboltOutlined, BulbOutlined, QuestionCircleOutlined } from '@ant-design/icons';
-import { Form, Button, Radio, Tooltip } from 'antd';
+import { Alert, Form, Button, Radio, Tooltip } from 'antd';
 import { ACEditor, AuthDiv, Breadcrumb } from 'components';
 import HostSelector from 'pages/host/Selector';
 import TemplateSelector from './TemplateSelector';
@@ -17,8 +17,11 @@ import moment from 'moment';
 import store from './store';
 import gStore from 'gStore';
 import style from './index.module.less';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 function TaskIndex() {
+  const access = useResourceAccess();
+  const canExecute = access.canAll('host', store.host_ids, 'exec.task.do');
   const [loading, setLoading] = useState(false)
   const [interpreter, setInterpreter] = useState('sh')
   const [command, setCommand] = useState('')
@@ -51,6 +54,7 @@ function TaskIndex() {
   }, [])
 
   function handleSubmit(params) {
+    if (!access.canAll('host', store.host_ids, 'exec.task.do')) return;
     if (!params && parameters.length > 0) {
       return setVisible(true)
     }
@@ -87,8 +91,10 @@ function TaskIndex() {
       <div className={style.index} hidden={store.showConsole}>
         <Form layout="vertical" className={style.left}>
           <Form.Item required label={t('目标主机')}>
-            <HostSelector type="button" value={store.host_ids} onChange={ids => store.host_ids = ids}/>
+            <HostSelector permission="exec.task.do" type="button" value={store.host_ids} onChange={ids => store.host_ids = ids}/>
           </Form.Item>
+          {store.host_ids.length > 0 && !canExecute && <Alert showIcon type="warning"
+            message="目标包含只读或未授权主机，无法执行。已保留全部目标，请调整选择或联系管理员授权。"/>}
 
           <Form.Item required label={t('执行命令')} style={{position: 'relative'}}>
             <Radio.Group
@@ -104,7 +110,7 @@ function TaskIndex() {
             <Button style={{float: 'right'}} icon={<PlusOutlined/>} onClick={store.switchTemplate}>{t('从执行模版中选择')}</Button>
             <ACEditor className={style.editor} mode={interpreter} value={command} width="100%" onChange={setCommand}/>
           </Form.Item>
-          <Button loading={loading} icon={<ThunderboltOutlined/>} type="primary"
+          <Button loading={loading} disabled={!canExecute} icon={<ThunderboltOutlined/>} type="primary"
                   onClick={() => handleSubmit()}>{t('开始执行')}</Button>
         </Form>
 

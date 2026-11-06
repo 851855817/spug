@@ -4,8 +4,11 @@ import Table from 'components/ResizableTable';
 import { hasPermission, http } from 'libs';
 import { Status } from './TaskEvidence';
 import { formatBytes } from './uploadHelpers';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
-export default function UploadResults({taskId, targetId, summary, active = false, refreshKey, onResolved}) {
+export default function UploadResults({taskId, targetId, panelId, canResolve = true, summary, active = false, refreshKey, onResolved}) {
+  const access = useResourceAccess();
+  const canManage = canResolve && access.canManage('panel', panelId, 'exec.panel.manage&exec.panel_action.file_upload');
   const [expanded, setExpanded] = useState(false);
   const [query, setQuery] = useState({page: 1, page_size: 20});
   const [data, setData] = useState({items: [], total: 0});
@@ -42,7 +45,7 @@ export default function UploadResults({taskId, targetId, summary, active = false
   }
 
   async function saveResolution() {
-    if (pending.current) return;
+    if (pending.current || !canManage) return;
     if (!reason.trim() || !evidence.trim() || reason.length > 2000 || evidence.length > 2000) {
       setSaveError('必须填写可追溯的理由和证据，每项最多 2000 字'); return;
     }
@@ -70,7 +73,7 @@ export default function UploadResults({taskId, targetId, summary, active = false
         {title: '状态', dataIndex: 'state', width: 130, render: state => <Status state={state}/>},
         {title: '大小', dataIndex: 'size', width: 100, render: formatBytes},
         {title: '异常原因', dataIndex: 'message', render: (message, row) => <div>{['failed', 'uncertain'].includes(row.state) ? message || '原因未返回' : '—'}
-          {hasPermission('exec.panel.manage') && row.state === 'uncertain' && row.source_id && <div><Button size="small" onClick={() => openResolution(row)}>人工判定此文件</Button></div>}
+          {hasPermission('exec.panel.manage') && row.state === 'uncertain' && row.source_id && <div><Button disabled={!canManage} size="small" onClick={() => openResolution(row)}>人工判定此文件</Button></div>}
         </div>},
       ]} pagination={{current: query.page, pageSize: query.page_size, total: data.total, showSizeChanger: true,
         onChange: (page, page_size) => setQuery({page, page_size}), showTotal: total => `共 ${total} 个文件`}}/>

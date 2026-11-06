@@ -12,8 +12,10 @@ import { hasPermission, http, t } from 'libs';
 import store from './store';
 import PanelPlanSummary from './PanelPlanSummary';
 import PanelPreview from './PanelPreview';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 class ComTable extends React.Component {
+  canManage = info => this.props.access.is_supper || info.can_manage === true;
   state = {panelTaskId: null};
   componentDidMount() {
     store.fetchRecords()
@@ -25,13 +27,13 @@ class ComTable extends React.Component {
     items: [
       {
         key: 'test',
-        label: <LinkButton auth="schedule.schedule.edit" onClick={() => this.handleTest(info)}>{info.interpreter === 'baota' ? '重新预检' : t('执行测试')}</LinkButton>
+        label: <LinkButton auth="schedule.schedule.run" disabled={!this.canManage(info)} onClick={() => this.handleTest(info)}>{info.interpreter === 'baota' ? '重新预检' : t('执行测试')}</LinkButton>
       },
       {
         key: 'active',
         label: (
           <LinkButton
-            auth="schedule.schedule.edit"
+            auth="schedule.schedule.enable" disabled={!this.canManage(info)}
             onClick={() => this.handleActive(info)}>
             {info.is_active ? t('禁用任务') : t('激活任务')}</LinkButton>
         )
@@ -43,11 +45,11 @@ class ComTable extends React.Component {
       {type: 'divider'},
       {
         key: 'delete',
-        label: <LinkButton danger auth="schedule.schedule.del" onClick={() => this.handleDelete(info)}>{t('删除')}</LinkButton>
+        label: <LinkButton danger auth="schedule.schedule.del" disabled={!this.canManage(info)} onClick={() => this.handleDelete(info)}>{t('删除')}</LinkButton>
       }
-    ].filter(item => info.interpreter !== 'baota' || (
+    ].filter(item => (!['test', 'active', 'delete'].includes(item.key) || hasPermission(`schedule.schedule.${{test: 'run', active: 'enable', delete: 'del'}[item.key]}`)) && (info.interpreter !== 'baota' || (
       (item.key !== 'active' || info.is_active || ['exec.panel.view', 'exec.panel.create', 'exec.panel.execute'].every(hasPermission)) &&
-      (item.key !== 'test' || ['exec.panel.view', 'exec.panel.create'].every(hasPermission))))
+      (item.key !== 'test' || ['exec.panel.view', 'exec.panel.create'].every(hasPermission)))))
   });
 
   columns = [{
@@ -90,7 +92,7 @@ class ComTable extends React.Component {
       <Action>
         <Action.Button disabled={info['latest_run_time'] === '1970-01-01'}
                        onClick={() => store.showInfo(info)}>{t('详情')}</Action.Button>
-        <Action.Button auth="schedule.schedule.edit" disabled={info.interpreter === 'baota' && (info.is_active || info.latest_status === 0)}
+        <Action.Button auth="schedule.schedule.edit" disabled={!this.canManage(info) || (info.interpreter === 'baota' && (info.is_active || info.latest_status === 0))}
                        onClick={() => store.showForm(info)}>{t('编辑')}</Action.Button>
         <Dropdown menu={this.moreMenus(info)} trigger={['click']}>
           <LinkButton>
@@ -102,6 +104,7 @@ class ComTable extends React.Component {
   }];
 
   handleActive = (text) => {
+    if (!this.canManage(text) || !hasPermission('schedule.schedule.enable')) return;
     const activatePanel = text.interpreter === 'baota' && !text.is_active;
     if (activatePanel && !['exec.panel.view', 'exec.panel.create', 'exec.panel.execute'].every(hasPermission)) return;
     Modal.confirm({
@@ -122,6 +125,7 @@ class ComTable extends React.Component {
   };
 
   handleDelete = (text) => {
+    if (!this.canManage(text) || !hasPermission('schedule.schedule.del')) return;
     Modal.confirm({
       title: t('删除确认'),
       content: t('确定要删除【{}】?', text['name']),
@@ -136,6 +140,7 @@ class ComTable extends React.Component {
   };
 
   handleTest = (text) => {
+    if (!this.canManage(text) || !hasPermission('schedule.schedule.run')) return;
     const isPanel = text.interpreter === 'baota';
     if (isPanel && !['exec.panel.view', 'exec.panel.create'].every(hasPermission)) return;
     Modal.confirm({
@@ -184,4 +189,7 @@ class ComTable extends React.Component {
   }
 }
 
-export default observer(ComTable)
+export default observer(function ResourceScheduleTable(props) {
+  const access = useResourceAccess();
+  return <ComTable {...props} access={access}/>;
+})

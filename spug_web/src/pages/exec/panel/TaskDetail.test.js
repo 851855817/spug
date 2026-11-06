@@ -1,3 +1,4 @@
+jest.mock('resources/ResourceAccess', () => ({useResourceAccess: () => require('resources/access').createResourceAccess({is_supper: true})}));
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { act } from 'react-dom/test-utils';

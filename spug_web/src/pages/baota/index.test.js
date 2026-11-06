@@ -4,6 +4,9 @@ import { act } from 'react-dom/test-utils';
 import { hasPermission, http } from 'libs';
 import BaotaIndex from './index';
 import { message } from 'antd';
+import {useResourceAccess} from 'resources/ResourceAccess';
+import {createResourceAccess} from 'resources/access';
+jest.mock('resources/ResourceAccess', () => ({useResourceAccess: jest.fn()}));
 
 jest.mock('libs', () => ({hasPermission: jest.fn(), http: {get: jest.fn(), post: jest.fn()}}));
 jest.mock('components', () => {
@@ -36,6 +39,7 @@ let container;
 let panels;
 
 beforeEach(() => {
+  useResourceAccess.mockReturnValue(createResourceAccess({is_supper: true}));
   container = document.createElement('div');
   document.body.appendChild(container);
   panels = [
@@ -44,7 +48,7 @@ beforeEach(() => {
     {id: 2, name: 'Two', url: 'https://two/login', username: 'two', group_id: 1,
       api_base_url: 'https://two', has_api_key: true},
   ];
-  hasPermission.mockImplementation(permission => ['baota.panel.view', 'baota.panel.edit'].includes(permission));
+  hasPermission.mockImplementation(permission => ['baota.panel.view', 'baota.panel.edit', 'baota.panel.test', 'monitor.server.configure'].includes(permission));
   http.get.mockImplementation(path => Promise.resolve(path.endsWith('sources/') ?
     {sources: panels.map(panel => ({id: panel.id, kind: 'panel', enabled: panel.id === 2})), hosts: []} :
     path.endsWith('group/') ? [{id: 1, name: 'Test'}] : panels));
@@ -64,6 +68,19 @@ async function renderPage() {
 function testButtons() {
   return [...container.querySelectorAll('button')].filter(button => button.textContent === '测试连接');
 }
+
+test('a read grant keeps a panel visible but disables editing, connection checks, login and deletion', async () => {
+  hasPermission.mockReturnValue(true);
+  useResourceAccess.mockReturnValue(createResourceAccess({permissions: ['baota.panel.edit', 'baota.panel.test', 'baota.panel.login', 'baota.panel.del'],
+    panels: [{id: 1, level: 'read'}, {id: 2, level: 'manage'}]}));
+  await renderPage();
+  const read = container.querySelector('[data-panel-id="1"]');
+  for (const label of ['编辑', '测试连接', '打开', '删除']) {
+    const button = [...read.querySelectorAll('button')].find(item => item.textContent === label);
+    expect(button.disabled).toBe(true);
+  }
+  expect(http.post).not.toHaveBeenCalled();
+});
 
 test('row connection check submits saved id, loads only its row and refreshes successful status', async () => {
   let completeCheck;

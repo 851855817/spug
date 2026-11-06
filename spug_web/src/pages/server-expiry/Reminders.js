@@ -26,7 +26,7 @@ export default function Reminders({revision, onCount}) {
   }, [page, filters, revision, refresh, onCount]);
   function filter(key, input) {setFilters(current => {const next = {...current}; if (input) next[key] = input; else delete next[key]; return next;}); setPage(current => ({...current, page: 1}));}
   async function read(id) {
-    if (pending.current || !hasPermission('admin')) return;
+    if (pending.current || !hasPermission('ops.expiry.view')) return;
     pending.current = true; setReading(id); setError('');
     try {
       await http.post(`${API}reminders/read/`, {ids: [id]});

@@ -13,6 +13,7 @@ import Renewal from './Renewal';
 import Guidance from './Guidance';
 import Reminders from './Reminders';
 import styles from './index.module.less';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 const icons = [GlobalOutlined, CheckCircleOutlined, ClockCircleOutlined, CloseCircleOutlined, SafetyCertificateOutlined, CloseCircleOutlined];
 function initialFilters() {
@@ -22,7 +23,8 @@ function initialFilters() {
   return result;
 }
 export default function SSLMonitor() {
-  const allowed = hasPermission('admin'), visible = usePageVisibility();
+  const access = useResourceAccess();
+  const allowed = hasPermission('monitor.ssl.view'), visible = usePageVisibility();
   const [filters, setFilters] = useState(initialFilters), [page, setPage] = useState(1), [pageSize, setPageSize] = useState(20);
   const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState('');
   const [revision, setRevision] = useState(0), [settings, setSettings] = useState(false), [detail, setDetail] = useState(null);
@@ -33,7 +35,7 @@ export default function SSLMonitor() {
   const visibilityLock = useRef(false);
   const muteLock = useRef(false);
   const mounted = useRef(false), preflightLock = useRef(false), checkLock = useRef(false), owner = useRef(localStorage.getItem('id'));
-  const sameOwner = () => owner.current === localStorage.getItem('id') && hasPermission('admin');
+  const sameOwner = () => owner.current === localStorage.getItem('id') && hasPermission('monitor.ssl.view');
   const refresh = () => setRevision(value => value + 1);
   useEffect(() => {mounted.current = true; return () => {mounted.current = false;};}, []);
   useEffect(() => {
@@ -80,7 +82,7 @@ export default function SSLMonitor() {
     finally {muteLock.current = false; if (mounted.current && sameOwner()) setMuting(null);}
   }
   async function preflight(row) {
-    if (preflightLock.current || !sameOwner()) return;
+    if (preflightLock.current || !sameOwner() || !access.canSource(row.source_key, 'monitor.ssl.renew')) return;
     preflightLock.current = true; setPreflighting(row.id); setActionError('');
     try {
       const job = await http.post(`${API}renew/`, {certificate_id: row.id});
@@ -94,7 +96,7 @@ export default function SSLMonitor() {
     (!filters.group || source.groups?.some(group => group.key === filters.group)));
   const sourceIssues = targets.filter(source => source.status && !['ok', 'never_checked'].includes(source.status));
   async function check(sourceKeys) {
-    if (checkLock.current || !sourceKeys.length || !sameOwner()) return;
+    if (checkLock.current || !sourceKeys.length || !sameOwner() || !sourceKeys.every(key => access.canSource(key, 'monitor.ssl.collect'))) return;
     if (sourceKeys.length > 10) {setActionError('每次最多检查 10 个来源，请通过分组或服务器筛选缩小范围。'); return;}
     checkLock.current = true; setChecking(true); setActionError('');
     try {
@@ -121,7 +123,7 @@ export default function SSLMonitor() {
       <Button type="link" onClick={() => setDetail(row)}>详情</Button>
       {row.latest_job_id && <Button type="link" onClick={() => setJobId(row.latest_job_id)}>任务</Button>}
       {row.renewal?.supported && !row.stale && !['unknown', 'unconfigured', 'error'].includes(certificateState(row))
-        ? <Button type="link" loading={preflighting === row.id} disabled={preflighting !== null || !!error} onClick={() => preflight(row)}>续签</Button>
+        ? <Button type="link" loading={preflighting === row.id} disabled={!access.canSource(row.source_key, 'monitor.ssl.renew') || preflighting !== null || !!error} onClick={() => preflight(row)}>续签</Button>
         : <Button type="link" onClick={() => setGuidance(row)}>配置指导</Button>}
       {(row.hidden || certificateState(row) === 'expired') && /^[a-f0-9]{64}$/.test(row.cycle || '') &&
         <Button type="link" title="仅当前账号、本次证书周期生效；提醒设置独立" disabled={savingVisibility !== null || loading || !!error}
@@ -133,8 +135,8 @@ export default function SSLMonitor() {
     <Breadcrumb><Breadcrumb.Item>首页</Breadcrumb.Item><Breadcrumb.Item>监控中心</Breadcrumb.Item><Breadcrumb.Item>SSL 监控</Breadcrumb.Item></Breadcrumb>
     <main className={styles.page}>
       <div className={styles.heading}><div><span className={styles.eyebrow}>SSL CERTIFICATE MONITOR</span><h1>SSL证书巡检</h1><p>掌握网站证书状态，让每一次安全连接持续有效。</p></div>
-        <div className={styles.actions}><Button icon={<SettingOutlined/>} onClick={() => setSettings(true)}>来源设置</Button>
-          <Button type="primary" disabled={busy || !targets.length || targets.length > 10} loading={checking} onClick={() => check(targets.map(source => source.key))}>立即巡检</Button></div>
+        <div className={styles.actions}><Button disabled={!hasPermission('monitor.ssl.configure')} icon={<SettingOutlined/>} onClick={() => setSettings(true)}>来源设置</Button>
+          <Button type="primary" disabled={busy || !targets.length || targets.length > 10 || !targets.every(source => access.canSource(source.key, 'monitor.ssl.collect'))} loading={checking} onClick={() => check(targets.map(source => source.key))}>立即巡检</Button></div>
       </div>
       <div className={styles.stats}>{statFilters.map((stat, index) => {const Icon = icons[index]; return <button key={stat.key} data-stat={stat.key} data-tone={stat.tone} className={styles.stat}
         aria-pressed={filters.state === stat.state} onClick={() => filter('state', stat.state)}>
@@ -147,6 +149,7 @@ export default function SSLMonitor() {
       {sourceIssues.map(source => <Alert key={source.key} className={styles.message} type="warning" showIcon
         message={`${text(source.name)}（${source.kind === 'panel' ? '宝塔' : 'SSH'}）：${text(source.message || '巡检未完成，请检查来源设置')}`}/>)}
       {!!jobs.length && <div className={styles.jobs}><b>巡检与续签进度</b>{jobs.map(job => <Button type="link" size="small" key={job.id} onClick={() => setJobId(job.id)}>#{job.id} · {jobStates[job.state] || '状态未知'} · {text(job.message || job.phase)}</Button>)}</div>}
+      {targets.some(source => !access.canSource(source.key, 'monitor.ssl.collect')) && <Alert type="info" message="当前范围包含只读来源或缺少巡检权限，请缩小范围后执行；不会自动跳过。"/>}
       <section className={styles.panel}>
         <div className={styles.filters}>
           <Input.Search aria-label="搜索域名或来源" defaultValue={filters.q} placeholder="搜索域名或服务器名称" allowClear onSearch={value => filter('q', value.trim().slice(0, 200))}/>

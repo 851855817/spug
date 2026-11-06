@@ -34,7 +34,7 @@ function remaining(days) {
 }
 
 function TodoIndex() {
-  const allowed = hasPermission('admin');
+  const allowed = hasPermission('ops.inventory.view|ops.expiry.view|monitor.ssl.view');
   const prefs = usePersonalReminders(allowed);
   const visible = usePageVisibility();
   const [revision, setRevision] = useState(0);

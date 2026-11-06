@@ -3,8 +3,12 @@ import { Button, Card, Empty, Form, Input, Modal, Space, Tree, TreeSelect, messa
 import { DeleteOutlined, EditOutlined, FolderOutlined, PlusOutlined } from '@ant-design/icons';
 import { hasPermission, http } from 'libs';
 import { buildGroupTree, descendantIds } from './helpers';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 export default function Group({groups, selected, onSelect, onRefresh}) {
+  const access = useResourceAccess();
+  const canGroup = group => access.is_supper || group?.can_manage === true;
+  const scopedTree = nodes => nodes.map(node => ({...node, disabled: !canGroup(groups.find(group => group.id === node.key)), children: scopedTree(node.children || [])}));
   const [record, setRecord] = useState(null);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
@@ -47,15 +51,15 @@ export default function Group({groups, selected, onSelect, onRefresh}) {
   const excluded = record?.id ? descendantIds(groups, record.id) : new Set();
   return (
     <Card title="分组列表" size="small" extra={canManage && (
-      <Button type="text" icon={<PlusOutlined/>} title="新建分组" onClick={() => openForm({parent_id: selected || null})}/>
+      <Button disabled={!!current && !canGroup(current)} type="text" icon={<PlusOutlined/>} title="新建分组" onClick={() => openForm({parent_id: selected || null})}/>
     )}>
       <Tree.DirectoryTree blockNode showIcon={false} expandAction="doubleClick" selectedKeys={[selected]}
                           treeData={[{key: 0, title: '全部面板', children: buildGroupTree(groups)}]}
                           defaultExpandedKeys={[0]} onSelect={keys => onSelect(keys[0] || 0)}/>
       {!groups.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有分组"/>}
       {canManage && current && <Space style={{marginTop: 20}}>
-        <Button size="small" icon={<EditOutlined/>} onClick={() => openForm(current)}>编辑</Button>
-        <Button size="small" danger icon={<DeleteOutlined/>} onClick={remove}>删除</Button>
+        <Button disabled={!canGroup(current)} size="small" icon={<EditOutlined/>} onClick={() => openForm(current)}>编辑</Button>
+        <Button disabled={!canGroup(current)} size="small" danger icon={<DeleteOutlined/>} onClick={remove}>删除</Button>
       </Space>}
       {record && <Modal open title={record.id ? '编辑分组' : '新建分组'} onCancel={() => setRecord(null)}
                         onOk={save} okText="保存" confirmLoading={saving} maskClosable={false}>
@@ -65,7 +69,7 @@ export default function Group({groups, selected, onSelect, onRefresh}) {
           </Form.Item>
           <Form.Item name="parent_id" label="上级分组">
             <TreeSelect allowClear treeDefaultExpandAll placeholder="不选择则创建根分组"
-                        treeData={buildGroupTree(groups.filter(group => !excluded.has(group.id)))}/>
+                        treeData={scopedTree(buildGroupTree(groups.filter(group => !excluded.has(group.id))))}/>
           </Form.Item>
         </Form>
       </Modal>}

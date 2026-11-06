@@ -7,7 +7,7 @@ import PanelWorkspace from './Workspace';
 import Operations from '../operations';
 
 export function LegacyOperations({location}) {
-  if (!hasPermission('admin')) return null;
+  if (!hasPermission('ops.job.view')) return null;
   const query = new URLSearchParams(location.search);
   query.set('type', 'inspection');
   return <Redirect to={{...location, pathname: '/exec/panel', search: `?${query.toString()}`}}/>;
@@ -15,7 +15,7 @@ export function LegacyOperations({location}) {
 
 export default function PanelTasks({location}) {
   const navigation = useHistory();
-  const canInspect = hasPermission('admin'), canPanel = hasPermission('exec.panel.view');
+  const canInspect = hasPermission('ops.job.view'), canPanel = hasPermission('exec.panel.view');
   const query = new URLSearchParams(location.search);
   const type = canInspect && (query.get('type') === 'inspection' || !canPanel) ? 'inspection' : 'panel';
   const options = [canPanel && {value: 'panel', label: '宝塔操作'}, canInspect && {value: 'inspection', label: '主机巡检'}].filter(Boolean);

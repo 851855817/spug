@@ -30,7 +30,7 @@ export default observer(function () {
 
   return (
     <AuthDiv auth="host.host.view">
-      <Breadcrumb extra={<Space><AuthButton auth="admin" href="/host/expiry">到期管理</AuthButton>
+      <Breadcrumb extra={<Space><AuthButton auth="ops.expiry.view" href="/host/expiry">到期管理</AuthButton>
         <AuthButton auth="host.console.view|host.console.list" type="primary" icon={<CodeOutlined/>}
                     onClick={openTerminal}>{t('Web 终端')}</AuthButton></Space>}>
         <Breadcrumb.Item>{t('首页')}</Breadcrumb.Item>

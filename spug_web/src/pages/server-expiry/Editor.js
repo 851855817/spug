@@ -18,7 +18,7 @@ export default function Editor({asset, mode, options, onClose, onSaved}) {
   useEffect(() => () => {mounted.current = false; if (confirmation.current) confirmation.current.destroy();}, []);
 
   async function submit(payload) {
-    if (pending.current || !mounted.current || !hasPermission('admin')) return;
+    if (pending.current || !mounted.current || !hasPermission('ops.expiry.edit')) return;
     pending.current = true; setSaving(true); setError('');
     try {
       await http.post(`${API}assets/${asset.key}/${renew ? 'renew/' : ''}`, payload);
@@ -30,7 +30,7 @@ export default function Editor({asset, mode, options, onClose, onSaved}) {
     }
   }
   function save() {
-    if (pending.current || confirmation.current || !hasPermission('admin')) return;
+    if (pending.current || confirmation.current || !hasPermission('ops.expiry.edit')) return;
     setError('');
     if ((renew || dateMode === 'manual') && !validDate(expiry)) {setError('请填写有效的到期日期。'); return;}
     if (renew && (expiry <= (options.today || platformToday(options.timezone)) ||

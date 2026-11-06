@@ -3,19 +3,36 @@
  * Copyright (c) <spug.dev@gmail.com>
  * Released under the AGPL-3.0 License.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { observer } from 'mobx-react';
 import { ExclamationCircleOutlined, UploadOutlined } from '@ant-design/icons';
 import { Modal, Form, Input, TreeSelect, Button, Upload, Alert, message } from 'antd';
 import { http, X_TOKEN, t } from 'libs';
 import store from './store';
 import styles from './index.module.less';
+import {useResourceAccess} from 'resources/ResourceAccess';
+import {canAssignGroups, canChangeResourceGroups, manageableGroupTree} from 'resources/groupAccess';
 
 export default observer(function () {
+  const access = useResourceAccess();
+  const latestAccess = useRef(access);
+  latestAccess.current = access;
+  const passwordModal = useRef();
+  const canChangeGroups = canChangeResourceGroups(access, 'host', store.record.id);
+  const saveReason = saveBlockReason(access, store.record.id);
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [fileList, setFileList] = useState([]);
+
+  useEffect(() => () => {
+    latestAccess.current = null;
+    if (passwordModal.current) passwordModal.current.destroy();
+  }, []);
+
+  useEffect(() => {
+    if (passwordModal.current) passwordModal.current.update({okButtonProps: {disabled: !!saveReason}, title: saveReason || t('首次验证请输入密码')});
+  }, [saveReason]);
 
   useEffect(() => {
     if (store.record.has_pkey) {
@@ -24,10 +41,30 @@ export default observer(function () {
     }
   }, [])
 
+  function saveBlockReason(policy, id) {
+    if (!policy) return t('表单已关闭，请重新打开后操作');
+    if (!policy.has(id ? 'host.host.edit' : 'host.host.add')) return t(id ? '当前账号缺少编辑主机权限，无法保存' : '当前账号缺少新增主机权限，无法保存');
+    if (id && !policy.canManage('host', id, 'host.host.edit')) return t('此主机已变为只读或未授权，无法保存');
+    if (!id && !policy.canAdd) return t(policy.quota ? '服务器额度已用尽，无法新增主机，请联系管理员调整' : '服务器额度尚未加载，暂不能新增主机');
+    return '';
+  }
+
+  function allowSave(formData) {
+    const policy = latestAccess.current;
+    const reason = saveBlockReason(policy, formData.id);
+    if (reason) {message.error(reason); return false;}
+    if (!canAssignGroups(store.treeData, formData.group_ids || [], policy, store.record.id ? store.record.group_ids || [] : [],
+      {kind: 'host', id: formData.id})) {
+      message.error(t('仅资源归属账号或管理员可选择可管理的分组；原分组可保留'));
+      return false;
+    }
+    return true;
+  }
+
   function handleSubmit() {
+    const formData = {...form.getFieldsValue(), id: store.record.id};
+    if (!allowSave(formData)) return;
     setLoading(true);
-    const formData = form.getFieldsValue();
-    formData['id'] = store.record.id;
     const file = fileList[0];
     if (file && file.data) {
       formData['pkey'] = file.data;
@@ -41,11 +78,13 @@ export default observer(function () {
           if (formData.pkey || formData.keep_pkey) {
             message.error(t('独立密钥认证失败'))
           } else {
+            if (!allowSave(formData)) return;
             const onChange = v => formData.password = v;
-            Modal.confirm({
+            passwordModal.current = Modal.confirm({
               icon: <ExclamationCircleOutlined/>,
               title: t('首次验证请输入密码'),
               content: <ConfirmForm username={formData.username} onChange={onChange}/>,
+              okButtonProps: {disabled: false},
               onOk: () => handleConfirm(formData),
             })
           }
@@ -59,6 +98,7 @@ export default observer(function () {
   }
 
   function handleConfirm(formData) {
+    if (!allowSave(formData)) return;
     if (formData.password) {
       return http.post('/api/host/', formData)
         .then(res => {
@@ -108,13 +148,17 @@ export default observer(function () {
       okText={t('验证')}
       onCancel={() => store.formVisible = false}
       confirmLoading={loading}
+      okButtonProps={{disabled: !!saveReason}}
       onOk={handleSubmit}>
+      {saveReason && <Alert showIcon type="warning" message={saveReason} style={{marginBottom: 16}}/>}
       <Form form={form} labelCol={{span: 5}} wrapperCol={{span: 17}} initialValues={info}>
-        <Form.Item required name="group_ids" label={t('主机分组')}>
+        <Form.Item required name="group_ids" label={t('主机分组')}
+                   extra={!canChangeGroups ? t('管理员分配的资源保留原分组；改组需由资源归属账号或管理员操作。') : undefined}>
           <TreeSelect
             multiple
+            disabled={!canChangeGroups}
             treeNodeLabelProp="name"
-            treeData={store.treeData}
+            treeData={manageableGroupTree(store.treeData, access)}
             showCheckedStrategy={TreeSelect.SHOW_CHILD}
             placeholder={t('请选择分组')}/>
         </Form.Item>

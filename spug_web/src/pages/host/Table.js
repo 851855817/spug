@@ -15,8 +15,11 @@ import { http, hasPermission, blobToExcel, humanDate, t } from 'libs';
 import store from './store';
 import icons from './icons';
 import moment from 'moment';
+import {useResourceAccess} from 'resources/ResourceAccess';
+import {quotaText} from 'resources/access';
 
 function ComTable() {
+  const access = useResourceAccess();
   const [loading, setLoading] = useState(false)
 
   function handleDelete(text) {
@@ -76,12 +79,14 @@ function ComTable() {
       dataSource={store.dataSource}
       onReload={store.fetchRecords}
       actions={[
-        <AuthFragment auth="host.host.add">
+        <span>{quotaText(access.quota)}</span>,
+        <AuthFragment auth="host.host.add|host.host.import">
           <Dropdown menu={{
             onClick: handleImport,
             items: [
               {
                 key: 'form',
+                disabled: !hasPermission('host.host.add') || !access.canAdd,
                 label: (
                   <Space>
                     <FormOutlined style={{fontSize: 16, marginRight: 4, color: 'var(--kops-primary)'}}/>
@@ -91,6 +96,7 @@ function ComTable() {
               },
               {
                 key: 'excel',
+                disabled: !hasPermission('host.host.import') || !access.canAdd,
                 label: (
                   <Space>
                     <Avatar shape="square" size={20} src={icons.excel}/>
@@ -100,6 +106,7 @@ function ComTable() {
               },
               {
                 key: 'ali',
+                disabled: !hasPermission('host.host.import') || !access.canAdd,
                 label: (
                   <Space>
                     <Avatar shape="square" size={20} src={icons.alibaba}/>
@@ -109,6 +116,7 @@ function ComTable() {
               },
               {
                 key: 'tencent',
+                disabled: !hasPermission('host.host.import') || !access.canAdd,
                 label: (
                   <Space>
                     <Avatar shape="square" size={20} src={icons.tencent}/>
@@ -118,17 +126,17 @@ function ComTable() {
               }
             ]
           }}>
-            <Button type="primary" icon={<PlusOutlined/>}>{t('新建')} <DownOutlined/></Button>
+            <Button type="primary" disabled={!access.canAdd} title={!access.canAdd ? '服务器额度已用尽，请联系管理员调整额度' : undefined} icon={<PlusOutlined/>}>{t('新建')} <DownOutlined/></Button>
           </Dropdown>
         </AuthFragment>,
         <AuthButton
-          auth="host.host.view"
+          auth="host.host.export"
           type="primary"
           loading={loading}
           icon={<ExportOutlined/>}
           onClick={handleExport}>{t('导出')}</AuthButton>,
         <AuthButton
-          auth="host.host.add"
+          auth="host.host.verify"
           type="primary"
           icon={<SyncOutlined/>}
           onClick={() => store.showSync()}>{t('验证')}</AuthButton>,
@@ -170,17 +178,17 @@ function ComTable() {
         width={110}
         render={info => <Space size={8}>
           <ResourceMonitorButton id={info.id} name={info.name}/>
-          <ResourceMonitorSwitch id={info.id} name={info.name} canEdit={hasPermission('host.host.edit')}/>
+          <ResourceMonitorSwitch id={info.id} name={info.name} canEdit={hasPermission('monitor.server.configure') && access.canManage('host', info.id, 'monitor.server.configure')}/>
         </Space>}/>
       <Table.Column
         title={t('状态')}
         dataIndex="is_verified"
         render={v => v ? <Tag color="green">{t('已验证')}</Tag> : <Tag color="orange">{t('未验证')}</Tag>}/>
-      {hasPermission('host.host.edit|host.host.del|host.host.console') && (
+      {hasPermission('host.host.edit|host.host.del') && (
         <Table.Column width={160} title={t('操作')} render={info => (
           <Action>
-            <Action.Button auth="host.host.edit" onClick={() => store.showForm(info)}>{t('编辑')}</Action.Button>
-            <Action.Button danger auth="host.host.del" onClick={() => handleDelete(info)}>{t('删除')}</Action.Button>
+            <Action.Button auth="host.host.edit" disabled={!access.canManage('host', info.id, 'host.host.edit')} onClick={() => store.showForm(info)}>{t('编辑')}</Action.Button>
+            <Action.Button danger auth="host.host.del" disabled={!access.canManage('host', info.id, 'host.host.del')} onClick={() => handleDelete(info)}>{t('删除')}</Action.Button>
           </Action>
         )}/>
       )}

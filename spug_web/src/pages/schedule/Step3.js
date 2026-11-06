@@ -17,15 +17,19 @@ import S from './store';
 import styles from './index.module.less';
 import PanelPlanSummary from './PanelPlanSummary';
 import { panelPlanReady, panelPlanPayload, validPanelTrigger } from './panelPlan';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 export default observer(function (props) {
+  const access = useResourceAccess();
   const [loading, setLoading] = useState(false)
   const isPanel = S.record.interpreter === 'baota';
   const validPanel = panelPlanReady(S.record.panel_plan) && validPanelTrigger(S.trigger, S.trigger_args);
+  const canTargets = isPanel ? access.canAll('panel', (S.record.panel_plan?.panels || []).map(panel => panel.id), `exec.panel.create&exec.panel_action.${S.record.panel_plan?.operation}`)
+    : S.targets.filter(Boolean).every(id => id === 'local' ? access.is_supper : id === 'monitor' ? access.is_supper : access.canManage('host', id));
   useEffect(() => {if (props.visible && !isPanel) hostStore.initial();}, [props.visible, isPanel]);
 
   function handleSubmit() {
-    if (isPanel && !validPanel) return;
+    if (!canTargets || (isPanel && !validPanel)) return;
     const formData = lds.pick(S.record, ['id', 'name', 'type', 'interpreter', 'desc', 'rst_notify']);
     if (isPanel) formData.panel_plan = panelPlanPayload(S.record.panel_plan);
     else {formData.command = S.record.command; formData.targets = S.targets.filter(x => x);}
@@ -89,11 +93,11 @@ export default observer(function (props) {
                 style={{width: 'calc(100% - 40px)', marginRight: 10, marginBottom: 12}}
                 filterOption={(input, option) => option.props.children.toLowerCase().indexOf(input.toLowerCase()) >= 0}
                 onChange={v => S.editTarget(index, v)}>
-                <Select.Option value="local" disabled={S.targets.includes('local')}>{t('本机')}</Select.Option>
+                <Select.Option value="local" disabled={!access.is_supper || S.targets.includes('local')}>{t('本机')}</Select.Option>
                 {S.trigger === 'monitor' &&
                   <Select.Option value="monitor" disabled={S.targets.includes('monitor')}>{t('告警关联主机')}</Select.Option>}
                 {hostStore.rawRecords.map(item => (
-                  <Select.Option key={item.id} value={item.id} disabled={S.targets.includes(item.id)}>
+                  <Select.Option key={item.id} value={item.id} disabled={!access.canManage('host', item.id) || S.targets.includes(item.id)}>
                     {`${item.name}(${item['hostname']}:${item['port']})`}
                   </Select.Option>
                 ))}
@@ -112,7 +116,8 @@ export default observer(function (props) {
           </HostSelector>
         </Form.Item></>}
         <Form.Item>
-          <Button loading={loading} disabled={isPanel ? !validPanel : S.targets.filter(x => x).length === 0} type="primary"
+          {!canTargets && <Alert type="warning" message="范围包含只读或未授权资源，或缺少具体动作权限；请调整选择。"/>}
+          <Button loading={loading} disabled={!canTargets || (isPanel ? !validPanel : S.targets.filter(x => x).length === 0)} type="primary"
                   onClick={handleSubmit}>{t('提交')}</Button>
           <Button style={{marginLeft: 20}} onClick={() => S.page -= 1}>{t('上一步')}</Button>
         </Form.Item>

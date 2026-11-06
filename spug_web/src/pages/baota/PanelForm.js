@@ -1,9 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Alert, Button, Checkbox, Divider, Form, Input, Modal, Radio, Space, TreeSelect, Typography, message } from 'antd';
 import { http } from 'libs';
+import {useResourceAccess} from 'resources/ResourceAccess';
 import { buildGroupTree, inferAPIBaseURL } from './helpers';
+import {canAssignGroups, canChangeResourceGroups, manageableGroupTree} from 'resources/groupAccess';
 
 export default function PanelForm({record, groups, selectedGroup, onCancel, onSaved, onChecked}) {
+  const access = useResourceAccess();
+  const latestAccess = useRef(access);
+  latestAccess.current = access;
+  const saveReason = saveBlockReason(access);
+  const canChangeGroups = canChangeResourceGroups(access, 'panel', record.id);
+  const groupTree = buildGroupTree(groups);
   const [form] = Form.useForm();
   const [saving, setSaving] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -15,9 +23,36 @@ export default function PanelForm({record, groups, selectedGroup, onCancel, onSa
   const apiAddress = Form.useWatch('api_base_url', form) || '';
   const clearingKey = Form.useWatch('clear_api_key', form);
 
+  useEffect(() => () => {latestAccess.current = null;}, []);
+
+  function saveBlockReason(policy) {
+    if (!policy) return '表单已关闭，请重新打开后操作';
+    if (!policy.has(record.id ? 'baota.panel.edit' : 'baota.panel.add')) return record.id ? '当前账号缺少编辑面板权限，无法保存' : '当前账号缺少新增面板权限，无法保存';
+    if (record.id && !policy.canManage('panel', record.id, 'baota.panel.edit')) return '此面板已变为只读或未授权，无法保存';
+    if (!record.id && !policy.canAdd) return policy.quota ? '服务器额度已用尽，无法新增面板，请联系管理员调整' : '服务器额度尚未加载，暂不能新增面板';
+    return '';
+  }
+
+  function allowTest() {
+    const policy = latestAccess.current;
+    const reason = !policy ? '表单已关闭，请重新打开后操作' : !policy.has('baota.panel.test') ? '当前账号缺少面板测试权限，无法检查连接或证书' :
+      !policy.canManage('panel', record.id, 'baota.panel.test') ? '此面板已变为只读或未授权，无法检查连接或证书' : '';
+    if (reason) {message.error(reason); return false;}
+    return true;
+  }
+
   async function handleSubmit() {
+    let reason = saveBlockReason(latestAccess.current);
+    if (reason) return message.error(reason);
     let values;
     try { values = await form.validateFields(); } catch (_) { return; }
+    const policy = latestAccess.current;
+    reason = saveBlockReason(policy);
+    if (reason) return message.error(reason);
+    if ((!record.id && !values.group_id) || !canAssignGroups(groupTree,
+      values.group_id ? [values.group_id] : [], policy, record.id ? [record.group_id] : [], {kind: 'panel', id: record.id})) {
+      return message.error('仅资源归属账号或管理员可选择可管理的分组；原分组可保留');
+    }
     setSaving(true);
     try {
       const payload = {...values, id: record.id};
@@ -64,6 +99,7 @@ export default function PanelForm({record, groups, selectedGroup, onCancel, onSa
   }
 
   async function checkConnection() {
+    if (!allowTest()) return;
     setChecking(true);
     try {
       const result = await http.post('/api/baota/connection/', {id: record.id});
@@ -77,6 +113,7 @@ export default function PanelForm({record, groups, selectedGroup, onCancel, onSa
   }
 
   async function inspectCertificate() {
+    if (!allowTest()) return;
     if ((form.getFieldValue('api_base_url') || '').replace(/\/$/, '') !== record.api_base_url) {
       message.info('请先保存 API 地址，再检查该地址的证书');
       return;
@@ -110,15 +147,17 @@ export default function PanelForm({record, groups, selectedGroup, onCancel, onSa
   return (
     <Modal open title={record.id ? '编辑宝塔面板' : '添加宝塔面板'} width={680} maskClosable={false}
            bodyStyle={{maxHeight: '65vh', overflowY: 'auto'}}
-           confirmLoading={saving} onCancel={onCancel} onOk={handleSubmit} okText="保存" destroyOnClose>
+           confirmLoading={saving} okButtonProps={{disabled: !!saveReason}} onCancel={onCancel} onOk={handleSubmit} okText="保存" destroyOnClose>
+      {saveReason && <Alert showIcon type="warning" message={saveReason} style={{marginBottom: 16}}/>}
       <Form form={form} layout="vertical" onValuesChange={handleValuesChange}
             initialValues={{group_id: selectedGroup || undefined, ...record,
               api_base_url: record.api_base_url || inferAPIBaseURL(record.url), api_key: '', clear_api_key: false}}>
         <Form.Item name="name" label="面板名称" rules={[{required: true, whitespace: true, message: '请输入面板名称'}]}>
           <Input maxLength={100} placeholder="例如：客户 A · 生产服务器" autoFocus/>
         </Form.Item>
-        <Form.Item name="group_id" label="所属分组" rules={[{required: true, message: '请选择分组'}]}>
-          <TreeSelect treeData={buildGroupTree(groups)} treeDefaultExpandAll placeholder="请选择分组"/>
+        <Form.Item name="group_id" hidden={!!record.id && !record.group_id} label="所属分组" rules={[{required: !record.id, message: '请选择分组'}]}
+                   extra={!canChangeGroups ? '管理员分配的资源保留原分组；改组需由资源归属账号或管理员操作。' : undefined}>
+          <TreeSelect disabled={!canChangeGroups} treeData={manageableGroupTree(groupTree, access)} treeDefaultExpandAll placeholder="请选择分组"/>
         </Form.Item>
         <Form.Item name="url" label="面板地址" extra="填写完整地址，包含端口和安全入口路径。"
                    rules={[{required: true, message: '请输入面板地址'}, {validator: validateURL}]}>
@@ -173,8 +212,8 @@ export default function PanelForm({record, groups, selectedGroup, onCancel, onSa
         {record.id ? <>
           <Typography.Paragraph type="secondary">以下检查使用已保存的 API 配置。修改后请先保存，再重新打开检查。</Typography.Paragraph>
           <Space style={{marginBottom: 12}}>
-            <Button onClick={checkConnection} loading={checking} disabled={!record.api_base_url || !record.has_api_key}>测试已保存配置</Button>
-            <Button onClick={inspectCertificate} loading={inspecting} disabled={!/^https:/i.test(record.api_base_url || '')}>查看证书</Button>
+            <Button onClick={checkConnection} loading={checking} disabled={!access.canManage('panel', record.id, 'baota.panel.test') || !record.api_base_url || !record.has_api_key}>测试已保存配置</Button>
+            <Button onClick={inspectCertificate} loading={inspecting} disabled={!access.canManage('panel', record.id, 'baota.panel.test') || !/^https:/i.test(record.api_base_url || '')}>查看证书</Button>
           </Space>
           <Typography.Paragraph type={checkFailed ? 'danger' : 'secondary'}>
             {checkFailed ? '本次连接失败。' : ''}

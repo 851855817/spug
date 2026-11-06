@@ -8,7 +8,7 @@ import Records from './Records';
 import { parseRunId } from './helpers';
 
 export default function Operations({embedded = false, location, navigation} = {}) {
-  const allowed = hasPermission('admin');
+  const allowed = hasPermission('ops.job.view');
   const [catalog, setCatalog] = useState(null);
   const [error, setError] = useState(false);
   const [refresh, setRefresh] = useState(0);
@@ -46,14 +46,14 @@ export default function Operations({embedded = false, location, navigation} = {}
     (navigation || history).replace({...current, search: `?${query.toString()}`});
     setActiveTab('records'); setRunId(id); setRevision(current => current + 1);
   }
-  if (!allowed) return <Alert showIcon type="warning" message="仅超级管理员可访问运维作业。"/>;
+  if (!allowed) return <Alert showIcon type="warning" message="没有查看运维作业的权限。"/>;
   return <div>
     {!embedded && <Breadcrumb><Breadcrumb.Item>首页</Breadcrumb.Item><Breadcrumb.Item>批量执行</Breadcrumb.Item><Breadcrumb.Item>运维作业</Breadcrumb.Item></Breadcrumb>}
     <Card title={embedded ? undefined : '运维作业'}>
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
         <Tabs.TabPane key="create" tab={embedded ? '新建任务' : '新建作业'}>
           {error ? <Space><Alert type="error" message="作业目录读取失败，请重试。"/><Button onClick={() => setRefresh(value => value + 1)}>重新读取</Button></Space> :
-            catalog ? <RunForm catalog={catalog} onCreated={open}/> : <Spin/>}
+            catalog ? hasPermission('ops.job.create') ? <RunForm catalog={catalog} onCreated={open}/> : <Alert type="info" message="没有创建运维作业的权限，可查看执行记录。"/> : <Spin/>}
         </Tabs.TabPane>
         <Tabs.TabPane key="records" tab="执行记录"><Records jobs={catalog?.jobs} revision={revision} onOpen={open}/></Tabs.TabPane>
         <Tabs.TabPane key="catalog" tab="标准作业库（只读）">

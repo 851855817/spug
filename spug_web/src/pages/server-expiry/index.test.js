@@ -1,3 +1,4 @@
+jest.mock('resources/ResourceAccess', () => ({useResourceAccess: () => require('resources/access').createResourceAccess({is_supper: true})}));
 import React from 'react';
 import ReactDOM from 'react-dom';
 import { act, Simulate } from 'react-dom/test-utils';
@@ -92,7 +93,7 @@ test('home expiry links show the correct state and keyword without editing an as
 test('denies reads and actions to ordinary accounts', async () => {
   hasPermission.mockReturnValue(false); await render();
   expect(http.get).not.toHaveBeenCalled(); expect(http.post).not.toHaveBeenCalled();
-  expect(container.textContent).toContain('仅超级管理员');
+  expect(container.textContent).toContain('没有查看到期管理的权限');
 });
 test('server filtering and pagination ignore obsolete responses', async () => {
   await render(); let finish;

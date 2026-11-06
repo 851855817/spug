@@ -7,6 +7,7 @@ import { hasPermission, http } from 'libs';
 import { buildGroupTree, descendantIds } from '../baota/helpers';
 import ReminderDismiss, { ReminderControls } from '../../components/ReminderDismiss';
 import { siteReminder, usePersonalReminders } from '../../components/personalReminders';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 const SSL_STATES = {valid: '有效（面板登记）', expiring: '30 天内临期', expired: '已过期', unconfigured: '未配置 SSL', unknown: '未知'};
 const BACKUP_STATES = {no_record: '无备份记录', local_missing: '本地文件缺失', empty: '本地文件为空', in_progress: '进行中',
@@ -25,11 +26,13 @@ function size(value) {
 }
 
 export default function Inventory({kind = 'sites'}) {
+  const access = useResourceAccess();
+  const canCollect = panels => access.canAll('panel', panels.map(panel => panel.id), 'ops.inventory.collect');
   const sites = kind === 'sites';
   const title = sites ? '网站与证书' : '备份检查台';
   const states = sites ? SSL_STATES : BACKUP_STATES;
   const filterStates = {...states, stale: '旧缓存'};
-  const canView = hasPermission('admin');
+  const canView = hasPermission('ops.inventory.view');
   const prefs = usePersonalReminders(canView && sites);
   const [options, setOptions] = useState({panels: [], groups: []});
   const [optionsError, setOptionsError] = useState('');
@@ -108,12 +111,12 @@ export default function Inventory({kind = 'sites'}) {
   const configuredTargets = targets.filter(panel => panel.configured);
   const allTargets = options.panels.filter(panel => panel.configured);
   async function collect(panels) {
-    if (!hasPermission('admin') || collecting || pendingPost.current || !panels.length || document.visibilityState === 'hidden') return;
+    if (!canCollect(panels) || collecting || pendingPost.current || !panels.length || document.visibilityState === 'hidden') return;
     const run = {cancelled: false};
     sequence.current = run;
     const valid = () => {
       if (!mounted.current || sequence.current !== run || run.cancelled || document.visibilityState === 'hidden') return false;
-      if (!hasPermission('admin')) {stop('访问权限已变化，已停止后续采集。'); return false;}
+      if (!hasPermission('ops.inventory.collect') || !canCollect(panels)) {stop('访问权限已变化，已停止后续采集。'); return false;}
       return true;
     };
     setCollecting(true); setCollectionError('');
@@ -191,7 +194,7 @@ export default function Inventory({kind = 'sites'}) {
     {title: '说明', dataIndex: 'message', width: 300, render: shortMessage},
     {title: '上次成功 / 最近尝试', key: 'times', width: 240, render: (_, row) => <><div>{date(row.sampled_at)}</div><div>{date(row.attempted_at)}</div>{row.cooldown_until && <div>冷却至 {date(row.cooldown_until)}</div>}</>},
   ];
-  return <AuthDiv auth="admin">
+  return <AuthDiv auth="ops.inventory.view">
     <Breadcrumb><Breadcrumb.Item>首页</Breadcrumb.Item><Breadcrumb.Item>批量执行</Breadcrumb.Item><Breadcrumb.Item>{title}</Breadcrumb.Item></Breadcrumb>
     <Card title={title}>
       <Alert showIcon type="info" message="列表读取上次成功采集的缓存，点击采集才查询面板。"
@@ -216,10 +219,11 @@ export default function Inventory({kind = 'sites'}) {
       <div style={{marginBottom: 16}}><Space wrap>
         <Select aria-label="采集面板" mode="multiple" showSearch optionFilterProp="label" placeholder="选择采集面板；留空使用筛选范围" value={selected}
           disabled={collecting || awaiting} style={{minWidth: 340, maxWidth: '100%'}} onChange={setSelected}
-          options={options.panels.map(panel => ({value: panel.id, label: `${panel.name}${panel.configured ? '' : ' · API 未配置'}`, disabled: !panel.configured}))}/>
-        <Button type="primary" disabled={collecting || awaiting || !configuredTargets.length} onClick={() => collect(configuredTargets)}>
+          options={options.panels.map(panel => ({value: panel.id, label: `${panel.name}${access.canManage('panel', panel.id) ? '' : ' · 只读'}${panel.configured ? '' : ' · API 未配置'}`, disabled: !panel.configured || !access.canManage('panel', panel.id)}))}/>
+        <Button type="primary" disabled={!canCollect(configuredTargets) || collecting || awaiting || !configuredTargets.length} onClick={() => collect(configuredTargets)}>
           {selected.length ? '采集所选面板' : '采集当前范围'}（{configuredTargets.length}）</Button>
-        <Button disabled={collecting || awaiting || !allTargets.length} onClick={() => collect(allTargets)}>采集全部面板（{allTargets.length}）</Button>
+        <Button disabled={!canCollect(allTargets) || collecting || awaiting || !allTargets.length} onClick={() => collect(allTargets)}>采集全部面板（{allTargets.length}）</Button>
+        {configuredTargets.some(panel => !access.canManage('panel', panel.id)) && <Typography.Text type="warning">范围包含只读面板，请调整选择；不会自动跳过。</Typography.Text>}
         <Button disabled={!collecting} onClick={() => stop()}>停止后续采集</Button>
       </Space><Typography.Paragraph type="secondary" style={{margin: '8px 0 0'}}>当前范围按分组及服务器选取面板；关键字和状态只筛选缓存资源。按面板顺序采集，切换页面或隐藏标签会停止后续面板。API 未配置的面板跳过。</Typography.Paragraph>
         {progress && <div role="status">{progress}</div>}

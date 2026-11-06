@@ -30,10 +30,12 @@ import gStore from 'gStore';
 import styles from './index.module.less';
 import Brand from '../../branding/Brand';
 import lds from 'lodash';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 let posX = 0
 
 function WebSSH(props) {
+  const access = useResourceAccess();
   const [visible, setVisible] = useState(false);
   const [visible2, setVisible2] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -99,6 +101,7 @@ function WebSSH(props) {
   }
 
   function _openNode(node, replace) {
+    if (!access.canManage('host', node.id, sshMode ? 'host.console.view' : 'host.console.list')) return;
     const newNode = {...node}
     newNode.vId = String(new Date().getTime())
     if (replace) {

@@ -7,9 +7,12 @@ import Editor from './Editor';
 import History from './History';
 import Reminders from './Reminders';
 import { API, expiryLabel, ownerName, safeError, STATES, time } from './common';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 export default function ServerExpiry() {
-  const allowed = hasPermission('admin');
+  const access = useResourceAccess();
+  const canEdit = row => hasPermission('ops.expiry.edit') && access.canSource(row.key, 'ops.expiry.edit') && row.sources.every(source => access.canManage(source.kind, source.id));
+  const allowed = hasPermission('ops.expiry.view');
   const [options, setOptions] = useState({owners: [], groups: [], timezone: 'Asia/Shanghai', schedule: '09:00'});
   const [data, setData] = useState(null), [filters, setFilters] = useState(() => {
     const query = new URLSearchParams(window.location.search), initial = {};
@@ -45,7 +48,7 @@ export default function ServerExpiry() {
     setPage(current => ({...current, page: 1}));
   }
   const refresh = () => setRevision(current => current + 1);
-  if (!allowed) return <Alert type="warning" message="仅超级管理员可访问到期管理。"/>;
+  if (!allowed) return <Alert type="warning" message="没有查看到期管理的权限。"/>;
   const summary = data?.summary || {}, check = data?.check || options.check || {};
   const today = data?.today || options.today;
   const columns = [
@@ -59,12 +62,12 @@ export default function ServerExpiry() {
     {title: '站内提醒', key: 'reminder', width: 115, render: (_, row) => row.exempt ? '无需管理' : row.reminder_enabled ? <Tag color="blue">已开启</Tag> : '未开启'},
     {title: '备注', dataIndex: 'note', width: 200, render: text => text || '—'},
     {title: '操作', key: 'actions', width: 250, render: (_, row) => <Space>
-      <Button type="link" disabled={Boolean(optionsError)} onClick={() => setEditor({asset: row, mode: 'edit'})}>编辑</Button>
-      <Button type="link" disabled={Boolean(optionsError) || row.exempt} onClick={() => setEditor({asset: row, mode: 'renew'})}>登记续费</Button>
+      <Button type="link" disabled={!canEdit(row) || Boolean(optionsError)} onClick={() => setEditor({asset: row, mode: 'edit'})}>编辑</Button>
+      <Button type="link" disabled={!canEdit(row) || Boolean(optionsError) || row.exempt} onClick={() => setEditor({asset: row, mode: 'renew'})}>登记续费</Button>
       <Button type="link" onClick={() => setHistory(row)}>记录</Button>
     </Space>},
   ];
-  return <AuthDiv auth="admin">
+  return <AuthDiv auth="ops.expiry.view">
     <Breadcrumb extra={<Space><Button href="/host">主机列表</Button><Button onClick={refresh}>刷新</Button></Space>}>
       <Breadcrumb.Item>主机管理</Breadcrumb.Item><Breadcrumb.Item>到期管理</Breadcrumb.Item>
     </Breadcrumb>

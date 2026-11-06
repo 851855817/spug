@@ -4,8 +4,10 @@ import { hasPermission, http } from 'libs';
 import ResizableTable from '../../components/ResizableTable';
 import { API, dateUTC8, sourceDefaults, text } from './helpers';
 import styles from './index.module.less';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 export default function SourceSettings({onClose, onSaved}) {
+  const access = useResourceAccess();
   const [items, setItems] = useState([]), [loading, setLoading] = useState(true), [saving, setSaving] = useState(false);
   const [error, setError] = useState(''), [query, setQuery] = useState(''), [revision, setRevision] = useState(0);
   const [reauthorize, setReauthorize] = useState(new Set());
@@ -15,7 +17,7 @@ export default function SourceSettings({onClose, onSaved}) {
     return () => {mounted.current = false;};
   }, []);
   useEffect(() => {
-    if (!hasPermission('admin')) return;
+    if (!hasPermission('monitor.ssl.configure')) return;
     let valid = true;
     setLoading(true); setError('');
     http.get(`${API}sources/`).then(result => {if (valid) {
@@ -27,13 +29,14 @@ export default function SourceSettings({onClose, onSaved}) {
   }, [revision]);
   function update(key, patch) {setItems(current => current.map(item => item.key === key ? {...item, ...patch} : item));}
   async function save() {
-    if (pending.current || loading || !items.length || !hasPermission('admin')) return;
+    if (pending.current || loading || !items.length || !hasPermission('monitor.ssl.configure')) return;
     pending.current = true; setSaving(true); setError('');
     try {
       for (const item of items) {
-        if (!mounted.current || !hasPermission('admin')) return;
+        if (!mounted.current || !hasPermission('monitor.ssl.configure')) return;
         const original = originals.current.get(item.key);
         if (!reauthorize.has(item.key) && original && ['enabled', 'reminders', 'interval_hours'].every(key => original[key] === item[key])) continue;
+        if (!access.canSource(item.key, 'monitor.ssl.configure')) throw new Error('只读来源不可配置');
         const {key, enabled, reminders, interval_hours, revision} = item;
         await http.post(`${API}sources/`, {key, revision, enabled, reminders, interval_hours});
       }
@@ -44,12 +47,12 @@ export default function SourceSettings({onClose, onSaved}) {
   }
   const columns = [
     {title: '服务器 / 来源', key: 'source', width: 240, render: (_, row) => <><b>{row.name}</b><small className={styles.secondary}>{row.kind === 'panel' ? '宝塔面板' : 'SSH 主机'} · {row.address || '地址未登记'}</small></>},
-    {title: '启用巡检', key: 'enabled', width: 105, render: (_, row) => <Switch aria-label={`启用 ${row.name}`} checked={row.enabled} disabled={saving} onChange={enabled => update(row.key, {enabled})}/>},
-    {title: '到期提醒', key: 'reminders', width: 105, render: (_, row) => <Switch aria-label={`${row.name} 到期提醒`} checked={row.reminders} disabled={saving || !row.enabled} onChange={reminders => update(row.key, {reminders})}/>},
-    {title: '巡检频率', key: 'interval', width: 150, render: (_, row) => <Select aria-label={`${row.name} 巡检频率`} value={row.interval_hours} disabled={saving}
+    {title: '启用巡检', key: 'enabled', width: 105, render: (_, row) => <Switch aria-label={`启用 ${row.name}`} checked={row.enabled} disabled={saving || !access.canSource(row.key, 'monitor.ssl.configure')} onChange={enabled => update(row.key, {enabled})}/>},
+    {title: '到期提醒', key: 'reminders', width: 105, render: (_, row) => <Switch aria-label={`${row.name} 到期提醒`} checked={row.reminders} disabled={saving || !row.enabled || !access.canSource(row.key, 'monitor.ssl.configure')} onChange={reminders => update(row.key, {reminders})}/>},
+    {title: '巡检频率', key: 'interval', width: 150, render: (_, row) => <Select aria-label={`${row.name} 巡检频率`} value={row.interval_hours} disabled={saving || !access.canSource(row.key, 'monitor.ssl.configure')}
       options={[1, 6, 12, 24].map(value => ({value, label: `每 ${value} 小时`}))} onChange={value => update(row.key, {interval_hours: Number(value)})}/>},
     {title: '最近成功 / 来源状态', key: 'last', width: 220, render: (_, row) => <><div>{dateUTC8(row.last_success_at)}</div><small>{text(row.message || '尚未巡检')}</small>
-      {row.enabled && ['disabled', 'invalidated'].includes(row.status) && <div><Button size="small" disabled={saving || reauthorize.has(row.key)}
+      {row.enabled && ['disabled', 'invalidated'].includes(row.status) && <div><Button size="small" disabled={saving || reauthorize.has(row.key) || !access.canSource(row.key, 'monitor.ssl.configure')}
         onClick={() => setReauthorize(current => new Set([...current, row.key]))}>{reauthorize.has(row.key) ? '保存后重新授权' : '重新授权'}</Button></div>}</>},
   ];
   return <Modal visible title="巡检来源设置" width={1000} onCancel={saving ? undefined : onClose} footer={<>

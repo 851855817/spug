@@ -12,6 +12,7 @@ import { t } from 'libs';
 import http from 'libs/http';
 import store from './store';
 import rStore from '../role/store';
+import {quotaText} from '../../../resources/access';
 
 @observer
 class ComTable extends React.Component {
@@ -41,6 +42,10 @@ class ComTable extends React.Component {
     title: t('角色'),
     dataIndex: 'role_ids',
     render: v => v.map(x => rStore.idMap[x]?.name).join(',')
+  }, {
+    title: '服务器额度',
+    dataIndex: 'resource_quota',
+    render: quotaText
   }, {
     title: t('状态'),
     render: text => text['is_active'] ? <Badge status="success" text={t('正常')}/> : <Badge status="default" text={t('禁用')}/>

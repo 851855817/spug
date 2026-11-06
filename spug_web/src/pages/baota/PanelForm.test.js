@@ -4,8 +4,11 @@ import { act, Simulate } from 'react-dom/test-utils';
 import { message } from 'antd';
 import { http } from 'libs';
 import PanelForm from './PanelForm';
+import {useResourceAccess} from 'resources/ResourceAccess';
+import {createResourceAccess} from 'resources/access';
 
 jest.mock('libs', () => ({http: {post: jest.fn()}}));
+jest.mock('resources/ResourceAccess', () => ({useResourceAccess: jest.fn()}));
 
 let container;
 const oldRecord = {id: 101, name: 'Test panel', group_id: 1, username: 'admin',
@@ -16,6 +19,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  useResourceAccess.mockReturnValue(createResourceAccess({is_supper: true}));
   container = document.createElement('div');
   document.body.appendChild(container);
   http.post.mockResolvedValue({});
