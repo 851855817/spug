@@ -99,8 +99,18 @@ python3 /opt/spug/account-resources-$SHORT_SHA/source/deploy/account-resources/h
 
 ## 发布和兼容回退
 
+本次实际发布已完成：2026-11-06 23:02（UTC+8），应用 `15d69ee`；全部九服务和公网 HTTPS 已独立验证。配对备份与原失败、成功记录均保留，精确过程见[上线与恢复记录](../superpowers/plans/2026-11-06-account-resource-progress.md)，公开验证摘要见 [published-verification.json](account-resource-qa/published-verification.json)。后续发布必须重新核对当时基线，不能复用本次现场状态。
+
 重新核对现网 SHA、业务空闲、来源开关、计划、凭据可解密性和全部旧业务保全摘要；创建代码／数据库／密钥配对备份。附加迁移、初始策略和回退必须先在同版本隔离副本演练。
 
 维护先暂停健康检查，持久化入口迁移 HOLD 与八个进程的 `autostart=false`，再停止 nginx、API、WebSocket、旧 worker、旧 monitor、panel worker、ops worker 和 scheduler；仅 Redis 保持原 PID。配对备份完成后，依次安装审计轮转、覆盖 API、运行四份迁移、验证附加结构、显式初始化普通旧账号、覆盖 UI、更新未来 compose，最后启动七个后端与 nginx。成功复验后恢复八进程的持久自动启动和原健康检查状态。
 
 回退保留附加表和审计，不做反向 DROP，不修改资源创建者。先证明业务在关闭入口后未变化、全部附加表／迁移完整，再恢复各根的原件；只额外保留四个迁移文件。未来 compose 指向完整旧源码及完整迁移历史的关闭回退镜像。当前入口继续 HOLD、八服务继续关闭；容器普通重启也不能自动执行迁移或重新开放旧权限代码。DDL 仅部分完成、初始化不符或出现新业务时，不尝试降级恢复，保持维护关闭并记录失败步骤。备份目录记录实际发布与恢复结果。
+
+## 本次 MySQL 元数据误判的定点恢复
+
+`get_table_description()` 的 `display_size` 会随 `SELECT * LIMIT 1` 样本改变。本次新增空表写入预期初始化行后触发误报，原发布器正确维持维护；不是新增迁移失败。`schema.addition_schema()` 仅对九张附加表将该项规范化为 `None`，其他列元数据、所有约束与旧 67 表保持精确。真实同版本 MariaDB 完整演练证明初始化前后结构稳定。
+
+`recover.py` 是绑定本次 revision、原 stage／scope、配对备份与精确三条初始化行的恢复入口，不能当作通用重复发布器。它要求原 API 全新、UI 全旧、Compose 原件、入口 HOLD、八进程停止、Redis 原 PID、健康检查停止及全部旧业务保全。外部持有的新 manifest 在导入前核验全包 SHA，恢复不改原 stage／checks，也不重复迁移或初始化。
+
+本次调度器已停止，等待周期采集不能解除前瞻阻塞。恢复 v2 只在内存将单一 SSL 前瞻锚从 15 分钟改为 5 分钟；仍拒绝所有活跃任务、验证请求与租约，启动后端前重新核验完整指纹。继续阶段有 120 秒可捕获硬超时，定时器取消后才执行失败关闭，客户来源开关／周期数据保持不变。该特殊恢复协议不修改旧发布合同，也不能复用于未来未经重新验证的场景。

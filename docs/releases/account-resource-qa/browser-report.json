@@ -263,7 +263,7 @@
   "unexpected_api": [],
   "runtime_errors": [],
   "passed": true,
-  "fixture": "http://127.0.0.1:61618",
-  "build_asset": "/static/js/main.d8675d58.chunk.js",
-  "build_sha256": "75d0b1ed5f0538646db4c46aa8f14fe926c6b52467bc1c98ef7a9a606b588c27"
+  "fixture": "http://127.0.0.1:49809",
+  "build_asset": "/static/js/main.4aabe556.chunk.js",
+  "build_sha256": "c6f65f10368f1d350006cbde1240625a329d6351654c69cd1c0417884fdf68e5"
 }
