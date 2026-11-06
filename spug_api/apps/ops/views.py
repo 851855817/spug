@@ -5,6 +5,7 @@ from django.db import DatabaseError
 from django.views import View
 
 from apps.host.models import Group, Host
+from apps.account import access
 from libs import json_response
 from . import catalogue, service
 from .models import OpsBaseline, OpsRun
@@ -41,8 +42,8 @@ class OpsView(View):
 class CatalogView(OpsView):
     def get(self, request):
         return json_response({'jobs': catalogue.jobs(),
-                              'hosts': [service.host_view(x) for x in Host.objects.prefetch_related('groups').order_by('id')],
-                              'groups': list(Group.objects.order_by('id').values('id', 'name', 'parent_id'))})
+                              'hosts': [service.host_view(x, request.user) for x in access.scope(request.user, 'host').prefetch_related('groups').order_by('id')],
+                              'groups': list(Group.objects.filter(pk__in=access.group_ids(request.user, 'host')).order_by('id').values('id', 'name', 'parent_id'))})
 
 
 class RunsView(OpsView):
@@ -53,31 +54,32 @@ class RunsView(OpsView):
             offset = max(0, int(request.GET.get('offset', (page - 1) * limit)))
         except (ValueError, TypeError):
             raise ValueError('分页参数无效') from None
-        runs = OpsRun.objects.prefetch_related('targets')
+        runs = service.visible_runs(request.user).prefetch_related('targets')
         if request.GET.get('job'):
             runs = runs.filter(job=request.GET['job'])
         if request.GET.get('state'):
             runs = runs.filter(state=request.GET['state'])
-        return json_response({'items': [service.run_view(x, detail=False) for x in runs[offset:offset + limit]],
+        return json_response({'items': [service.run_view(x, detail=False, user=request.user) for x in runs[offset:offset + limit]],
                               'total': runs.count()})
 
     def post(self, request):
-        return json_response(service.run_view(service.create_run(request.user, body(request))))
+        return json_response(service.run_view(service.create_run(request.user, body(request)), user=request.user))
 
 
 class RunView(OpsView):
     def get(self, request, run_id):
-        return json_response(service.run_view(OpsRun.objects.get(pk=run_id)))
+        run = service.authorized_run(request.user, OpsRun.objects.get(pk=run_id))
+        return json_response(service.run_view(run, user=request.user))
 
 
 class ContinueView(OpsView):
     def post(self, request, run_id):
-        return json_response(service.run_view(service.continue_run(request.user, run_id, body(request))))
+        return json_response(service.run_view(service.continue_run(request.user, run_id, body(request)), user=request.user))
 
 
 class CancelView(OpsView):
     def post(self, request, run_id):
-        return json_response(service.run_view(service.cancel_run(request.user, run_id)))
+        return json_response(service.run_view(service.cancel_run(request.user, run_id), user=request.user))
 
 
 class BaselinesView(OpsView):
@@ -87,7 +89,7 @@ class BaselinesView(OpsView):
             page_size = min(100, max(1, int(request.GET.get('page_size', 30))))
         except (TypeError, ValueError):
             raise ValueError('分页参数无效') from None
-        baselines = OpsBaseline.objects.select_related('target')
+        baselines = service.visible_baselines(request.user).select_related('target')
         for field in ('job', 'version'):
             if request.GET.get(field):
                 baselines = baselines.filter(**{field: request.GET[field]})
@@ -97,11 +99,11 @@ class BaselinesView(OpsView):
         if query:
             baselines = baselines.filter(name__icontains=query[:100])
         offset = (page - 1) * page_size
-        return json_response({'items': [service.baseline_view(x) for x in baselines[offset:offset + page_size]],
+        return json_response({'items': [service.baseline_view(x, user=request.user) for x in baselines[offset:offset + page_size]],
                               'total': baselines.count()})
 
     def post(self, request):
-        return json_response(service.baseline_view(service.create_baseline(request.user, body(request))))
+        return json_response(service.baseline_view(service.create_baseline(request.user, body(request)), user=request.user))
 
 
 class DiffView(OpsView):
@@ -110,4 +112,7 @@ class DiffView(OpsView):
             baseline_id = int(request.GET.get('baseline_id', ''))
         except (TypeError, ValueError):
             raise ValueError('请选择基线') from None
-        return json_response(service.diff_run(OpsRun.objects.get(pk=run_id), baseline_id))
+        run = service.authorized_run(request.user, OpsRun.objects.get(pk=run_id))
+        if not service.visible_baselines(request.user).filter(pk=baseline_id).exists():
+            raise ValueError('基线不存在或无权访问')
+        return json_response(service.diff_run(run, baseline_id, user=request.user))

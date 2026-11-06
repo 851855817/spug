@@ -8,7 +8,12 @@ from .transactions import retry_lock_conflicts
 
 
 def unread_count(user_id):
-    return ExpiryReminder.objects.exclude(pk__in=ExpiryReminderRead.objects.filter(user_id=user_id)
+    try:
+        user = service.require_admin(user_id)
+    except ValueError:
+        return 0
+    qs = ExpiryReminder.objects.all() if user.is_supper else ExpiryReminder.objects.filter(asset_key__in=assets.inventory(user))
+    return qs.exclude(pk__in=ExpiryReminderRead.objects.filter(user_id=user_id)
                                          .values('reminder_id')).count()
 
 
@@ -25,9 +30,9 @@ def listing(user, params):
     page, page_size = service.pagination(params)
     if any(params[name] != '1' for name in ('unread', 'current') if name in params):
         raise ValueError('提醒筛选只接受 1')
-    inventory = assets.inventory()
+    inventory = assets.inventory(user)
     read = set(ExpiryReminderRead.objects.filter(user_id=user.pk).values_list('reminder_id', flat=True))
-    query = ExpiryReminder.objects.all()
+    query = ExpiryReminder.objects.all() if service.require_admin(user).is_supper else ExpiryReminder.objects.filter(asset_key__in=inventory)
     if 'unread' in params:
         query = query.exclude(pk__in=read)
     offset = (page - 1) * page_size
@@ -66,7 +71,10 @@ def mark_read(user, data):
         service.positive(identifier)
     with transaction.atomic():
         actor = service.require_admin(user, lock=True)
-        actual = set(ExpiryReminder.objects.filter(pk__in=identifiers).values_list('pk', flat=True))
+        qs = ExpiryReminder.objects.filter(pk__in=identifiers)
+        if not actor.is_supper:
+            qs = qs.filter(asset_key__in=assets.inventory(actor))
+        actual = set(qs.values_list('pk', flat=True))
         if actual != set(identifiers):
             raise ValueError('提醒不存在，请刷新后重试')
         for identifier in actual:

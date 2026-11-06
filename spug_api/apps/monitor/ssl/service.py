@@ -10,6 +10,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.account.models import User
+from apps.account import access
 from apps.host.models import Host
 from apps.baota.models import Panel
 from apps.setting.models import UserSetting
@@ -55,13 +56,17 @@ class WorkflowError(ValueError):
         super().__init__(MESSAGES[self.code])
 
 
-def permission(user, lock=False):
-    qs = User.objects.select_for_update() if lock else User.objects
-    current = qs.filter(pk=getattr(user, 'pk', user if isinstance(user, int) else None),
-                        is_active=True, is_deleted=False, is_supper=True).first()
-    if current is None:
-        raise PermissionError('仅活跃超级管理员可访问 SSL 监控')
-    return current
+def permission(user, lock=False, action='view'):
+    return access.require(user, 'monitor.ssl.' + action, lock=lock)
+
+
+def source_owner_active(pref):
+    try:
+        permission(pref.owner_id, action='configure')
+        access.require_source(pref.owner_id, pref.key, manage=True)
+        return True
+    except ValueError:
+        return False
 
 
 def strict(data, allowed):
@@ -147,11 +152,15 @@ def source_status(kind, obj, pref, now=None):
     now = now or timezone.now()
     if not pref or not pref.enabled:
         return 'disabled', '监控尚未开启'
-    if not User.objects.filter(pk=pref.owner_id, is_active=True, is_supper=True, is_deleted=False).exists():
+    if not source_owner_active(pref):
         return 'disabled', '开启监控的账号已停用或失去权限，请重新配置'
     # The digest is a successful snapshot identity, not an initial credential
     # baseline. A first failed check has none and must keep its actual reason.
-    if pref.config_digest and pref.config_digest != config_digest(kind, obj):
+    try:
+        current_digest = config_digest(kind, obj)
+    except ValueError:
+        return 'unconfigured', '当前来源缺少独立 SSH 凭据，请在主机管理中配置后重试'
+    if pref.config_digest and pref.config_digest != current_digest:
         return 'invalidated', '来源配置已变化，请重新检查'
     if not pref.last_success_at:
         return pref.status, pref.message
@@ -160,12 +169,15 @@ def source_status(kind, obj, pref, now=None):
     return 'ok', pref.message
 
 
-def source_view(kind, obj, pref=None):
+def source_view(kind, obj, pref=None, user=None):
     key = kind + ':' + str(obj.pk)
     groups = ([{'key': 'host:' + str(g.pk), 'kind': 'host', 'id': g.pk, 'name': g.name}
                for g in obj.groups.all()] if kind == 'host' else
               [{'key': 'panel:' + str(obj.group_id), 'kind': 'panel', 'id': obj.group_id, 'name': obj.group.name}])
     address = obj.hostname if kind == 'host' else urlsplit(obj.api_base_url or obj.url).hostname or ''
+    if user is not None:
+        visible_groups = access.group_ids(user, kind)
+        groups = [g for g in groups if g['id'] in visible_groups]
     status, message = source_status(kind, obj, pref)
     return {'key': key, 'kind': kind, 'id': obj.pk, 'name': obj.name, 'address': address, 'groups': groups,
             'enabled': bool(pref and pref.enabled), 'reminders': bool(pref and pref.reminders),
@@ -177,14 +189,14 @@ def source_view(kind, obj, pref=None):
 def sources(user):
     permission(user)
     prefs = {p.key: p for p in SSLSource.objects.all()}
-    items = [source_view('host', obj, prefs.get('host:' + str(obj.pk))) for obj in Host.objects.order_by('id')]
-    items += [source_view('panel', obj, prefs.get('panel:' + str(obj.pk)))
-              for obj in Panel.objects.select_related('group').order_by('id')]
+    items = [source_view('host', obj, prefs.get('host:' + str(obj.pk)), user) for obj in access.scope(user, 'host').order_by('id')]
+    items += [source_view('panel', obj, prefs.get('panel:' + str(obj.pk)), user)
+              for obj in access.scope(user, 'panel').select_related('group').order_by('id')]
     return {'items': items}
 
 
 def configure(user, data):
-    permission(user)
+    permission(user, action='configure')
     strict(data, ('key', 'revision', 'enabled', 'reminders', 'interval_hours'))
     if set(data) != {'key', 'revision', 'enabled', 'reminders', 'interval_hours'}:
         raise ValueError('请完整提供来源配置')
@@ -196,24 +208,24 @@ def configure(user, data):
         raise ValueError('配置版本无效')
     try:
         with transaction.atomic():
-            current = permission(user, lock=True)
+            current = permission(user, lock=True, action='configure')
+            access.require_source(user, data['key'], manage=True)
             kind, obj = source_object(data['key'], lock=True)
             pref = SSLSource.objects.select_for_update().filter(pk=data['key']).first()
             if (pref.revision if pref else '') != data['revision']:
                 raise ValueError('来源配置已被修改，请刷新后重试')
-            owner_active = bool(pref and User.objects.filter(pk=pref.owner_id, is_active=True,
-                                                           is_supper=True, is_deleted=False).exists())
+            owner_active = bool(pref and source_owner_active(pref))
             if (pref and pref.enabled == data['enabled'] and pref.reminders == data['reminders'] and
                     pref.interval_hours == data['interval_hours'] and pref.config_digest == config_digest(kind, obj) and
                     owner_active):
-                return source_view(kind, obj, pref)
+                return source_view(kind, obj, pref, user)
             if pref and not owner_active:
                 pref.status, pref.message = 'invalidated', '监控授权已变化，请重新检查'
             pref = pref or SSLSource(key=data['key'])
             pref.owner, pref.enabled, pref.reminders = current, data['enabled'], data['reminders']
             pref.interval_hours, pref.revision = data['interval_hours'], uuid.uuid4().hex
             pref.save()
-            return source_view(kind, obj, pref)
+            return source_view(kind, obj, pref, user)
     except IntegrityError:
         raise ValueError('来源配置已被修改，请刷新后重试') from None
 
@@ -394,7 +406,7 @@ def listing(user, query):
     rows = [r for r in rows if not state or r['state'] == state or state == 'error' and
             r['state'] in ('stale', 'unknown')]
     return {'items': rows[(page - 1) * size:page * size], 'total': len(rows), 'stats': stats, 'hidden_count': hidden_count,
-            'sources': all_sources, 'active_jobs': [job_view(j) for j in SSLJob.objects.filter(owner_id=user.pk, state__in=ACTIVE)[:50]]}
+            'sources': all_sources, 'active_jobs': [job_view(j) for j in visible_jobs(user).filter(state__in=ACTIVE)[:50]]}
 
 
 def safe_certificate(value):
@@ -495,25 +507,43 @@ def job_view(job):
                 'created_at': iso(job.created_at), 'updated_at': iso(job.updated_at)}
 
 
-def owned_job(user, job_id, lock=False):
-    permission(user, lock=lock)
+def owned_job(user, job_id, lock=False, audit=False):
+    current = permission(user, lock=lock)
     qs = SSLJob.objects.select_for_update() if lock else SSLJob.objects
-    job = qs.filter(pk=integer(job_id), owner_id=user.pk).first()
+    qs = qs if audit and current.is_supper else qs.filter(owner_id=current.pk)
+    job = qs.filter(pk=integer(job_id)).first()
     if job is None:
         raise PermissionError('任务不存在或无权访问')
+    if not access.current_user(user).is_supper:
+        if not isinstance(job.source_keys, list) or not job.source_keys:
+            access.reject(user, '任务目标清单缺失，无法验证访问权限')
+        for key in job.source_keys:
+            access.require_source(user, key)
     return job
 
 
 def get_job(user, job_id):
-    return job_view(owned_job(user, job_id))
+    return job_view(owned_job(user, job_id, audit=True))
 
 
 def jobs_listing(user, query):
     permission(user)
     strict(query, ('page', 'page_size'))
     page, size = pagination(query)
-    qs = SSLJob.objects.filter(owner_id=user.pk)
+    qs = visible_jobs(user)
     return {'items': [job_view(j) for j in qs[(page - 1) * size:page * size]], 'total': qs.count()}
+
+
+def visible_jobs(user):
+    current = permission(user)
+    keys = {'host:%s' % pk for pk in access.allowed_ids(current, 'host')}
+    keys.update('panel:%s' % pk for pk in access.allowed_ids(current, 'panel'))
+    qs = SSLJob.objects.filter(owner_id=current.pk)
+    if current.is_supper:
+        return SSLJob.objects.all()
+    ids = [pk for pk, sources in qs.values_list('pk', 'source_keys')
+           if sources and set(sources).issubset(keys)]
+    return qs.filter(pk__in=ids)
 
 
 def reserve(key, job, now):
@@ -530,22 +560,24 @@ def release(job):
 
 
 def enqueue_checks(user, data):
-    permission(user)
+    permission(user, action='check')
     strict(data, ('source_keys',))
     keys = data.get('source_keys')
     if not isinstance(keys, list) or not 1 <= len(keys) <= MAX_SOURCES or any(not isinstance(k, str) for k in keys) or len(set(keys)) != len(keys):
         raise ValueError('每次请选择 1 至 10 个不同来源')
     with transaction.atomic():
-        current = permission(user, lock=True)
+        current = permission(user, lock=True, action='check')
         now, versions = timezone.now(), {}
         if SSLJob.objects.filter(kind='check', state__in=('queued', 'running')).exists():
             raise ValueError('已有发现或检查任务在途，请稍后再试')
         for key in keys:
+            access.require_source(user, key, manage=True)
             kind, obj = source_object(key, lock=True)
             pref = SSLSource.objects.select_for_update().filter(pk=key, enabled=True).first()
             if pref is None:
                 raise ValueError('请先明确开启所选来源的 SSL 监控')
-            permission(pref.owner_id)
+            if not source_owner_active(pref):
+                raise ValueError('监控来源授权已变化，请重新配置')
             if pref.last_attempt_at and (now - pref.last_attempt_at).total_seconds() < COOLDOWN:
                 raise ValueError('手工检查冷却中，请 60 秒后重试')
             versions[key] = {'revision': pref.revision, 'digest': config_digest(kind, obj)}

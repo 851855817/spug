@@ -16,6 +16,7 @@ from datetime import datetime
 from apps.baota.client import PanelAPIError
 from apps.baota.resources import system_info, php_branch, site_ssl_summary
 from apps.baota.validation import positive_id
+from libs.worker_authorization import current_authorizer, exchange
 
 
 TOTAL_TIMEOUT = 45
@@ -219,7 +220,11 @@ def run_worker(payload):
         remaining = TOTAL_TIMEOUT - (time.monotonic() - started)
         if remaining <= 0:
             raise subprocess.TimeoutExpired('inventory worker', TOTAL_TIMEOUT)
-        output, _ = child.communicate(wire, timeout=remaining)
+        authorize = current_authorizer()
+        if authorize:
+            output = exchange(child, payload, authorize, remaining, MAX_OUTPUT_BYTES)
+        else:
+            output, _ = child.communicate(wire, timeout=remaining)
         finished = True
         if child.returncode != 0 or len(output) > MAX_OUTPUT_BYTES:
             raise InventoryError('invalid_response')
@@ -235,6 +240,8 @@ def run_worker(payload):
     except subprocess.TimeoutExpired:
         raise InventoryError('timeout') from None
     except InventoryError:
+        raise
+    except PermissionError:
         raise
     except Exception:
         raise InventoryError('collection_failed') from None
@@ -253,6 +260,8 @@ def collect_panel(panel, kind):
         return run_worker({'kind': kind, 'api_base_url': panel.api_base_url, 'api_key': panel.get_api_key(),
                            'tls_ca': panel.tls_ca, 'tls_fingerprint': panel.tls_fingerprint})
     except InventoryError:
+        raise
+    except PermissionError:
         raise
     except Exception:
         raise InventoryError('collection_failed') from None

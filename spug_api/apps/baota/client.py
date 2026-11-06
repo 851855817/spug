@@ -26,6 +26,7 @@ from urllib3.exceptions import HTTPError as Urllib3HTTPError, ReadTimeoutError
 
 from .security import SecretError
 from .validation import api_base_url, api_configuration
+from libs.worker_authorization import authorize_remote
 
 
 DEFAULT_TIMEOUT = (5, 20)
@@ -362,6 +363,7 @@ class PanelClient:
         response = None
         deadline_token = _request_deadline.set(deadline)
         try:
+            authorize_remote()
             response = self.session.post(self.base_url + path,
                                          params={'action': action} if action is not None else None,
                                          data=params, timeout=timeout, allow_redirects=False,
@@ -430,6 +432,7 @@ class PanelClient:
         deadline_token = _request_deadline.set(deadline)
         response = None
         try:
+            authorize_remote()
             response = self.session.post(self.base_url + '/files', data=multipart,
                                          headers={'Content-Type': 'multipart/form-data; boundary=' + multipart.boundary},
                                          timeout=timeout, allow_redirects=False, verify=self.verify, stream=True)
@@ -484,6 +487,7 @@ class PanelClient:
         deadline_token = _request_deadline.set(deadline)
         response = None
         try:
+            authorize_remote()
             response = self.session.get(self.base_url + '/download', params={'filename': filename},
                                         data=self._file_signature(), headers={'Accept-Encoding': 'identity'},
                                         timeout=timeout, allow_redirects=False, verify=self.verify, stream=True)
@@ -580,6 +584,7 @@ class PanelClient:
         deadline_token = _request_deadline.set(deadline)
         response = None
         try:
+            authorize_remote()
             response = self.session.get(self.base_url + '/download', params={'filename': filename},
                                         data=signature, timeout=timeout, allow_redirects=False,
                                         verify=self.verify, stream=True)

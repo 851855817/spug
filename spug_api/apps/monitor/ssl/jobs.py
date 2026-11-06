@@ -7,6 +7,7 @@ from datetime import timedelta
 from django.db import connections, transaction
 from django.db.models import Q
 from django.utils import timezone
+from libs.worker_authorization import guard
 
 from . import service as s
 from . import renewal
@@ -139,13 +140,18 @@ def safe_rows(payload):
 def source_authorized(job, key, lock=False):
     if not lease_valid(job):
         raise s.WorkflowError('lease_expired')
-    s.permission(job.owner_id, lock=lock)
+    s.permission(job.owner_id, lock=lock, action='check')
+    if not job.source_keys or key not in job.source_keys:
+        s.access.reject(job.owner_id, '检查任务来源无效')
+    for target in job.source_keys:
+        s.access.require_source(job.owner_id, target, manage=True)
     kind, obj = s.source_object(key, lock=lock)
     qs = SSLSource.objects.select_for_update() if lock else SSLSource.objects
     pref = qs.filter(pk=key, enabled=True).first()
     if pref is None:
         raise s.WorkflowError('source_disabled')
-    s.permission(pref.owner_id, lock=lock)
+    if not s.source_owner_active(pref):
+        raise ValueError('监控来源授权已变化')
     expected = job.source_versions[key]
     if pref.revision != expected['revision'] or s.config_digest(kind, obj) != expected['digest']:
         raise s.WorkflowError('stale_plan')
@@ -163,13 +169,15 @@ def collect_source(job, key, deadline=None):
     kind, obj, pref = source_authorized(job, key)
     if deadline - time.monotonic() < DISCOVERY_MARGIN:
         raise TimeoutError()
-    rows, warning = safe_rows(discover(kind, obj))
+    with guard(lambda: source_authorized(job, key)):
+        rows, warning = safe_rows(discover(kind, obj))
     for row in rows:
         source_authorized(job, key)
         if deadline - time.monotonic() < TLS_MARGIN or not lease_valid(job):
             raise TimeoutError()
-        row['public_tls'] = ({'verified': False, 'certificate': {}, 'message': '通配符仅检查本地部署证书'}
-                             if row['domain'].startswith('*.') else s.safe_tls(check_tls(row['domain'], row['port'])))
+        with guard(lambda: source_authorized(job, key)):
+            row['public_tls'] = ({'verified': False, 'certificate': {}, 'message': '通配符仅检查本地部署证书'}
+                                 if row['domain'].startswith('*.') else s.safe_tls(check_tls(row['domain'], row['port'])))
     if time.monotonic() > deadline:
         raise TimeoutError()
     with transaction.atomic():
@@ -396,7 +404,7 @@ def schedule_due():
         if pref.last_attempt_at and now - pref.last_attempt_at < timedelta(hours=pref.interval_hours):
             continue
         try:
-            owner = s.permission(pref.owner_id)
+            owner = s.permission(pref.owner_id, action='check')
             s.enqueue_checks(owner, {'source_keys': [pref.key]})
             return
         except (ValueError, PermissionError):
@@ -431,20 +439,27 @@ def run_pending():
                 job.save()
             try:
                 s.permission(job.owner_id)
-                if verify:
-                    verify_renewal(job)
-                elif job.kind == 'check':
-                    run_check(job)
-                elif job.phase == 'preflight':
-                    preflight(job)
-                elif job.phase == 'panel_preflight':
-                    sync_panel_preflight(job)
-                elif job.phase == 'panel_wait':
-                    sync_panel_execution(job)
-                elif job.phase == 'dispatch':
-                    dispatch_renewal(job)
-                else:
-                    finish(job, 'blocked', '任务阶段无法验证，请重新预检')
+                def authorize():
+                    if job.kind == 'check':
+                        if not job.source_keys:
+                            s.access.reject(job.owner_id, '检查目标无效')
+                        return source_authorized(job, job.source_keys[0])
+                    return renewal.authorized(job)
+                with guard(authorize):
+                    if verify:
+                        verify_renewal(job)
+                    elif job.kind == 'check':
+                        run_check(job)
+                    elif job.phase == 'preflight':
+                        preflight(job)
+                    elif job.phase == 'panel_preflight':
+                        sync_panel_preflight(job)
+                    elif job.phase == 'panel_wait':
+                        sync_panel_execution(job)
+                    elif job.phase == 'dispatch':
+                        dispatch_renewal(job)
+                    else:
+                        finish(job, 'blocked', '任务阶段无法验证，请重新预检')
             except PermissionError:
                 finish(job, 'uncertain' if job.intent else 'cancelled', '账号权限已撤销，后续操作已停止')
             except Exception as error:

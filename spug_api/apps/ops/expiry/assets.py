@@ -5,6 +5,7 @@ import re
 from urllib.parse import urlsplit
 
 from apps.account.models import User
+from apps.account import access
 from apps.host.models import Host, HostExtend, Group
 from apps.baota.models import Panel, PanelGroup, ResourceMonitorPreference
 from . import dates
@@ -28,13 +29,15 @@ def panel_address(panel):
         return ''
 
 
-def group_options():
+def group_options(user=None):
     return ([{'key': 'host:%s' % g.pk, 'name': g.name,
               'parent_key': 'host:%s' % g.parent_id if g.parent_id else None}
-             for g in Group.objects.order_by('pk')] +
+             for g in Group.objects.order_by('pk')
+             if user is None or g.pk in access.group_ids(user, 'host')] +
             [{'key': 'panel:%s' % g.pk, 'name': g.name,
               'parent_key': 'panel:%s' % g.parent_id if g.parent_id else None}
-             for g in PanelGroup.objects.order_by('pk')])
+             for g in PanelGroup.objects.order_by('pk')
+             if user is None or g.pk in access.group_ids(user, 'panel')])
 
 
 def descendants(key):
@@ -59,10 +62,12 @@ def metadata_values(metadata):
             'note': metadata.note if metadata else ''}
 
 
-def inventory():
+def inventory(user=None):
     """Read all assets, including unverified hosts and unconfigured/disabled panels."""
-    hosts = list(Host.objects.only('id', 'name', 'hostname').prefetch_related('groups').order_by('pk'))
-    panels = list(Panel.objects.only('id', 'name', 'url', 'group_id').select_related('group').order_by('pk'))
+    host_qs = Host.objects.all() if user is None else access.scope(user, 'host')
+    panel_qs = Panel.objects.all() if user is None else access.scope(user, 'panel')
+    hosts = list(host_qs.only('id', 'name', 'hostname').prefetch_related('groups').order_by('pk'))
+    panels = list(panel_qs.only('id', 'name', 'url', 'group_id').select_related('group').order_by('pk'))
     preferences = list(ResourceMonitorPreference.objects.order_by('pk').values(
         'id', 'host_id', 'panel_id', 'linked_host_id', 'revision'))
     by_host = {h.pk: h for h in hosts}
@@ -94,6 +99,7 @@ def inventory():
         if pref['host_id'] in by_host:
             result['host:%s' % pref['host_id']]['_preferences'].append(pref)
     today = dates.platform_today()
+    visible_groups = None if user is None else {g['key'] for g in group_options(user)}
     for row in result.values():
         meta = metadata.get(row['key'])
         values = metadata_values(meta)
@@ -115,4 +121,6 @@ def inventory():
                           meta.revision if meta else None, row['owner']]
         row['version'] = hashlib.sha256(json.dumps(version_inputs, sort_keys=True,
                                                   separators=(',', ':')).encode()).hexdigest()
+        if visible_groups is not None:
+            row['groups'] = [g for g in row['groups'] if g['key'] in visible_groups]
     return result

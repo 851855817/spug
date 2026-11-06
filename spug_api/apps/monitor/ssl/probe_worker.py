@@ -1,6 +1,7 @@
 """Disposable local process: saved credentials in stdin, public JSON in stdout."""
 import json
 import logging
+from libs.worker_authorization import configure_child
 import os
 import sys
 from types import SimpleNamespace
@@ -19,10 +20,11 @@ from .collectors import (CollectorError, MAX_OUTPUT_BYTES, _discover_panel, _hos
 def main():
     logging.disable(logging.CRITICAL)
     try:
-        wire = sys.stdin.buffer.read(MAX_OUTPUT_BYTES + 1)
+        wire = sys.stdin.buffer.readline(MAX_OUTPUT_BYTES + 1)
         if len(wire) > MAX_OUTPUT_BYTES:
             raise CollectorError('output_limit')
         payload = json.loads(wire)
+        configure_child(payload)
         if payload.get('action') == 'tls':
             from .tls import _check_tls
             result = _check_tls(payload['domain'], payload['port'])

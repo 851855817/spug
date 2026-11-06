@@ -15,16 +15,18 @@ ACKS = {'ssh_renew': '仅续签所选证书订单，复用当前验证方式和�
 
 def authorized(job, lock=False):
     """Fresh authorization and source identity before each remote boundary."""
-    user = s.permission(job.owner_id, lock=lock)
+    user = s.permission(job.owner_id, lock=lock, action='renew')
     if not job.source_keys or len(job.source_keys) != 1:
         raise ValueError('续签来源无效')
     key = job.source_keys[0]
+    s.access.require_source(user, key, manage=True)
     kind, obj = s.source_object(key, lock=lock)
     qs = SSLSource.objects.select_for_update() if lock else SSLSource.objects
     pref = qs.filter(pk=key, enabled=True).first()
     if pref is None:
         raise s.WorkflowError('source_disabled')
-    s.permission(pref.owner_id, lock=lock)
+    if not s.source_owner_active(pref):
+        raise ValueError('监控来源授权已变化')
     version = job.source_versions.get(key, {})
     if pref.revision != version.get('revision') or s.config_digest(kind, obj) != version.get('digest'):
         raise s.WorkflowError('stale_plan')
@@ -34,14 +36,15 @@ def authorized(job, lock=False):
 
 
 def prepare(user, data):
-    s.permission(user)
+    s.permission(user, action='renew')
     s.strict(data, ('certificate_id',))
     with transaction.atomic():
-        current = s.permission(user, lock=True)
+        current = s.permission(user, lock=True, action='renew')
         cert = SSLCertificate.objects.filter(
             pk=s.integer(data.get('certificate_id')), present=True).first()
         if cert is None:
             raise ValueError('证书记录不存在，请重新检查')
+        s.access.require_source(user, cert.source_id, manage=True)
         kind, obj = s.source_object(cert.source_id, lock=True)
         pref = SSLSource.objects.select_for_update().get(pk=cert.source_id)
         # Match source configuration writers: source object, preference, then
@@ -120,9 +123,13 @@ def cancel_prepared(job, message):
 
 
 def cancel(user, job_id, data):
+    s.permission(user, action='cancel')
     s.strict(data, ())
     with transaction.atomic():
+        s.permission(user, lock=True, action='cancel')
         job = s.owned_job(user, job_id, lock=True)
+        for key in job.source_keys:
+            s.access.require_source(user, key, manage=True)
         return cancel_prepared(job, '已取消未下发的预检，可重新创建续签任务')
 
 

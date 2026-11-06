@@ -9,6 +9,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.account.models import User
+from apps.account import access
+from libs.worker_authorization import guard
 from apps.baota.models import Panel, PanelGroup
 from apps.baota.validation import positive_id
 from .models import PanelInventoryLease as Lease, PanelInventorySnapshot as Snapshot
@@ -27,10 +29,8 @@ BACKUP_FIELDS = ('asset_type', 'asset_id', 'name', 'backup_id', 'backup_name', '
                  'local_exists', 'in_progress', 'location', 'state')
 
 
-def permission(user, lock=False):
-    users = User.objects.select_for_update() if lock else User.objects
-    if not users.filter(pk=getattr(user, 'pk', None), is_supper=True, is_active=True, is_deleted=False).exists():
-        raise PermissionError('仅超级管理员可访问资产检查台')
+def permission(user, lock=False, action='view'):
+    return access.require(user, 'ops.inventory.' + action, lock=lock)
 
 
 def strict(data, allowed):
@@ -57,9 +57,11 @@ def _ip(panel):
         return ''
 
 
-def panel_fields(panel):
+def panel_fields(panel, user=None):
+    group_visible = user is None or panel.group_id in access.group_ids(user, 'panel')
     return {'panel_id': panel.pk, 'panel_name': panel.name, 'ip': _ip(panel),
-            'group_id': panel.group_id, 'group_name': panel.group.name}
+            'group_id': panel.group_id if group_visible else None,
+            'group_name': panel.group.name if group_visible else ''}
 
 
 def _iso(value):
@@ -82,10 +84,11 @@ def _status(panel, snapshot, now):
     return 'ok', '采集成功（面板登记摘要）'
 
 
-def panel_view(panel, snapshot, kind, now=None):
+def panel_view(panel, snapshot, kind, now=None, user=None):
     now = now or timezone.now()
     status, message = _status(panel, snapshot, now)
-    return {'panel_id': panel.pk, 'name': panel.name, 'ip': _ip(panel), 'group_id': panel.group_id,
+    return {'panel_id': panel.pk, 'name': panel.name, 'ip': _ip(panel),
+            'group_id': panel_fields(panel, user)['group_id'],
             'configured': _configured(panel), 'kind': kind, 'status': status, 'message': message,
             'sampled_at': _iso(snapshot.sampled_at) if snapshot else None,
             'attempted_at': _iso(snapshot.attempted_at) if snapshot else None,
@@ -95,9 +98,10 @@ def panel_view(panel, snapshot, kind, now=None):
 
 def options(user):
     permission(user)
-    return {'panels': [{'id': panel.pk, 'name': panel.name, 'ip': _ip(panel), 'group_id': panel.group_id,
-                        'configured': _configured(panel)} for panel in Panel.objects.order_by('id')],
-            'groups': [group.to_view() for group in PanelGroup.objects.all()],
+    return {'panels': [{'id': panel.pk, 'name': panel.name, 'ip': _ip(panel),
+                        'group_id': panel_fields(panel, user)['group_id'],
+                        'configured': _configured(panel)} for panel in access.scope(user, 'panel').order_by('id')],
+            'groups': [group.to_view() for group in PanelGroup.objects.filter(pk__in=access.group_ids(user, 'panel'))],
             'limits': {'total_timeout_seconds': 45, 'requests': 200, 'assets': MAX_ASSETS,
                        'fresh_hours': 24, 'cooldown_seconds': COOLDOWN_SECONDS}}
 
@@ -161,21 +165,22 @@ def listing(user, kind, query):
     max_age = positive_id(query.get('max_age_hours', 48))
     if max_age not in (24, 48, 72, 168):
         raise ValueError('备份时间阈值必须为 24、48、72 或 168 小时')
-    panels = Panel.objects.select_related('group').order_by('id')
+    panels = access.scope(user, 'panel').select_related('group').order_by('id')
     if query.get('panel_id'):
         panels = panels.filter(pk=positive_id(query['panel_id']))
     if query.get('group_id'):
+        access.require_groups(user, 'panel', [positive_id(query['group_id'])])
         panels = panels.filter(group_id__in=_group_ids(positive_id(query['group_id'])))
     panels = list(panels)
     snapshots = {s.panel_id: s for s in Snapshot.objects.filter(panel_id__in=[p.pk for p in panels], kind=kind)}
     rows, statuses, now = [], [], timezone.now()
     for panel in panels:
         snapshot = snapshots.get(panel.pk)
-        status = panel_view(panel, snapshot, kind, now)
+        status = panel_view(panel, snapshot, kind, now, user=user)
         statuses.append(status)
         if snapshot is None or not snapshot.sampled_at or status['status'] in ('invalidated', 'unconfigured'):
             continue
-        context = {**panel_fields(panel), 'sampled_at': status['sampled_at'], 'stale': status['stale']}
+        context = {**panel_fields(panel, user), 'sampled_at': status['sampled_at'], 'stale': status['stale']}
         for raw in _safe_rows(snapshot.rows, kind):
             # Select again when rendering, including snapshots produced by older code.
             fields = SITE_FIELDS if kind == 'sites' else BACKUP_FIELDS
@@ -219,8 +224,8 @@ def release_lease(token):
     Lease.objects.filter(pk=1, token=token).update(token='', expires_at=timezone.now())
 
 
-def _transient(panel, snapshot, kind, status, message):
-    return {**panel_view(panel, snapshot, kind), 'status': status, 'message': message}
+def _transient(panel, snapshot, kind, status, message, user=None):
+    return {**panel_view(panel, snapshot, kind, user=user), 'status': status, 'message': message}
 
 
 def _safe_rows(rows, kind):
@@ -282,9 +287,10 @@ def _safe_rows(rows, kind):
 
 
 def collect(user, data):
-    permission(user)
+    permission(user, action='collect')
     strict(data, ('panel_id', 'kind'))
     panel_id, kind = positive_id(data.get('panel_id')), data.get('kind')
+    access.require_resources(user, 'panel', [panel_id], manage=True)
     if kind not in KINDS:
         raise ValueError('采集类型无效')
     panel = Panel.objects.select_related('group').filter(pk=panel_id).first()
@@ -292,36 +298,46 @@ def collect(user, data):
         raise ValueError('面板不存在')
     cached = Snapshot.objects.filter(panel=panel, kind=kind).first()
     if not _configured(panel):
-        return panel_view(panel, cached, kind)
+        return panel_view(panel, cached, kind, user=user)
     now = timezone.now()
     if cached and cached.cooldown_until and cached.cooldown_until > now:
-        return _transient(panel, cached, kind, 'cooldown', '采集冷却中，请稍后再试')
+        return _transient(panel, cached, kind, 'cooldown', '采集冷却中，请稍后再试', user=user)
     lease = acquire_lease(now)
     if lease is None:
-        return _transient(panel, cached, kind, 'busy', '另一项资产采集正在进行，请稍后再试')
+        return _transient(panel, cached, kind, 'busy', '另一项资产采集正在进行，请稍后再试', user=user)
     try:
         # Re-read after admission. Network/crypto stays outside every transaction.
-        permission(user)
+        permission(user, action='collect')
+        access.require_resources(user, 'panel', [panel_id], manage=True)
         panel = Panel.objects.select_related('group').filter(pk=panel_id).first()
         if panel is None:
             raise ValueError('面板不存在')
         cached = Snapshot.objects.filter(panel=panel, kind=kind).first()
         if cached and cached.cooldown_until and cached.cooldown_until > timezone.now():
-            return _transient(panel, cached, kind, 'cooldown', '采集冷却中，请稍后再试')
+            return _transient(panel, cached, kind, 'cooldown', '采集冷却中，请稍后再试', user=user)
         if not _configured(panel):
-            return panel_view(panel, cached, kind)
+            return panel_view(panel, cached, kind, user=user)
         digest, revision, attempted_at = config_digest(panel), panel.api_config_revision, timezone.now()
         rows, message = None, MESSAGES['collection_failed']
         try:
-            rows = _safe_rows(collect_panel(panel, kind), kind)
+            def authorize():
+                permission(user, action='collect')
+                fresh = access.require_resources(user, 'panel', [panel_id], manage=True).first()
+                if config_digest(fresh) != digest:
+                    access.reject(user, '采集配置已变化，后续请求已停止')
+            with guard(authorize):
+                rows = _safe_rows(collect_panel(panel, kind), kind)
             message = '采集成功（面板登记摘要）'
+        except PermissionError:
+            raise
         except Exception as error:
             message = MESSAGES.get(getattr(error, 'code', ''), MESSAGES['collection_failed'])
         finished = timezone.now()
         with transaction.atomic():
             if not Lease.objects.select_for_update().filter(pk=1, token=lease, expires_at__gt=finished).exists():
-                return _transient(panel, cached, kind, 'busy', '采集租约已过期，请重新采集')
-            permission(user, lock=True)
+                return _transient(panel, cached, kind, 'busy', '采集租约已过期，请重新采集', user=user)
+            permission(user, lock=True, action='collect')
+            access.require_resources(user, 'panel', [panel_id], manage=True)
             current = Panel.objects.select_for_update().select_related('group').filter(pk=panel_id).first()
             if current is None:
                 raise ValueError('面板已删除，采集结果已丢弃')
@@ -331,7 +347,7 @@ def collect(user, data):
                     cached.attempted_at = attempted_at
                     cached.cooldown_until = finished + timedelta(seconds=COOLDOWN_SECONDS)
                     cached.save(update_fields=['attempted_at', 'cooldown_until'])
-                return _transient(current, cached, kind, 'invalidated', '采集期间 API 配置发生变化，结果已丢弃')
+                return _transient(current, cached, kind, 'invalidated', '采集期间 API 配置发生变化，结果已丢弃', user=user)
             saved, _ = Snapshot.objects.update_or_create(panel=current, kind=kind, defaults={
                 'config_revision': revision if rows is not None or not cached else cached.config_revision,
                 'config_digest': digest if rows is not None or not cached else cached.config_digest,
@@ -340,6 +356,6 @@ def collect(user, data):
                 'attempted_at': attempted_at, 'cooldown_until': finished + timedelta(seconds=COOLDOWN_SECONDS),
                 'status': 'ok' if rows is not None else ('stale' if cached and cached.sampled_at else 'error'),
                 'message': message})
-        return panel_view(current, saved, kind)
+        return panel_view(current, saved, kind, user=user)
     finally:
         release_lease(lease)

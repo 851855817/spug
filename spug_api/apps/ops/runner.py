@@ -101,12 +101,14 @@ def _remaining(deadline, cap=10):
     return min(cap, remaining)
 
 
-def _connect_socket(hostname, port, deadline):
+def _connect_socket(hostname, port, deadline, authorize=None):
     """DNS has no socket timeout; only the lookup lives in a bounded-wait daemon.
 
     A timed-out lookup can finish later but cannot connect or send a command.
     Connections use an already-resolved socket, keeping Paramiko away from DNS.
     """
+    authorize = authorize or (lambda: None)
+    authorize()
     result = queue.Queue(maxsize=1)
     def lookup():
         try:
@@ -123,11 +125,16 @@ def _connect_socket(hostname, port, deadline):
         raise ProbeError('connection', reason='dns')
     last_reason = ''
     for family, socktype, proto, _, address in addresses[:8]:
+        authorize()
         stream = socket.socket(family, socktype, proto)
         try:
             stream.settimeout(_remaining(connect_deadline))
+            authorize()
             stream.connect(address)
             return stream
+        except PermissionError:
+            stream.close()
+            raise
         except socket.timeout:
             stream.close()
             raise ProbeError('timeout', reason='tcp_timeout') from None
@@ -139,6 +146,7 @@ def _connect_socket(hostname, port, deadline):
 
 
 def run_probe(host, job, params):
+    authorize = getattr(host, '__dict__', {}).get('resource_guard', lambda: None)
     command = catalogue.command(job, params)
     deadline = time.monotonic() + TOTAL_TIMEOUT
     client, channel, stream = SSHClient(), None, None
@@ -169,6 +177,7 @@ def run_probe(host, job, params):
     watchdog.daemon = True
     watchdog.start()
     try:
+        authorize()
         key = host.private_key
         if not isinstance(key, str) or not key or len(key.encode()) > 32768:
             raise ProbeError('ssh_auth', reason='key')
@@ -177,13 +186,16 @@ def run_probe(host, job, params):
         except (ValueError, SSHException):
             raise ProbeError('ssh_auth', reason='key') from None
         phase = 'connect'
-        stream = _connect_socket(host.hostname, host.port or 22, deadline)
+        authorize()
+        stream = _connect_socket(host.hostname, host.port or 22, deadline, authorize=authorize)
         phase = 'handshake'
         client.set_missing_host_key_policy(AutoAddPolicy())
+        authorize()
         client.connect(hostname=host.hostname, port=host.port or 22, username=host.username,
                        pkey=private_key, sock=stream, timeout=_remaining(deadline),
                        auth_timeout=_remaining(deadline), banner_timeout=_remaining(deadline),
                        allow_agent=False, look_for_keys=False)
+        authorize()
         transport = client.get_transport()
         if not transport or not transport.is_active():
             raise ProbeError('connection')
@@ -193,9 +205,11 @@ def run_probe(host, job, params):
         channel.set_combine_stderr(True)
         dispatched = True
         phase = 'execute'
+        authorize()
         channel.exec_command(command)
         output = bytearray()
         while True:
+            authorize()
             _remaining(deadline)
             if channel.recv_ready():
                 data = channel.recv(min(4096, MAX_OUTPUT + 1 - len(output)))
@@ -227,7 +241,10 @@ def run_probe(host, job, params):
         _remaining(deadline)
         if expired.is_set():
             raise ProbeError('timeout')
+        authorize()
         return checks
+    except PermissionError:
+        raise
     except ProbeError as exc:
         if expired.is_set():
             raise ProbeError('timeout', uncertain=dispatched, reason='deadline') from None

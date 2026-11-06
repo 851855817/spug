@@ -3,6 +3,7 @@ import ipaddress
 import re
 import socket
 import ssl
+from libs.worker_authorization import authorize_remote
 
 TLS_MESSAGES = {
     'dns_failed': '公网 DNS 解析失败', 'handshake_failed': '公网 TLS 连接或握手失败',
@@ -48,6 +49,7 @@ def failure(message):
 def _public_addresses(domain, port):
     # This resolver runs only in a disposable child. Its result is never resolved
     # a second time by connect(), including the unverified metadata fallback.
+    authorize_remote()
     rows = socket.getaddrinfo(domain, port, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP)
     if not rows or len(rows) > 32:
         raise ValueError('公网 DNS 结果为空或超出限制')
@@ -71,7 +73,9 @@ def _handshake(endpoint, domain, context, timeout=5):
     raw = socket.socket(family, socktype, protocol)
     try:
         raw.settimeout(timeout)
+        authorize_remote()
         raw.connect(address)  # Already-resolved numeric sockaddr, never a hostname.
+        authorize_remote()
         with context.wrap_socket(raw, server_hostname=domain) as secured:
             der = secured.getpeercert(binary_form=True)
             return public_certificate(ssl.DER_cert_to_PEM_cert(der))

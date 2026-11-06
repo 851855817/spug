@@ -1,5 +1,6 @@
 """Credential-isolated, bounded source collection; only public facts leave here."""
 import json
+from libs.worker_authorization import current_authorizer, exchange, authorize_remote
 from datetime import datetime
 from pathlib import Path
 import re
@@ -234,15 +235,22 @@ def _discover_panel(panel):
         return {'items': items, 'warnings': sorted(set(warnings))}
     except CollectorError:
         raise
+    except PermissionError:
+        raise
     except Exception:
         raise CollectorError('collection_failed') from None
 
 
 def _read_output(channel, expires):
     output, count = bytearray(), 0
+    checked_at = None
     while True:
-        if time.monotonic() >= expires:
+        now = time.monotonic()
+        if now >= expires:
             raise CollectorError('timeout')
+        if checked_at is None or now - checked_at >= 1:
+            authorize_remote()
+            checked_at = now
         progressed = False
         if channel.recv_ready():
             chunk = channel.recv(4096)
@@ -281,19 +289,24 @@ def _host_transport(host, action, plan=None):
     expires = time.monotonic() + (200 if action == 'renew' else 35)
     try:
         ssh = host.get_ssh()
+        ssh.authorize = authorize_remote
         remaining = max(.1, expires - time.monotonic())
         ssh.arguments.update(timeout=remaining, banner_timeout=remaining, auth_timeout=remaining,
                              allow_agent=False, look_for_keys=False)
+        authorize_remote()
         client = ssh.get_client()
+        authorize_remote()
         channel = client.get_transport().open_session(timeout=max(.1, expires - time.monotonic()))
         channel.settimeout(max(.1, expires - time.monotonic()))
         # Static source is shell-quoted once. Remote values are only bounded JSON
         # on stdin; no uploads, shell variables, eval or source are used.
         source = Path(__file__).with_name('remote_probe.py').read_text(encoding='utf8')
+        authorize_remote()
         channel.exec_command('python3 -c ' + shlex.quote(source))
         payload = json.dumps({'action': action, 'plan': plan}, separators=(',', ':'), allow_nan=False).encode('utf8')
         if len(payload) > MAX_OUTPUT_BYTES:
             raise CollectorError('output_limit')
+        authorize_remote()
         channel.sendall(payload)
         channel.shutdown_write()
         return _read_output(channel, expires)
@@ -302,6 +315,8 @@ def _host_transport(host, action, plan=None):
     except (socket.timeout, TimeoutError):
         raise CollectorError('renewal_uncertain' if action == 'renew' else 'timeout') from None
     except CollectorError:
+        raise
+    except PermissionError:
         raise
     except Exception:
         raise CollectorError('renewal_uncertain' if action == 'renew' else 'collection_failed') from None
@@ -349,7 +364,11 @@ def run_worker(payload):
         child = subprocess.Popen([sys.executable, '-m', 'apps.monitor.ssl.probe_worker'],
                                  cwd=str(Path(__file__).resolve().parents[3]),
                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-        output, _ = child.communicate(wire, timeout=timeout)
+        authorize = current_authorizer()
+        if authorize:
+            output = exchange(child, payload, authorize, timeout, MAX_OUTPUT_BYTES)
+        else:
+            output, _ = child.communicate(wire, timeout=timeout)
         finished = True
         if child.returncode != 0 or len(output) > MAX_OUTPUT_BYTES:
             raise CollectorError('collection_failed')
@@ -361,9 +380,13 @@ def run_worker(payload):
         if not isinstance(result.get('result'), dict):
             raise CollectorError('invalid_response')
         return result['result']
+    except PermissionError:
+        raise
     except subprocess.TimeoutExpired:
         raise CollectorError('renewal_uncertain' if payload.get('action') == 'renew' else 'timeout') from None
     except CollectorError:
+        raise
+    except PermissionError:
         raise
     except Exception:
         raise CollectorError('collection_failed') from None

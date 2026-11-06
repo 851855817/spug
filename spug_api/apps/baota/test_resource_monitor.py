@@ -13,6 +13,7 @@ from django.urls import resolve
 from django.utils import timezone
 
 from apps.account.models import Role
+from apps.account import access
 from apps.host.models import Host, Group
 from apps.setting.models import Setting
 from . import models
@@ -48,13 +49,20 @@ class ResourceMonitorTests(TransactionTestCase):
         return models.Panel.objects.get(pk=self.panel(
             api_base_url='https://api.example.com', api_key='fixture-api-key', **changes)['id'])
 
-    def user(self, name='reader', permissions=(), groups=()):
+    def user(self, name='reader', permissions=(), groups=(), panels=()):
         user = self.make_user(name)
         page = {}
         for code in permissions:
             module, resource, action = code.split('.')
             page.setdefault(module, {}).setdefault(resource, []).append(action)
         user.roles.add(Role.objects.create(name=name, page_perms=page, group_perms=list(groups)))
+        # Explicit fixture grants replace the old group-implies-host model.
+        access.set_policy(self.admin, user, 100)
+        ids = list(Host.objects.filter(groups__pk__in=groups).values_list('pk', flat=True).distinct())
+        if ids:
+            access.assign(self.admin, user, 'host', ids, 'manage')
+        if panels:
+            access.assign(self.admin, user, 'panel', list(panels), 'manage')
         cache.clear()
         return user
 
@@ -115,13 +123,13 @@ class ResourceMonitorTests(TransactionTestCase):
         ssh.assert_not_called()
         self.assertTrue(self.request('get', '/baota/monitor/sources/', {'kind': 'panel'})['sources'][0]['enabled'])
 
-    def test_settings_requires_both_source_view_and_edit(self):
+    def test_settings_requires_source_view_and_monitor_configure(self):
         panel = self.configured_panel()
         for i, permissions in enumerate([('baota.panel.view',), ('baota.panel.edit',), ()]):
             self.authenticate(self.user('u' + str(i), permissions))
             self.request('post', '/baota/monitor/settings/',
                          {'kind': 'panel', 'id': panel.pk, 'enabled': True}, success=False)
-        self.authenticate(self.user('editor', ('baota.panel.view', 'baota.panel.edit')))
+        self.authenticate(self.user('editor', ('baota.panel.view', 'monitor.server.configure'), panels=(panel.pk,)))
         self.assertTrue(self.enable(panel)['enabled'])
 
     def test_host_groups_filter_sources_settings_cards_and_link_candidates(self):
@@ -129,7 +137,7 @@ class ResourceMonitorTests(TransactionTestCase):
         host, hidden = self.host(group=visible_group), self.host('hidden')
         self.enable(host, 'host')
         self.enable(hidden, 'host')
-        user = self.user(permissions=('host.host.view', 'host.host.edit', 'monitor.monitor.view'),
+        user = self.user(permissions=('host.host.view', 'host.host.edit', 'monitor.server.view', 'monitor.server.collect'),
                          groups=(visible_group.pk,))
         self.authenticate(user)
         data = self.request('get', '/baota/monitor/sources/', {'kind': 'host'})
@@ -147,7 +155,7 @@ class ResourceMonitorTests(TransactionTestCase):
         self.authenticate(self.user('only-source', ('baota.panel.view',)))
         self.request('get', '/baota/monitor/cards/', success=False)
         self.request('post', '/baota/monitor/sample/', {'key': 'panel:' + str(panel.pk), 'interval': 30}, success=False)
-        self.authenticate(self.user('only-monitor', ('monitor.monitor.view',)))
+        self.authenticate(self.user('only-monitor', ('monitor.server.view', 'monitor.server.collect',)))
         self.assertEqual(self.cards(), [])
         self.request('post', '/baota/monitor/sample/', {'key': 'panel:' + str(panel.pk), 'interval': 30}, success=False)
         self.request('get', '/baota/monitor/sources/', {'kind': 'panel'}, success=False)
@@ -182,7 +190,7 @@ class ResourceMonitorTests(TransactionTestCase):
         self.request('post', '/baota/monitor/link/', {'panel_id': panel.pk, 'host_id': host.pk})
         api, ssh = self.collectors()
         self.sample('host:' + str(host.pk))
-        self.authenticate(self.user('host-reader', ('host.host.view', 'monitor.monitor.view'),
+        self.authenticate(self.user('host-reader', ('host.host.view', 'monitor.server.view', 'monitor.server.collect'),
                                     groups=(host.groups.first().pk,)))
         card = self.cards()[0]
         self.assertEqual(card['sources'], [{'kind': 'host', 'id': host.pk, 'name': host.name}])
@@ -201,7 +209,7 @@ class ResourceMonitorTests(TransactionTestCase):
         now = timezone.now()
         with patch('apps.baota.resource_monitor.service.timezone.now', return_value=now):
             self.sample('host:' + str(host.pk))
-        self.authenticate(self.user('host-only', ('host.host.view', 'monitor.monitor.view'),
+        self.authenticate(self.user('host-only', ('host.host.view', 'monitor.server.view', 'monitor.server.collect'),
                                     groups=(host.groups.first().pk,)))
         with patch('apps.baota.resource_monitor.service.timezone.now', return_value=now + timedelta(seconds=10)):
             result = self.sample('host:' + str(host.pk))
@@ -247,7 +255,7 @@ class ResourceMonitorTests(TransactionTestCase):
         start = timezone.now()
         with patch('apps.baota.resource_monitor.service.timezone.now', return_value=start):
             first = self.sample('panel:' + str(panel.pk))
-        self.authenticate(self.user('readonly', ('baota.panel.view', 'monitor.monitor.view')))
+        self.authenticate(self.user('collector', ('baota.panel.view', 'monitor.server.view', 'monitor.server.collect'), panels=(panel.pk,)))
         with patch('apps.baota.resource_monitor.service.timezone.now', return_value=start + timedelta(seconds=29)):
             self.assertEqual(self.sample(first['key'])['snapshot'], first['snapshot'])
         with patch('apps.baota.resource_monitor.service.timezone.now', return_value=start + timedelta(seconds=31)):
@@ -286,7 +294,7 @@ class ResourceMonitorTests(TransactionTestCase):
         with patch('apps.baota.resource_monitor.service.timezone.now',
                    return_value=start + timedelta(seconds=40)):
             self.assertEqual(self.sample(key, 30).get('retry_reason'), 'backoff')
-        self.authenticate(self.user('only-ssh-reason', ('host.host.view', 'monitor.monitor.view'),
+        self.authenticate(self.user('only-ssh-reason', ('host.host.view', 'monitor.server.view', 'monitor.server.collect'),
                                     groups=(host.groups.first().pk,)))
         with patch('apps.baota.resource_monitor.service.timezone.now',
                    return_value=start + timedelta(seconds=40)):
@@ -362,7 +370,7 @@ class ResourceMonitorTests(TransactionTestCase):
         self.enable(host, 'host')
         self.enable(panel)
         self.request('post', '/baota/monitor/link/', {'panel_id': panel.pk, 'host_id': host.pk})
-        reader = self.user('host-only-backoff', ('host.host.view', 'monitor.monitor.view'),
+        reader = self.user('host-only-backoff', ('host.host.view', 'monitor.server.view', 'monitor.server.collect'),
                            groups=(host.groups.first().pk,))
         api, ssh = self.collectors()
         api.side_effect = RuntimeError('fixture API failure')
@@ -472,7 +480,7 @@ class ResourceMonitorTests(TransactionTestCase):
         host = self.host(group=allowed)
         host.groups.add(hidden)
         self.enable(host, 'host')
-        self.authenticate(self.user(permissions=('host.host.view', 'host.host.edit', 'monitor.monitor.view'),
+        self.authenticate(self.user(permissions=('host.host.view', 'host.host.edit', 'monitor.server.view', 'monitor.server.collect'),
                                     groups=(allowed.pk,)))
         sources = self.request('get', '/baota/monitor/sources/', {'kind': 'host'})
         self.assertNotIn('secret-team', json.dumps(sources))
@@ -499,7 +507,7 @@ class ResourceMonitorTests(TransactionTestCase):
         self.enable(panel)
         self.request('post', '/baota/monitor/link/', {'panel_id': panel.pk, 'host_id': host.pk})
         self.service().acquire_lease('host:' + str(host.pk), timezone.now())
-        self.authenticate(self.user(permissions=('baota.panel.view', 'monitor.monitor.view')))
+        self.authenticate(self.user(permissions=('baota.panel.view', 'monitor.server.view', 'monitor.server.collect'), panels=(panel.pk,)))
         api, _ = self.collectors()
         card = self.cards()[0]
         self.assertEqual(card['key'], 'panel:' + str(panel.pk))

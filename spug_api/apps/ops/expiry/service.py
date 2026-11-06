@@ -9,6 +9,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.account.models import User
+from apps.account import access
 from apps.host.models import Host, HostExtend
 from apps.baota.models import Panel, ResourceMonitorPreference
 from . import assets, dates
@@ -20,12 +21,8 @@ EDIT_FIELDS = {'version', 'manual_expiry', 'owner_id', 'followup', 'reminder_ena
 STATES = {'expired', 'within_7', 'within_30', 'valid', 'unset', 'invalid', 'exempt'}
 
 
-def require_admin(user, lock=False):
-    query = User.objects.select_for_update() if lock else User.objects
-    admin = query.filter(pk=getattr(user, 'pk', None), is_active=True, is_deleted=False, is_supper=True).first()
-    if admin is None:
-        raise PermissionError('仅活跃超级管理员可访问到期管理')
-    return admin
+def require_admin(user, lock=False, action='view'):
+    return access.require(user, 'ops.expiry.' + action, lock=lock)
 
 
 def strict(values, allowed):
@@ -72,8 +69,9 @@ def check_status():
 def options(user):
     require_admin(user)
     return {'owners': [{'id': owner.pk, 'name': owner.nickname or owner.username}
-                       for owner in User.objects.filter(is_active=True, is_deleted=False).order_by('pk')],
-            'groups': assets.group_options(), 'timezone': settings.TIME_ZONE, 'today': dates.platform_today().isoformat(),
+                       for owner in User.objects.filter(is_active=True, is_deleted=False).order_by('pk')
+                       if user.is_supper or owner.pk == user.pk],
+            'groups': assets.group_options(user), 'timezone': settings.TIME_ZONE, 'today': dates.platform_today().isoformat(),
             'schedule': '09:00', 'check': check_status()}
 
 
@@ -93,7 +91,7 @@ def listing(user, params):
         raise ValueError('跟进状态筛选无效')
     owner_id = positive(params['owner_id']) if 'owner_id' in params else None
     groups = assets.descendants(params['group']) if 'group' in params else None
-    rows = list(assets.inventory().values())
+    rows = list(assets.inventory(user).values())
     query = query.strip().casefold()
     rows = [row for row in rows if
             (not query or query in (row['name'] + ' ' + row['address'] + ' ' +
@@ -201,8 +199,14 @@ def save(user, key, data, renew=False):
             raise ValueError('提醒与无需管理必须为布尔值')
     with transaction.atomic():
         lock_decisions()
-        actor = require_admin(user, lock=True)
+        actor = require_admin(user, lock=True, action='edit')
+        access.require_source(user, key, manage=True)
         row = lock_asset(key)
+        visible = assets.inventory(user).get(key)
+        if visible is None or visible['sources'] != row['sources']:
+            raise ValueError('该资产包含未授权关联来源，请由管理员维护到期信息')
+        for source in row['sources']:
+            access.require_resources(actor, source['kind'], [source['id']], manage=True)
         if row['version'] != data['version']:
             raise ValueError('资产记录、到期日或关联已变化，请刷新后重试')
         metadata, _ = ExpiryMetadata.objects.get_or_create(asset_key=key)
@@ -213,6 +217,9 @@ def save(user, key, data, renew=False):
                 raise ValueError('续费到期日必须晚于今天及当前有效到期日')
             metadata.manual_expiry, metadata.followup, metadata.note = new_date, 'pending', data['note']
         else:
+            existing_owner = row['owner']['id'] if row['owner'] else None
+            if not actor.is_supper and data['owner_id'] not in (None, actor.pk, existing_owner):
+                raise ValueError('仅管理员可指定其他账号为负责人')
             validate_owner(data['owner_id'])
             metadata.manual_expiry = new_date
             for field in ('owner_id', 'followup', 'reminder_enabled', 'exempt', 'note'):
@@ -222,11 +229,16 @@ def save(user, key, data, renew=False):
         ExpiryAudit.objects.create(asset_key=key, event='renew' if renew else 'update',
                                    actor_id=actor.pk, actor_name=actor.nickname or actor.username,
                                    detail={'before': before, 'after': assets.metadata_values(metadata)})
-        return assets.inventory()[key]
+        return assets.inventory(user)[key]
 
 
 def history(user, key, params):
-    require_admin(user)
+    current = require_admin(user)
+    if not current.is_supper:
+        access.require_source(user, key)
+        all_row, visible = assets.inventory().get(key), assets.inventory(user).get(key)
+        if not visible or not all_row or visible['sources'] != all_row['sources']:
+            raise ValueError('历史包含未授权关联来源，请由管理员查看')
     assets.parse_key(key)
     strict(params, ('page', 'page_size'))
     page, page_size = pagination(params)

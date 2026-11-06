@@ -18,6 +18,53 @@ from . import collectors, remote_probe, tls
 
 
 class AdapterContractTests(TestCase):
+    def test_idle_host_probe_rechecks_authorization_without_poll_flooding(self):
+        from libs.worker_authorization import guard
+        channel = mock.MagicMock()
+        channel.recv_ready.return_value = False
+        channel.recv_stderr_ready.return_value = False
+        channel.exit_status_ready.return_value = False
+        clock, active, checks = [0], [True], []
+        def authorize():
+            checks.append(clock[0])
+            if not active[0]:
+                raise PermissionError('revoked')
+        def idle(_):
+            clock[0] += .02
+            active[0] = False
+        with mock.patch.object(collectors.time, 'monotonic', side_effect=lambda: clock[0]), \
+                mock.patch.object(collectors.time, 'sleep', side_effect=idle), guard(authorize):
+            with self.assertRaises(PermissionError):
+                collectors._read_output(channel, 100)
+        self.assertLess(len(checks), 5)
+        self.assertLess(clock[0], 2)
+
+    def test_revocation_before_dns_prevents_resolution(self):
+        from libs.worker_authorization import guard
+        active = [True]
+        def authorize():
+            if not active[0]:
+                raise PermissionError('revoked')
+        with guard(authorize), mock.patch.object(tls.socket, 'getaddrinfo') as resolve:
+            active[0] = False
+            with self.assertRaises(PermissionError):
+                tls._public_addresses('example.com', 443)
+        resolve.assert_not_called()
+
+    def test_revocation_after_probe_start_prevents_sending_renewal_payload(self):
+        from libs.worker_authorization import guard
+        channel, ssh = mock.MagicMock(), mock.MagicMock()
+        ssh.arguments = {}
+        ssh.get_client.return_value.get_transport.return_value.open_session.return_value = channel
+        active = [True]
+        def authorize():
+            if not active[0]:
+                raise PermissionError('revoked')
+        channel.exec_command.side_effect = lambda command: active.__setitem__(0, False)
+        with mock.patch.object(collectors, '_read_output', return_value={}), guard(authorize), self.assertRaises(PermissionError):
+            collectors._host_transport(SimpleNamespace(get_ssh=lambda: ssh), 'renew', {'fixture': True})
+        channel.sendall.assert_not_called()
+
     def test_discovery_and_renewal_contract_exists(self):
         for module, names in ((collectors, ('discover', 'renew_host', 'public_certificate')),
                               (remote_probe, ('scan', 'renew')), (tls, ('check_tls', 'normalize_domain'))):

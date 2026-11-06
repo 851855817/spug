@@ -102,23 +102,28 @@ class OpsWorker:
             return False
         target = OpsTarget.objects.select_related('run__created_by', 'host').get(pk=target_id)
         try:
-            service.require_admin(target.run.created_by)
+            service.authorized_run(target.run.created_by, target.run, 'create', manage=True)
         except ValueError:
             self.finish(target_id, [], 'permission_denied')
             return True
-        if target.host is None or not hmac.compare_digest(target.identity_digest, service.identity(target.host)):
-            self.finish(target_id, [], 'host_changed')
-            return True
         try:
+            if target.host is None or not hmac.compare_digest(target.identity_digest, service.identity(target.host)):
+                self.finish(target_id, [], 'host_changed')
+                return True
             current = catalogue.get_job(target.run.job)
             if current['version'] != target.run.version:
                 raise ProbeError('check_error')
             # A claim is the dispatch boundary: cancellation may drain this
             # bounded read-only call, but no pending target will be claimed.
+            target.host.resource_guard = lambda: service.authorized_run(
+                target.run.created_by_id, target.run, 'create', manage=True)
             checks = self.probe(target.host, target.run.job, target.run.params)
+            target.host.resource_guard()
             self.finish(target_id, checks)
         except ProbeError as exc:
             self.finish(target_id, [], exc.category, uncertain=exc.uncertain, message=str(exc))
+        except PermissionError:
+            self.finish(target_id, [], 'permission_denied')
         except Exception:
             self.finish(target_id, [], 'check_error')
         return True

@@ -7,6 +7,7 @@ from django.conf import settings
 from django.db import transaction
 
 from apps.host.models import Group, Host
+from apps.account import access
 from . import catalogue
 from .models import OpsAudit, OpsBaseline, OpsRun, OpsTarget
 
@@ -24,9 +25,53 @@ def timestamp(value):
     return value.isoformat(timespec='seconds') if value else None
 
 
-def require_admin(user):
-    if not user or not user.is_supper or not user.is_active or user.is_deleted:
-        raise ValueError('仅超级管理员可使用运维作业')
+def require_admin(user, action='view'):
+    return access.require(user, 'ops.job.' + action)
+
+
+def run_host_ids(run):
+    targets = list(run.targets.values_list('host_id', 'host_snapshot'))
+    if not targets:
+        raise ValueError('作业目标清单无效')
+    ids = [pk or snapshot.get('id') for pk, snapshot in targets]
+    return access.identifiers(ids)
+
+
+def authorized_run(user, run, action='view', manage=False):
+    current = require_admin(user, action)
+    if not current.is_supper and run.created_by_id != current.pk:
+        access.reject(current, '作业不存在或无权访问')
+    if not current.is_supper or manage:
+        ids = run_host_ids(run)
+        if current.is_supper:
+            ids = set(Host.objects.filter(pk__in=ids).values_list('pk', flat=True))
+        access.require_resources(current, 'host', list(ids), manage=manage)
+    return run
+
+
+def visible_runs(user):
+    current = require_admin(user)
+    qs = OpsRun.objects.all()
+    if current.is_supper:
+        return qs
+    allowed = access.allowed_ids(current, 'host')
+    visible = []
+    for run in qs.filter(created_by=current).prefetch_related('targets'):
+        try:
+            ids = run_host_ids(run)
+            if ids.issubset(allowed):
+                visible.append(run.pk)
+        except ValueError:
+            continue
+    return qs.filter(pk__in=visible)
+
+
+def visible_baselines(user):
+    current = require_admin(user)
+    qs = OpsBaseline.objects.all()
+    if current.is_supper:
+        return qs
+    return qs.filter(created_by=current, target__run_id__in=visible_runs(current).values('pk'))
 
 
 def positive(value, label='编号'):
@@ -48,9 +93,10 @@ def identity(host):
     return hmac.new(settings.SECRET_KEY.encode(), payload, hashlib.sha256).hexdigest()
 
 
-def host_view(host):
+def host_view(host, user=None):
     return {'id': host.id, 'name': host.name, 'hostname': host.hostname,
-            'group_ids': sorted(group.id for group in host.groups.all())}
+            'group_ids': sorted(group.id for group in host.groups.all()
+                                if user is None or group.id in access.group_ids(user, 'host'))}
 
 
 def audit(run, event, user=None, detail=None):
@@ -59,7 +105,7 @@ def audit(run, event, user=None, detail=None):
 
 @transaction.atomic
 def create_run(user, data):
-    require_admin(user)
+    user = require_admin(user, 'create')
     if not isinstance(data, dict) or data.get('confirmed') is not True:
         raise ValueError('请确认只读检查范围后创建作业')
     if set(data) - {'job', 'host_ids', 'group_ids', 'params', 'batch_size', 'failure_threshold', 'confirmed', 'execution_mode'}:
@@ -80,6 +126,7 @@ def create_run(user, data):
             raise ValueError('批次大小为 1–10，失败阈值不能超过批次大小')
     selected = id_list(data.get('host_ids', []))
     selected_groups = id_list(data.get('group_ids', []))
+    access.require_groups(user, 'host', list(selected_groups))
     groups = {x.id: x for x in Group.objects.all()}
     if selected_groups - groups.keys():
         raise ValueError('主机分组不存在，请刷新后重试')
@@ -89,9 +136,10 @@ def create_run(user, data):
         selected_groups.update(children)
         frontier = children
     if selected_groups:
-        selected.update(Host.objects.filter(groups__id__in=selected_groups).values_list('id', flat=True))
+        selected.update(access.scope(user, 'host').filter(groups__id__in=selected_groups).values_list('id', flat=True))
     if not selected or len(selected) > 50:
         raise ValueError('每次作业必须选择 1–50 台主机')
+    access.require_resources(user, 'host', list(selected), manage=True)
     hosts = list(Host.objects.select_for_update().filter(id__in=selected).prefetch_related('groups').order_by('id'))
     if len(hosts) != len(selected):
         raise ValueError('主机不存在，请刷新后重试')
@@ -112,7 +160,17 @@ def target_view(target):
             'started_at': timestamp(target.started_at), 'finished_at': timestamp(target.finished_at)}
 
 
-def run_view(run, detail=True):
+def scoped_snapshot(snapshot, user=None):
+    result = copy.deepcopy(snapshot)
+    if user is not None:
+        groups = access.group_ids(user, 'host')
+        result['group_ids'] = [pk for pk in result.get('group_ids', []) if pk in groups]
+    return result
+
+
+def run_view(run, detail=True, user=None):
+    if user is not None:
+        authorized_run(user, run)
     targets = list(run.targets.all())
     counts = {state: sum(x.state == state for x in targets) for state in STATES}
     counts['total'] = len(targets)
@@ -126,6 +184,9 @@ def run_view(run, detail=True):
                 'created_by': run.created_by_id}
     if detail:
         response['targets'] = [target_view(x) for x in targets]
+        if user is not None:
+            for target in response['targets']:
+                target['host'] = scoped_snapshot(target['host'], user)
         response['audit'] = [{'id': x.id, 'event': x.event, 'actor_id': x.actor_id,
                               'created_at': timestamp(x.created_at), 'detail': x.detail} for x in run.audit.all()]
     return response
@@ -133,8 +194,8 @@ def run_view(run, detail=True):
 
 @transaction.atomic
 def continue_run(user, run_id, data):
-    require_admin(user)
     run = OpsRun.objects.select_for_update().get(pk=positive(run_id))
+    authorized_run(user, run, 'continue', manage=True)
     if run.cancel_requested or run.state not in ('paused', 'tripped'):
         raise ValueError('仅暂停或熔断作业可继续')
     if run.state == 'tripped' and data.get('acknowledge') is not True:
@@ -149,8 +210,8 @@ def continue_run(user, run_id, data):
 
 @transaction.atomic
 def cancel_run(user, run_id):
-    require_admin(user)
     run = OpsRun.objects.select_for_update().get(pk=positive(run_id))
+    authorized_run(user, run, 'cancel', manage=True)
     if run.state in ('completed', 'cancelled'):
         raise ValueError('作业已结束')
     run.cancel_requested = True
@@ -161,16 +222,18 @@ def cancel_run(user, run_id):
     return run
 
 
-def baseline_view(baseline):
+def baseline_view(baseline, user=None):
+    if user is not None and not visible_baselines(user).filter(pk=baseline.pk).exists():
+        access.reject(user, '基线不存在或无权访问')
     return {'id': baseline.id, 'name': baseline.name, 'job': baseline.job, 'version': baseline.version,
-            'params': baseline.params, 'host': baseline.host_snapshot, 'checks': baseline.checks,
+            'params': baseline.params, 'host': scoped_snapshot(baseline.host_snapshot, user), 'checks': baseline.checks,
             'created_at': timestamp(baseline.created_at), 'run_id': baseline.target.run_id, 'target_id': baseline.target_id}
 
 
 @transaction.atomic
 def create_baseline(user, data):
-    require_admin(user)
     run = OpsRun.objects.select_for_update().get(pk=positive(data.get('run_id')))
+    authorized_run(user, run, 'baseline', manage=True)
     target = run.targets.select_for_update().get(pk=positive(data.get('target_id')))
     name = data.get('name')
     if not isinstance(name, str) or not name.strip() or len(name) > 100:
@@ -185,7 +248,11 @@ def create_baseline(user, data):
     return baseline
 
 
-def diff_run(run, baseline_id):
+def diff_run(run, baseline_id, user=None):
+    if user is not None:
+        authorized_run(user, run)
+        if not visible_baselines(user).filter(pk=baseline_id).exists():
+            access.reject(user, '基线不存在或无权访问')
     baseline = OpsBaseline.objects.select_related('target').get(pk=positive(baseline_id))
     if (run.job, run.version, run.params) != (baseline.job, baseline.version, baseline.params):
         raise ValueError('只能比较相同作业、代码版本及参数的基线')
@@ -206,5 +273,5 @@ def diff_run(run, baseline_id):
                 state = 'same' if old['value'] == new['value'] else 'changed'
             changes.append({'key': key, 'label': label, 'before': old['value'] if old_known else None,
                             'after': new['value'] if new_known else None, 'state': state})
-        items.append({'host': target.host_snapshot, 'state': target.state, 'changes': changes})
-    return {'baseline': baseline_view(baseline), 'items': items}
+        items.append({'host': scoped_snapshot(target.host_snapshot, user), 'state': target.state, 'changes': changes})
+    return {'baseline': baseline_view(baseline, user=user), 'items': items}
