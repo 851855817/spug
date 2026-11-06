@@ -1,0 +1,4 @@
+.item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; }
+.item > span { min-width: 0; overflow-wrap: anywhere; }
+.item small { display: block; color: var(--kops-muted); font-size: 12px; }
+.item button { flex-shrink: 0; }

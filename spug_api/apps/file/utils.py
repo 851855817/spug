@@ -13,9 +13,28 @@ TB = 1024 * 1024 * 1024 * 1024
 
 
 class FileResponseAfter(FileResponse):
-    def __init__(self, callback, *args, **kwargs):
+    def __init__(self, callback, *args, user=None, host_id=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.callback = callback
+        if user is not None:
+            stream = self.streaming_content
+            def authorized_chunks():
+                from apps.account import access
+                try:
+                    iterator = iter(stream)
+                    while True:
+                        access.require(user, 'host.console.list')
+                        access.require_resources(user, 'host', [host_id])
+                        try:
+                            chunk = next(iterator)
+                        except StopIteration:
+                            break
+                        access.require(user, 'host.console.list')
+                        access.require_resources(user, 'host', [host_id])
+                        yield chunk
+                finally:
+                    self.close()
+            self.streaming_content = authorized_chunks()
 
     def close(self):
         super().close()
@@ -70,8 +89,15 @@ def format_size(size):
         return ''
 
 
-def fetch_dir_list(host, path):
-    with host.get_ssh() as ssh:
+def fetch_dir_list(host, path, user=None):
+    def authorize():
+        if user is not None:
+            from apps.account import access
+            access.require(user, 'host.console.list')
+            access.require_resources(user, 'host', [host.pk])
+    authorize()
+    with host.get_ssh(authorize=authorize) as ssh:
+        authorize()
         objects = []
         for item in ssh.list_dir_attr(path):
             code = parse_mode(item)
@@ -79,6 +105,7 @@ def fetch_dir_list(host, path):
             if stat.S_ISLNK(item.st_mode):
                 is_link = True
                 try:
+                    authorize()
                     item = ssh.sftp_stat(os.path.join(path, name))
                 except FileNotFoundError:
                     pass

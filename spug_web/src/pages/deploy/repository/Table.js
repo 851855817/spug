@@ -40,7 +40,7 @@ function ComTable() {
     return (
       <Table resizeKey="pages/deploy/repository/Table:1" rowKey="id" dataSource={record.child} pagination={false}>
         <Table.Column title={t('版本')} render={info => (
-          <div style={{color: '#1890ff', cursor: 'pointer'}} onClick={() => store.showDetail(info)}>{info.version}</div>
+          <div style={{color: 'var(--kops-primary)', cursor: 'pointer'}} onClick={() => store.showDetail(info)}>{info.version}</div>
         )}/>
         <Table.Column title={t('环境')} dataIndex="env_name"/>
         <Table.Column title={t('构建时间')} dataIndex="created_at"/>

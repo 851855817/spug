@@ -4,10 +4,34 @@
 from libs.utils import human_datetime
 from libs.spug import Notification
 import json
+from .models import Task
+
+
+def _notification_scope(task):
+    from . import resources, panel_tasks
+    from apps.account import access
+    task = Task.objects.get(pk=task.pk)
+    access.require(task.created_by_id, 'schedule.schedule.view', 'schedule.schedule.run')
+    scope = dict(user=task.created_by_id, permission='schedule.schedule.view', host_ids=[], panel_ids=[])
+    if task.interpreter == 'baota':
+        panel_tasks.access(task.created_by_id, task, 'run')
+        access.require(task.created_by_id, 'exec.panel.create', 'exec.panel.execute')
+        scope['panel_ids'] = panel_tasks.definition(task)['panel_ids']
+    else:
+        resources.authorized(task.created_by_id, task, 'run')
+        scope['host_ids'] = sorted({int(pk) for pk in json.loads(task.targets) if str(pk).isdigit()}
+                                   | resources.definition_scope(task.created_by_id, task, manage=True))
+        if task.latest_id:
+            resources.history_access(task.created_by_id, task.latest_id, manage=True)
+    return task, scope
 
 
 def send_fail_notify(task, msg=None):
-    rst_notify = json.loads(task.rst_notify)
+    try:
+        task, _ = _notification_scope(task)
+    except (ValueError, PermissionError, Task.DoesNotExist):
+        return
+    rst_notify = json.loads(task.rst_notify or '{"mode":"0"}')
     mode = rst_notify.get('mode')
     url = rst_notify.get('value')
     if mode != '0' and url:
@@ -15,6 +39,21 @@ def send_fail_notify(task, msg=None):
 
 
 def _do_notify(task, mode, url, msg):
+    try:
+        task, _ = _notification_scope(task)
+    except (ValueError, PermissionError, Task.DoesNotExist):
+        return
+
+    def send(data, channel=None):
+        try:
+            current, scope = _notification_scope(task)
+            saved = json.loads(current.rst_notify or '{"mode":"0"}')
+            if saved.get('mode') != mode or saved.get('value') != url:
+                return
+        except (ValueError, PermissionError, Task.DoesNotExist):
+            return
+        return Notification.handle_request(url, data, channel, scope=scope)
+
     if mode == '1':
         texts = [
             '## <font color="#f90202">任务执行失败通知</font> ## ',
@@ -34,7 +73,7 @@ def _do_notify(task, mode, url, msg):
                 'isAtAll': True
             }
         }
-        Notification.handle_request(url, data, 'dd')
+        send(data, 'dd')
     elif mode == '2':
         data = {
             'task_id': task.id,
@@ -43,7 +82,7 @@ def _do_notify(task, mode, url, msg):
             'message': msg or '请在任务计划执行历史中查看详情',
             'created_at': human_datetime()
         }
-        Notification.handle_request(url, data)
+        send(data)
     elif mode == '3':
         texts = [
             '## <font color="warning">任务执行失败通知</font>',
@@ -59,7 +98,7 @@ def _do_notify(task, mode, url, msg):
                 'content': '\n'.join(texts)
             }
         }
-        Notification.handle_request(url, data, 'wx')
+        send(data, 'wx')
     elif mode == '4':
         data = {
             'msg_type': 'post',
@@ -78,4 +117,4 @@ def _do_notify(task, mode, url, msg):
                 }
             }
         }
-        Notification.handle_request(url, data, 'fs')
+        send(data, 'fs')

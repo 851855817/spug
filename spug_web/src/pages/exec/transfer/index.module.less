@@ -2,13 +2,13 @@
   display: flex;
   height: calc(100vh - 218px);
   min-height: 500px;
-  background-color: #fff;
+  background-color: var(--kops-surface);
   overflow: hidden;
 
   .left {
     padding: 24px;
     width: 60%;
-    border-right: 1px solid #dfdfdf;
+    border-right: 1px solid var(--kops-border);
 
     .table {
       max-height: calc(100vh - 600px);
@@ -23,7 +23,7 @@
 
     .tips {
       font-size: 12px;
-      color: #999;
+      color: var(--kops-muted);
     }
 
     :global(.ant-table-tbody) {
@@ -44,7 +44,7 @@
     max-width: 600px;
     display: flex;
     flex-direction: column;
-    background-color: #fafafa;
+    background-color: var(--kops-raised);
     padding: 24px 24px 0 24px;
 
     .title {
@@ -70,16 +70,16 @@
         align-items: center;
         width: 20px;
         height: 20px;
-        color: #fff;
+        color: var(--kops-on-primary);
         border-radius: 2px;
-        background-color: #1890ff;
+        background-color: var(--kops-primary);
       }
 
       .upload {
         display: flex;
         justify-content: center;
         align-items: center;
-        color: #fff;
+        color: var(--kops-on-primary);
         width: 20px;
         height: 20px;
         border-radius: 2px;
@@ -92,7 +92,7 @@
         margin-left: 12px;
         border-radius: 2px;
         font-weight: 500;
-        background-color: #dfdfdf;
+        background-color: var(--kops-border);
       }
 
       .command {
@@ -104,20 +104,20 @@
       }
 
       .desc {
-        color: #999;
+        color: var(--kops-muted);
       }
     }
 
     .item:hover {
-      border-color: #1890ff;
-      background-color: #e6f7ff;
+      border-color: var(--kops-primary);
+      background-color: var(--kops-selected);
     }
   }
 }
 
 .output {
   display: flex;
-  background-color: #fff;
+  background-color: var(--kops-surface);
   height: calc(100vh - 218px);
   overflow: hidden;
 
@@ -125,7 +125,7 @@
     display: flex;
     flex-direction: column;
     width: 300px;
-    border-right: 1px solid #dfdfdf;
+    border-right: 1px solid var(--kops-border);
 
     .tags {
       padding: 0 24px 24px;
@@ -140,54 +140,52 @@
         border-radius: 35px;
         padding: 2px 8px;
         cursor: pointer;
-        background-color: #f3f3f3;
-        color: #666;
+        background-color: var(--kops-raised);
+        color: var(--kops-muted);
         user-select: none;
       }
 
       .pendingOn {
-        background-color: #1890ff;
-        color: #fff;
+        background-color: var(--kops-primary);
+        color: var(--kops-on-primary);
       }
 
       .pending {
-        color: #1890ff;
+        color: var(--kops-primary);
       }
 
       .pending:hover {
-        background-color: #1890ff;
+        background-color: var(--kops-primary);
         opacity: 0.7;
-        color: #fff;
+        color: var(--kops-on-primary);
       }
 
       .successOn {
-        background-color: #52c41a;
-        color: #fff;
+        background-color: var(--kops-success-bg);
+        color: var(--kops-success);
       }
 
       .success {
-        color: #52c41a;
+        color: var(--kops-success);
       }
 
       .success:hover {
-        background-color: #52c41a;
-        opacity: 0.7;
-        color: #fff;
+        background-color: var(--kops-success-bg);
+        color: var(--kops-success);
       }
 
       .failOn {
-        background-color: red;
-        color: #fff;
+        background-color: var(--kops-error-bg);
+        color: var(--kops-error);
       }
 
       .fail {
-        color: red;
+        color: var(--kops-error);
       }
 
       .fail:hover {
-        background-color: red;
-        opacity: 0.6;
-        color: #fff;
+        background-color: var(--kops-error-bg);
+        color: var(--kops-error);
       }
     }
 
@@ -203,7 +201,7 @@
         cursor: pointer;
 
         &.active {
-          background: #e6f7ff;
+          background: var(--kops-selected);
         }
 
         :global(.anticon) {
@@ -219,7 +217,7 @@
       }
 
       .item:hover {
-        background: #e6f7ff;
+        background: var(--kops-selected);
       }
     }
   }
@@ -238,7 +236,7 @@
 
       .icon {
         font-size: 18px;
-        color: #1890ff;
+        color: var(--kops-primary);
         cursor: pointer;
       }
 

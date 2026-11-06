@@ -12,7 +12,7 @@ import {
   CloudServerOutlined,
   BulbOutlined,
 } from '@ant-design/icons';
-import { Form, Button, Tooltip, Space, Card, Input, Upload, message } from 'antd';
+import { Alert, Form, Button, Tooltip, Space, Card, Input, Upload, message } from 'antd';
 import Table from 'components/ResizableTable';
 import { AuthDiv, Breadcrumb } from 'components';
 import HostSelector from 'pages/host/Selector';
@@ -21,8 +21,10 @@ import { http, uniqueId, t } from 'libs';
 import moment from 'moment';
 import store from './store';
 import style from './index.module.less';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 function TransferIndex() {
+  const access = useResourceAccess();
   const [loading, setLoading] = useState(false)
   const [files, setFiles] = useState([])
   const [dir, setDir] = useState('')
@@ -30,6 +32,10 @@ function TransferIndex() {
   const [percent, setPercent] = useState()
   const [token, setToken] = useState()
   const [histories, setHistories] = useState([])
+  const sourcesAllowed = files.filter(item => item.type === 'host').every(item => access.canManage('host', item.host_id, 'exec.transfer.do'));
+  const canExecute = sourcesAllowed && access.canAll('host', hosts.map(host => host.id), 'exec.transfer.do');
+  const blockedByAccess = !sourcesAllowed || !access.has('exec.transfer.do') ||
+    hosts.some(host => !access.canManage('host', host.id, 'exec.transfer.do'));
 
   useEffect(() => {
     if (!loading) {
@@ -45,6 +51,7 @@ function TransferIndex() {
   }
 
   function handleSubmit() {
+    if (!canExecute) return;
     const formData = new FormData();
     if (files.length === 0) return message.error(t('请添加数据源'))
     if (!dir) return message.error(t('请输入目标路径'))
@@ -121,7 +128,7 @@ function TransferIndex() {
         <Card type="inner" title={files.length ? t('数据源（{}）', files.length) : t('数据源')} extra={(<Space size={24}>
           <Upload multiple beforeUpload={handleUpload}><Space
             className="btn"><UploadOutlined/>{t('上传本地文件')}</Space></Upload>
-          <HostSelector onlyOne mode="rows" onChange={row => makeFile(row)}>
+          <HostSelector permission="exec.transfer.do" onlyOne mode="rows" onChange={row => makeFile(row)}>
             <Space className="btn"><CloudServerOutlined/>{t('添加主机文件')}</Space>
           </HostSelector>
         </Space>)}>
@@ -145,12 +152,14 @@ function TransferIndex() {
               <Input value={dir} onChange={e => setDir(e.target.value)} placeholder={t('请输入目标路径')}/>
             </Form.Item>
             <Form.Item required label={t('目标主机')}>
-              <HostSelector type="button" mode="rows" value={hosts.map(x => x.id)} onChange={rows => setHosts(rows)}/>
+              <HostSelector permission="exec.transfer.do" type="button" mode="rows" value={hosts.map(x => x.id)} onChange={rows => setHosts(rows)}/>
             </Form.Item>
           </Form>
         </Card>
 
-        <Button loading={loading} icon={<ThunderboltOutlined/>} type="primary" onClick={() => handleSubmit()}>
+        {blockedByAccess && <Alert showIcon type="warning" style={{marginBottom: 12}}
+          message="来源或目标包含只读或未授权主机，无法分发。已保留全部选择，请调整选择或联系管理员授权。"/>}
+        <Button loading={loading} disabled={!canExecute} icon={<ThunderboltOutlined/>} type="primary" onClick={() => handleSubmit()}>
           {percent ? t('上传中 {}%', percent) : t('开始执行')}
         </Button>
       </div>
@@ -159,7 +168,7 @@ function TransferIndex() {
         <div className={style.title}>
           {t('分发记录')}
           <Tooltip title={t('每天自动清理，每个账户保留最近10条记录。')}>
-            <QuestionCircleOutlined style={{color: '#999', marginLeft: 8}}/>
+            <QuestionCircleOutlined style={{color: 'var(--kops-muted)', marginLeft: 8}}/>
           </Tooltip>
         </div>
         <div className={style.inner}>

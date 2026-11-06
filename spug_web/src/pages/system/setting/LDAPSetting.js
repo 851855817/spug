@@ -70,14 +70,14 @@ export default observer(function () {
         </Form.Item>
 
         <Form.Item required name="admin_dn" label={t('绑定DN')}  >
-          <Input placeholder={t('例如：cn=admin,dc=spug,dc=cc')} />
+          <Input placeholder={t('例如：cn=admin,dc=example,dc=com')} />
         </Form.Item>
         <Form.Item required name="admin_password" label={t('密码')}>
           <Input.Password placeholder={t('LDAP管理密码')} />
         </Form.Item>
 
         <Form.Item required name="user_ou" label={t('用户OU')}>
-          <Input placeholder={t('例如：ou=users,dc=spug,dc=cc')} />
+          <Input placeholder={t('例如：ou=users,dc=example,dc=com')} />
         </Form.Item>
 
         <Form.Item required name="user_filter" label={t('用户过滤器')}>
@@ -87,10 +87,10 @@ export default observer(function () {
           <Input.TextArea row={4} placeholder="例如：" />
         </Form.Item> */}
 
-        <Form.Item required name="map_username" label={t('登录名映射')} extra={t('登录名映射代表将LDAP用户的某个属性映射到Spug账户的登录名中，例如cn对应登录名')}>
+        <Form.Item required name="map_username" label={t('登录名映射')} extra={t('登录名映射代表将LDAP用户的某个属性映射到平台账户的登录名中，例如cn对应登录名')}>
           <Input placeholder={t('例如：cn')} />
         </Form.Item>
-        <Form.Item required name="map_nickname" label={t('姓名映射')} extra={t('姓名映射代表将LDAP用户的某个属性映射到Spug账户的姓名中，例如sn对应姓名')}>
+        <Form.Item required name="map_nickname" label={t('姓名映射')} extra={t('姓名映射代表将LDAP用户的某个属性映射到平台账户的姓名中，例如sn对应姓名')}>
           <Input placeholder={t('例如：sn')} />
         </Form.Item>
         <Space>

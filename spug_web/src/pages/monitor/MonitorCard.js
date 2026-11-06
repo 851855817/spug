@@ -12,11 +12,11 @@ import styles from './index.module.less';
 import store from './store';
 
 const StyleMap = {
-  '0': {background: '#99999933', border: '1px solid #999', color: '#999999'},
-  '1': {background: '#16a98733', border: '1px solid #16a987', color: '#16a987'},
-  '2': {background: '#ffba0033', border: '1px solid #ffba00', color: '#ffba00'},
-  '3': {background: '#f2655d33', border: '1px solid #f2655d', color: '#f2655d'},
-  '10': {background: '#99999919', border: '1px dashed #999999', color: '#999999'}
+  '0': {background: 'var(--kops-subtle)', border: '1px solid var(--kops-border)', color: 'var(--kops-muted)'},
+  '1': {background: 'var(--kops-success-bg)', border: '1px solid var(--kops-success)', color: 'var(--kops-success)'},
+  '2': {background: 'var(--kops-warning-bg)', border: '1px solid var(--kops-warning)', color: 'var(--kops-warning)'},
+  '3': {background: 'var(--kops-error-bg)', border: '1px solid var(--kops-error)', color: 'var(--kops-error)'},
+  '10': {background: 'var(--kops-subtle)', border: '1px dashed var(--kops-border)', color: 'var(--kops-muted)'}
 }
 
 const StatusMap = {
@@ -99,7 +99,7 @@ function MonitorCard() {
               <Tooltip key={s} title={StatusMap[s]}>
                 <div
                   className={styles.item}
-                  style={s === status ? style : {...style, background: '#fff'}}
+                  style={s === status ? style : {...style, background: 'var(--kops-surface)'}}
                   onClick={() => setStatus(s === status ? '' : s)}>
                   {store.ovDataSource.filter(x => x.status === s).length}
                 </div>
@@ -108,7 +108,7 @@ function MonitorCard() {
           })}
           <Tooltip title={t('自动刷新')}>
             <div className={styles.autoLoad} onClick={handleAutoReload}>
-              {autoReload ? <SyncOutlined spin style={{color: '#2563fc'}}/> : <ReloadOutlined/>}
+              {autoReload ? <SyncOutlined spin style={{color: 'var(--kops-primary)'}}/> : <ReloadOutlined/>}
             </div>
           </Tooltip>
         </div>

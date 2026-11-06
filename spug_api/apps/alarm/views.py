@@ -7,19 +7,21 @@ from libs.spug import Notification
 from apps.alarm.models import Alarm, Group, Contact
 from apps.monitor.models import Detection
 import json
+from . import resources
+from apps.account import access
 
 
 class AlarmView(View):
     @auth('alarm.alarm.view')
     def get(self, request):
-        alarms = Alarm.objects.all()
+        alarms = resources.visible(request.user)
         return json_response(alarms)
 
 
 class GroupView(View):
     @auth('alarm.group.view|monitor.monitor.add|monitor.monitor.edit|alarm.alarm.view')
     def get(self, request):
-        groups = Group.objects.all()
+        groups = resources.owned(request.user, Group.objects.all())
         return json_response(groups)
 
     @auth('alarm.group.add|alarm.group.edit')
@@ -31,8 +33,11 @@ class GroupView(View):
             Argument('desc', required=False)
         ).parse(request.body)
         if error is None:
+            access.require(request.user, 'alarm.group.edit' if form.id else 'alarm.group.add')
+            resources.require_owned(request.user, Contact, form.contacts)
             form.contacts = json.dumps(form.contacts)
             if form.id:
+                resources.require_owned(request.user, Group, [form.id])
                 Group.objects.filter(pk=form.id).update(**form)
             else:
                 form.created_by = request.user
@@ -45,7 +50,9 @@ class GroupView(View):
             Argument('id', type=int, help='请指定操作对象')
         ).parse(request.GET)
         if error is None:
-            detection = Detection.objects.filter(notify_grp__regex=fr'[^0-9]{form.id}[^0-9]').first()
+            resources.require_owned(request.user, Group, [form.id])
+            from apps.monitor.resources import visible
+            detection = visible(request.user).filter(notify_grp__regex=fr'[^0-9]{form.id}[^0-9]').first()
             if detection:
                 return json_response(error=f'监控任务【{detection.name}】正在使用该报警组，请解除关联后再尝试删除该联系组')
             Group.objects.filter(pk=form.id).delete()
@@ -55,7 +62,7 @@ class GroupView(View):
 class ContactView(View):
     @auth('alarm.contact.view|alarm.group.view')
     def get(self, request):
-        contacts = Contact.objects.all()
+        contacts = resources.owned(request.user, Contact.objects.all())
         return json_response(contacts)
 
     @auth('alarm.contact.add|alarm.contact.edit')
@@ -72,7 +79,9 @@ class ContactView(View):
             Argument('secret', required=False),
         ).parse(request.body)
         if error is None:
+            access.require(request.user, 'alarm.contact.edit' if form.id else 'alarm.contact.add')
             if form.id:
+                resources.require_owned(request.user, Contact, [form.id])
                 Contact.objects.filter(pk=form.id).update(**form)
             else:
                 form.created_by = request.user
@@ -85,7 +94,8 @@ class ContactView(View):
             Argument('id', type=int, help='请指定操作对象')
         ).parse(request.GET)
         if error is None:
-            group = Group.objects.filter(contacts__contains=f'\"{form.id}\"').first()
+            resources.require_owned(request.user, Contact, [form.id])
+            group = resources.owned(request.user, Group.objects.all()).filter(contacts__contains=f'\"{form.id}\"').first()
             if group:
                 return json_response(error=f'报警联系组【{group.name}】包含此联系人，请解除关联后再尝试删除该联系人')
             Contact.objects.filter(pk=form.id).delete()

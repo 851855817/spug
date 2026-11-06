@@ -138,9 +138,12 @@ class BaotaAPITests(TestCase):
 
     def test_read_only_user_can_list_but_cannot_modify(self):
         record = self.panel()
-        self.authenticate(self.make_user('reader', perms={'panel': ['view']}))
+        reader = self.make_user('reader', perms={'panel': ['view']})
+        from apps.account.models import ResourceGrant
+        ResourceGrant.objects.create(user=reader, panel_id=record['id'], level='read')
+        self.authenticate(reader)
         self.assertEqual(len(self.request('get', '/baota/')), 1)
-        self.assertEqual(len(self.request('get', '/baota/group/')), 1)
+        self.assertEqual(len(self.request('get', '/baota/group/')), 0)
         self.request('post', '/baota/group/', {'name': 'denied'}, success=False)
         self.request('delete', '/baota/', {'id': record['id']}, success=False)
 

@@ -1,5 +1,5 @@
 .entry + .entry {
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--kops-border);
   margin-top: 14px;
   padding-top: 14px;
 }
@@ -26,11 +26,32 @@
 }
 
 .details > summary {
-  color: #1890ff;
+  color: var(--kops-primary);
   cursor: pointer;
   width: fit-content;
 }
 
 .details[open] > summary {
   margin-bottom: 12px;
+}
+
+.upgradeReview {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--kops-border);
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
+.impactSites {
+  padding-left: 20px;
+  margin: 10px 0;
+}
+
+.impactSites li {
+  padding: 4px 0;
+}
+
+.impactSites li > span {
+  display: block;
 }

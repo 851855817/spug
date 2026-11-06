@@ -5,7 +5,7 @@
   .content {
     font-size: 12px;
     margin: 0;
-    color: #ff4d4f;
+    color: var(--kops-error);
     white-space: pre-line;
   }
 }
@@ -27,7 +27,7 @@
 
     :global(.anticon) {
       margin-left: 4px;
-      color: #999999;
+      color: var(--kops-muted);
       cursor: help;
     }
   }
@@ -35,7 +35,7 @@
   .required:before {
     display: inline-block;
     margin-right: 4px;
-    color: #ff4d4f;
+    color: var(--kops-error);
     font-size: 14px;
     font-family: SimSun, sans-serif;
     line-height: 1;
@@ -43,7 +43,7 @@
   }
 
   .body {
-    background: #f9f9f9;
+    background: var(--kops-raised);
     border-radius: 4px;
     padding: 24px;
     margin-bottom: 24px;
@@ -77,14 +77,14 @@
 
       :global(.anticon-edit) {
         font-size: 18px;
-        color: #2563fc;
+        color: var(--kops-primary);
         margin-left: 12px;
         cursor: pointer;
       }
 
       :global(.anticon-delete) {
         font-size: 18px;
-        color: #ff4d4f;
+        color: var(--kops-error);
         margin-left: 12px;
         cursor: pointer;
       }

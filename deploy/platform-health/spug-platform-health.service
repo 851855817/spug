@@ -1,0 +1,14 @@
+[Unit]
+Description=Collect Spug host health report
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/python3 /opt/spug/platform-health/spug-health.py --write-report --publish-report
+SuccessExitStatus=1 2
+TimeoutStartSec=75
+Nice=10
+CPUQuota=20%
+MemoryMax=128M
+UMask=0077

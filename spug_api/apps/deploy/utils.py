@@ -10,6 +10,8 @@ from apps.deploy.models import DeployRequest
 from apps.deploy.helper import Helper, SpugError
 from apps.deploy.ext1 import ext1_deploy
 from apps.deploy.ext2 import ext2_deploy
+from apps.deploy import resources
+from apps.account import access
 import json
 import uuid
 
@@ -18,6 +20,8 @@ REPOS_DIR = settings.REPOS_DIR
 
 def dispatch_all(req):
     """Dispatch a deploy request for all its hosts, used by planned/webhook triggered deploys."""
+    req = DeployRequest.objects.get(pk=req.pk)
+    _guard(req)
     host_ids = json.loads(req.host_ids)
     with_local = False
     if req.deploy.extend == '1':
@@ -30,14 +34,18 @@ def dispatch_all(req):
 
 
 def dispatch(req, deploy_host_ids, with_local, language='zh'):
+    req = DeployRequest.objects.get(pk=req.pk)
+    authorize = _guard(req, deploy_host_ids)
     rds = get_redis_connection()
     rds_key = req.deploy_key
     keys = deploy_host_ids + ['local'] if with_local else deploy_host_ids
     helper = Helper.make(rds, rds_key, keys, language)
+    helper.authorize = authorize
+    helper.execution_record = req
 
     try:
         api_token = uuid.uuid4().hex
-        rds.setex(api_token, 60 * 60, f'{req.deploy.app_id},{req.deploy.env_id}')
+        resources.issue_config_token(rds, api_token, req, authorize())
         env = AttrDict(
             SPUG_APP_NAME=req.deploy.app.name,
             SPUG_APP_KEY=req.deploy.app.key,
@@ -87,4 +95,18 @@ def dispatch(req, deploy_host_ids, with_local, language='zh'):
         request.save()
         req.status = request.status
         helper.clear()
-        Helper.send_deploy_notify(req)
+        try:
+            authorize()
+        except access.AccessDenied:
+            pass  # Revocation must not publish resource details to external recipients.
+        else:
+            Helper.send_deploy_notify(req)
+
+
+def _guard(req, targets=None):
+    try:
+        return resources.execution_guard(req, targets)
+    except (ValueError, PermissionError):
+        DeployRequest.objects.filter(pk=req.pk, status__in=['1', '2']).update(
+            status='-3', reason='账号权限或目标配置已变化，任务未下发；请检查授权后重新发起')
+        raise

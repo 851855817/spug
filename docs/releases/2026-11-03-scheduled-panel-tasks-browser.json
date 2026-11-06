@@ -1,0 +1,284 @@
+{
+  "fixture": "http://127.0.0.1:63528",
+  "real_headless_browser": true,
+  "fresh_temporary_profile": true,
+  "resolver_blocks_non_loopback": true,
+  "mocked_api_only": true,
+  "assertions": [
+    "required impact acknowledgement blocks Next",
+    "panel scope appears without command editor",
+    "panel trigger omits monitor alerts",
+    "panel interval input min is 300",
+    "interval 299 blocks Next",
+    "final step shows fixed scope and inactive default",
+    "saved schedule remains inactive",
+    "activation names scope and automatic execution",
+    "history preserves failure cause and uncertain panel result",
+    "linked history preview exposes no execute controls",
+    "re-preflight confirmation explicitly remains read-only",
+    "re-preflight preview has GET refresh and no start controls",
+    "save submits only template identity and explicit acknowledgements without hosts or command",
+    "activation submits confirm_panel true after scope confirmation",
+    "no start or remote mutation API called",
+    "all API requests match mocked fixture",
+    "all page network traffic stays on loopback"
+  ],
+  "runtime_exceptions": [],
+  "console_errors": [],
+  "network_requests": [
+    {
+      "url": "http://127.0.0.1:63528/schedule",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/static/css/main.fac602b3.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/static/js/2.9d063fb9.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/static/js/main.e1438f64.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/schedule/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/host/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/host/group/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/schedule/panel_templates/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/schedule/panel_templates/?id=17",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/schedule/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/schedule/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/schedule/",
+      "method": "PATCH"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/schedule/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/schedule/5/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/schedule/5/?id=90",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/baota/tasks/402/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/schedule/5/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/baota/tasks/401/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:63528/api/baota/tasks/401/",
+      "method": "GET"
+    }
+  ],
+  "blocked_outbound_requests": [],
+  "screenshots": [
+    "docs/releases/scheduled-panel-shots/01-fixed-scope-unacknowledged.png",
+    "docs/releases/scheduled-panel-shots/02-trigger-minimum.png",
+    "docs/releases/scheduled-panel-shots/03-save-fixed-scope.png",
+    "docs/releases/scheduled-panel-shots/04-activation-confirmation.png",
+    "docs/releases/scheduled-panel-shots/05-history-readonly-preview.png",
+    "docs/releases/scheduled-panel-shots/06-repreflight-readonly.png"
+  ],
+  "revision": "48c305dbbd656fa9cc2ecbbf9be749fb390bf3fc",
+  "mock_requests": [
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/",
+      "query": {},
+      "simulated": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/",
+      "query": {},
+      "simulated": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/schedule/",
+      "query": {},
+      "simulated": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/",
+      "query": {},
+      "simulated": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/host/",
+      "query": {},
+      "simulated": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/host/group/",
+      "query": {},
+      "simulated": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/schedule/panel_templates/",
+      "query": {},
+      "simulated": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/schedule/panel_templates/",
+      "query": {
+        "id": "17"
+      },
+      "simulated": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/schedule/",
+      "query": {},
+      "simulated": true,
+      "body": {
+        "name": "模拟定时宝塔计划",
+        "type": "运维",
+        "interpreter": "baota",
+        "rst_notify": {
+          "mode": "0"
+        },
+        "panel_plan": {
+          "template_id": 17,
+          "template_token": "fixture-signed-template",
+          "acknowledgements": [
+            "ssl_panel_sync"
+          ]
+        },
+        "trigger": "interval",
+        "trigger_args": 300
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/schedule/",
+      "query": {},
+      "simulated": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/schedule/",
+      "query": {},
+      "simulated": true,
+      "body": {
+        "id": 5,
+        "is_active": true,
+        "confirm_panel": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/schedule/",
+      "query": {},
+      "simulated": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/schedule/5/",
+      "query": {},
+      "simulated": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/schedule/5/",
+      "query": {
+        "id": "90"
+      },
+      "simulated": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/tasks/402/",
+      "query": {},
+      "simulated": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/schedule/5/",
+      "query": {},
+      "simulated": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/tasks/401/",
+      "query": {},
+      "simulated": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/tasks/401/",
+      "query": {},
+      "simulated": true
+    }
+  ],
+  "passed": true,
+  "mock_writes": 3,
+  "build_asset": "/static/js/main.e1438f64.chunk.js",
+  "build_asset_sha256": "b521417a8a8c4708e31c46f3f66fe5832bcdb2fd4c8ef85be5fd72365959a30b"
+}

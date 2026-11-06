@@ -12,13 +12,13 @@ export default function ResourceMonitorButton({id, name}) {
   function open() {
     if (!source || monitor.loadError) {message.info('监控状态加载失败，请刷新列表'); return;}
     if (!source.enabled) {message.info('未开启监控'); return;}
-    if (!hasPermission('monitor.monitor.view')) {message.info('没有查看监控的权限'); return;}
+    if (!hasPermission('monitor.server.view')) {message.info('没有查看监控的权限'); return;}
     setOpened(true);
   }
   return <>
     <Tooltip title={source?.enabled ? '查看监控' : '未开启监控'}>
       <Button type="text" size="small" aria-label={`查看${name || ''}监控`} icon={<LineChartOutlined/>}
-        style={{color: source?.enabled ? '#2563fc' : '#98a2b3'}} disabled={!monitor?.enabled || !!monitor?.saving[id]}
+        style={{color: source?.enabled ? 'var(--kops-primary)' : 'var(--kops-muted)'}} disabled={!monitor?.enabled || !!monitor?.saving[id]}
         onClick={open}/>
     </Tooltip>
     {opened && <ResourceMonitorDetail kind={monitor.kind} id={id} name={name} onCancel={() => setOpened(false)}/>}

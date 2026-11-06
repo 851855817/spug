@@ -62,7 +62,7 @@ export default observer(function () {
               <Select.Option key={item.id} value={item.id} record={item} disabled={index === 0}>
                 <div style={{display: 'flex', justifyContent: 'space-between'}}>
                   <span>{`${item.name} (${item.version})`}</span>
-                  <span style={{color: '#999', fontSize: 12}}>{t('创建于')} {moment(item.created_at).fromNow()}</span>
+                  <span style={{color: 'var(--kops-muted)', fontSize: 12}}>{t('创建于')} {moment(item.created_at).fromNow()}</span>
                 </div>
               </Select.Option>
             ))}

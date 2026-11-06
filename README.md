@@ -1,3 +1,9 @@
+# KOps · 云枢
+
+由 K 开发维护，基于 [Spug](https://github.com/openspug/spug) 二次开发，遵循 [AGPL v3](LICENSE)。原作者版权保留；本修改版本的范围、日期及对应源码说明见 [MODIFICATIONS.md](MODIFICATIONS.md)。以下保留上游项目说明及引用，演示站与官方服务归上游所有。
+
+---
+
 English | [简体中文](./README-zh_CN.md) 
 
 <h1 align="center">Spug</h1>

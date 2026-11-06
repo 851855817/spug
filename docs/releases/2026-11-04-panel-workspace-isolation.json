@@ -1,0 +1,13 @@
+{
+  "revision": "e6ee4e3a5831ff79b9aebe56123ddbb3e7b34839",
+  "previous_revision": "0e5edaf2dbb639a185e0def29291b469641c5d10",
+  "image": "spug-baota:e6ee4e3",
+  "image_id": "sha256:1e3522fdc511829b9feeea303e2e62e61a218118c8188d7c36e781ac6a7b5ab9",
+  "archive_sha256": "4ba9b64343a275e984b8a3da20e4cadc1933fa4bb4ff51f8d3c9e2b87337bb8d",
+  "linux_regression": true,
+  "release_failure_tests": true,
+  "image_wiring": true,
+  "schema_changes": false,
+  "baseline_image_id": "sha256:75e9720b73a2d013f8d328c3fc513c0383a6ff7086e9d7a98f99d88ce3765934",
+  "unchanged_api_tree_sha256": "48d311f196b1bd2846088e14dcc9aee7ce19eca880cdd17be12f6650a7ce3da4"
+}

@@ -11,6 +11,9 @@ from apps.account.utils import has_host_perm
 from apps.setting.utils import AppSetting
 from datetime import datetime
 import json
+from types import SimpleNamespace
+from apps.account import access
+from . import resources
 
 
 def _verify_host_targets(user, tp, targets, extra):
@@ -24,15 +27,26 @@ def _verify_host_targets(user, tp, targets, extra):
         host_ids = [int(x) for x in targets]
     except (TypeError, ValueError):
         return '请选择监控主机'
-    if not has_host_perm(user, host_ids):
-        return '无权访问主机，请联系管理员'
+    try:
+        access.require_resources(user, 'host', host_ids, manage=True)
+        if tp == '4':
+            access.require(user, 'exec.task.do')
+    except ValueError:
+        return '无权操作主机或执行脚本，请联系管理员'
     return None
 
 
 class DetectionView(View):
+    def dispatch(self, request, *args, **kwargs):
+        try:
+            access.current_user(request.user)
+            return super().dispatch(request, *args, **kwargs)
+        except access.AccessDenied as error:
+            return json_response(error=str(error))
+
     @auth('dashboard.dashboard.view|monitor.monitor.view')
     def get(self, request):
-        detections = Detection.objects.all()
+        detections = resources.visible(request.user)
         groups = [x['group'] for x in detections.order_by('group').values('group').distinct()]
         return json_response({'groups': groups, 'detections': [x.to_view() for x in detections]})
 
@@ -53,6 +67,12 @@ class DetectionView(View):
             Argument('notify_mode', type=list, help='请选择报警方式'),
         ).parse(request.body)
         if error is None:
+            access.require(request.user, 'monitor.monitor.edit' if form.id else 'monitor.monitor.add')
+            from apps.alarm.models import Group
+            from apps.alarm.resources import require_owned
+            require_owned(request.user, Group, form.notify_grp)
+            if form.id:
+                resources.authorize(request.user, Detection.objects.get(pk=form.id), manage=True)
             error = _verify_host_targets(request.user, form.type, form.targets, form.extra)
             if error:
                 return json_response(error=error)
@@ -91,6 +111,7 @@ class DetectionView(View):
             task = Detection.objects.filter(pk=form.id).first()
             if not task:
                 return json_response(error='未找到指定监控项')
+            resources.authorize(request.user, task, manage=True)
             if form.get('is_active'):
                 error = _verify_host_targets(request.user, task.type, json.loads(task.targets), task.extra)
                 if error:
@@ -115,6 +136,7 @@ class DetectionView(View):
         if error is None:
             task = Detection.objects.filter(pk=form.id).first()
             if task:
+                resources.authorize(request.user, task, manage=True)
                 if task.is_active:
                     return json_response(error='该监控项正在运行中，请先停止后再尝试删除')
                 task.delete()
@@ -132,7 +154,7 @@ def run_test(request):
         error = _verify_host_targets(request.user, form.type, form.targets[:1], form.extra)
         if error:
             return json_response(error=error)
-        is_success, message = dispatch(form.type, form.targets[0], form.extra)
+        is_success, message = dispatch(form.type, form.targets[0], form.extra, user=request.user)
         return json_response({'is_success': is_success, 'message': message})
     return json_response(error=error)
 
@@ -141,7 +163,7 @@ def run_test(request):
 def get_overview(request):
     response = []
     rds = get_redis_connection()
-    for item in Detection.objects.all():
+    for item in resources.visible(request.user):
         data = {}
         for key in json.loads(item.targets):
             key = str(key)

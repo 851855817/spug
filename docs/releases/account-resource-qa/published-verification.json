@@ -1,0 +1,38 @@
+{
+  "audit_environment_programs": 8,
+  "audit_rotation_verified": true,
+  "backup": "/opt/spug/backups/20261106-223711-before-upgrade-15d69ee-e829c052",
+  "credential_decryption_verified": true,
+  "https_verified_with_default_tls": true,
+  "legacy_account_policies": {
+    "2": 0
+  },
+  "new_migrations": 4,
+  "new_tables": 9,
+  "no_automatic_sharing": true,
+  "old_business_preserved": true,
+  "old_tables": 67,
+  "original_failure_record_retained": true,
+  "paired_backup_verified": true,
+  "persistent_startup_verified": true,
+  "publication_record": 2,
+  "published": true,
+  "real_customer_actions_used_for_validation": false,
+  "recovery_manifest_sha256": "8195bc38c24d8cc8948849affdd8f111ccbf3dd0d76bb6014c92cb290c37df71",
+  "recovery_profile": "account-resources-display-size-recovery-v2",
+  "redis_pid_preserved": true,
+  "restart_count_preserved": true,
+  "revision": "15d69eef7d73abd5078a3cf5e38411d4da9a15a1",
+  "services": {
+    "nginx": "RUNNING",
+    "redis": "RUNNING",
+    "spug-api": "RUNNING",
+    "spug-monitor": "RUNNING",
+    "spug-ops-worker": "RUNNING",
+    "spug-panel-worker": "RUNNING",
+    "spug-scheduler": "RUNNING",
+    "spug-worker": "RUNNING",
+    "spug-ws": "RUNNING"
+  },
+  "source_flags_and_schedules_preserved": true
+}

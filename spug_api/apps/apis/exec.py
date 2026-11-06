@@ -6,6 +6,7 @@ from django_redis import get_redis_connection
 from apps.apis.utils import api_key_required, api_response, parse_json_body
 from apps.exec.models import ExecTemplate
 from apps.host.models import Host
+from apps.account import access
 from libs.validators import is_env_name
 import json
 import uuid
@@ -15,6 +16,13 @@ RESULT_TTL = 3600
 
 def _result_key(token):
     return f'{settings.EXEC_RESULT_KEY}:{token}'
+
+
+def authorize(template, ids):
+    current = ExecTemplate.objects.get(pk=template.pk)
+    access.require(current.created_by_id, 'exec.task.do')
+    access.require_resources(current.created_by_id, 'host', json.loads(current.host_ids), manage=True)
+    access.require_resources(current.created_by_id, 'host', list(ids), manage=True)
 
 
 @api_key_required
@@ -37,6 +45,10 @@ def trigger(request, template_id):
         return api_response(error='host_ids must be a list of host id', status=400)
     if not set(host_ids).issubset(allowed_ids):
         return api_response(error=f'Host not in template: {sorted(set(host_ids) - allowed_ids)}', status=403)
+    try:
+        authorize(template, allowed_ids)
+    except (ValueError, PermissionError):
+        return api_response(error='Template owner is inactive or no longer authorized for all targets', status=403)
     hosts = list(Host.objects.filter(id__in=host_ids))
     missing = set(host_ids) - {x.id for x in hosts}
     if missing:
@@ -58,6 +70,10 @@ def trigger(request, template_id):
     rds.hset(_result_key(token), 'meta', json.dumps(meta))
     rds.expire(_result_key(token), RESULT_TTL)
     for host in hosts:
+        try:
+            authorize(template, allowed_ids)
+        except (ValueError, PermissionError):
+            return api_response(error='Authorization changed; further dispatch stopped', status=403)
         data = dict(
             key=host.id,
             name=host.name,
@@ -70,6 +86,7 @@ def trigger(request, template_id):
             pkey=host.private_key,
             params=params,
             record=True,
+            template_id=template.pk,
         )
         rds.rpush(settings.EXEC_WORKER_KEY, json.dumps(data))
     return api_response({'token': token}, status=202)
@@ -82,8 +99,16 @@ def result(request, token):
     if not raw:
         return api_response(error='Token not found or expired', status=404)
     raw = {k.decode(): v.decode() for k, v in raw.items()}
+    meta = json.loads(raw['meta'])
+    template = ExecTemplate.objects.filter(pk=meta.get('template_id')).first()
+    try:
+        if template is None:
+            raise ValueError('Template unavailable')
+        authorize(template, [int(pk) for pk in meta['hosts']])
+    except (ValueError, PermissionError):
+        return api_response(error='Template owner is inactive or no longer authorized for all targets', status=403)
     hosts, state = [], 'success'
-    for host_id, title in json.loads(raw['meta'])['hosts'].items():
+    for host_id, title in meta['hosts'].items():
         code = raw.get(f'status:{host_id}')
         output = rds.get(f'{_result_key(token)}:{host_id}')
         if code is None:
@@ -101,4 +126,8 @@ def result(request, token):
             exit_code=None if code is None else int(code),
             output=output.decode(errors='replace') if output else ''
         ))
+    try:
+        authorize(template, [int(pk) for pk in meta['hosts']])
+    except (ValueError, PermissionError):
+        return api_response(error='Authorization changed; result access denied', status=403)
     return api_response({'status': state, 'hosts': hosts})

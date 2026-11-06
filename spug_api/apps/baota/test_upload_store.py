@@ -163,11 +163,14 @@ class UploadStoreTests(TransactionTestCase):
 
     def test_stream_real_bytes_private_random_paths_and_sealed_manifest(self):
         store = self.store()
-        bundle = self.bundle([{'path': 'dist/z.txt', 'size': 3}, {'path': 'dist/a.txt', 'size': 0}])
+        # A hexadecimal body such as abc can also occur in random IDs or hashes.
+        # Use a distinct non-hex marker so ID collisions cannot mimic leakage.
+        payload = b'private-file-body'
+        bundle = self.bundle([{'path': 'dist/z.txt', 'size': len(payload)}, {'path': 'dist/a.txt', 'size': 0}])
         with self.assertRaises(ValueError):
             store.seal_bundle(self.user, bundle.pk)
         for source in bundle.files.all():
-            content = b'abc' if source.size else b''
+            content = payload if source.size else b''
             source = store.receive_file(self.user, bundle.pk, source.pk, SimpleUploadedFile('secret-name', content))
             path = store.blob_path(source)
             self.assertEqual(Path(path).read_bytes(), content)
@@ -186,7 +189,7 @@ class UploadStoreTests(TransactionTestCase):
         view = store.bundle_view(bundle)
         self.assertEqual(set(view), {'id', 'state', 'total_bytes', 'file_count', 'manifest_sha256', 'files'})
         self.assertEqual(set(view['files'][0]), {'id', 'path', 'size', 'state'})
-        self.assertNotIn('abc', json.dumps(view))
+        self.assertNotIn(payload.decode(), json.dumps(view))
         self.assertNotIn('sha256', json.dumps(view['files']))
 
     def test_failed_stream_retries_safely_and_hides_raw_exception(self):

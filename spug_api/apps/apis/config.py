@@ -7,15 +7,26 @@ from apps.config.models import Environment
 from apps.app.models import App
 from apps.setting.utils import AppSetting
 from apps.config.utils import compose_configs
+from django.core.exceptions import ObjectDoesNotExist
 import json
 
 
 def get_configs(request):
-    app, env_id, no_prefix = _parse_params(request)
+    try:
+        app, env_id, no_prefix = _parse_params(request)
+    except (ValueError, KeyError, TypeError, PermissionError, ObjectDoesNotExist):
+        return HttpResponse('Token is no longer authorized', status=403)
     if not app or not env_id:
         return HttpResponse('Invalid params', status=400)
 
     configs = compose_configs(app, env_id, no_prefix)
+    if request.GET.get('apiToken'):
+        try:
+            current_app, current_env, _ = _parse_params(request)
+            if current_app is None or current_app.pk != app.pk or current_env != env_id:
+                raise ValueError()
+        except (ValueError, KeyError, TypeError, PermissionError, ObjectDoesNotExist):
+            return HttpResponse('Token is no longer authorized', status=403)
     fmt = request.GET.get('format', 'kv')
     if fmt == 'kv':
         return _kv_response(configs)
@@ -53,8 +64,8 @@ def _parse_params(request):
         rds = get_redis_connection()
         content = rds.get(api_token)
         if content:
-            app_id, env_id = content.decode().split(',')
-            app = App.objects.filter(pk=app_id).first()
+            from apps.deploy.resources import config_token_scope
+            app, env_id = config_token_scope(json.loads(content))
     else:
         api_key = AppSetting.get_default('api_key')
         if api_key and request.GET.get('apiKey') == api_key:

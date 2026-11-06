@@ -8,14 +8,18 @@ import {Switch, Route} from 'react-router-dom';
 import Login from './pages/login';
 import WebSSH from './pages/ssh';
 import Layout from './layout';
+import {ResourceAccessProvider} from './resources/ResourceAccess';
+
+const AuthorizedLayout = props => <ResourceAccessProvider><Layout {...props}/></ResourceAccessProvider>;
+const AuthorizedSSH = props => <ResourceAccessProvider><WebSSH {...props}/></ResourceAccessProvider>;
 
 class App extends Component {
   render() {
     return (
       <Switch>
         <Route path="/" exact component={Login} />
-        <Route path="/ssh" exact component={WebSSH} />
-        <Route component={Layout} />
+        <Route path="/ssh" exact component={AuthorizedSSH} />
+        <Route component={AuthorizedLayout} />
       </Switch>
     );
   }

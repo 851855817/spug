@@ -18,9 +18,11 @@ from datetime import datetime
 import subprocess
 import json
 import os
+from apps.account import access
+from . import resources
 
 
-class RequestView(View):
+class RequestView(resources.ResourceView):
     @auth('deploy.request.view')
     def get(self, request):
         data, query, counter = [], {}, {}
@@ -28,7 +30,7 @@ class RequestView(View):
             perms = request.user.deploy_perms
             query['deploy__app_id__in'] = perms['apps']
             query['deploy__env_id__in'] = perms['envs']
-        for item in DeployRequest.objects.filter(**query).annotate(
+        for item in resources.visible(request.user, DeployRequest.objects.filter(**query), owned=True).annotate(
                 env_id=F('deploy__env_id'),
                 env_name=F('deploy__env__name'),
                 app_id=F('deploy__app_id'),
@@ -70,38 +72,43 @@ class RequestView(View):
         if error is None:
             if form.id:
                 deploy = DeployRequest.objects.get(pk=form.id)
+                resources.authorize(request.user, deploy, manage=True, owned=True)
                 deploy.delete()
                 return json_response()
 
-            count = 0
+            pending = []
             if form.mode == 'count':
                 if not str(form.value).isdigit() or int(form.value) < 1:
                     return json_response(error='请输入正确的保留数量')
                 counter, form.value = defaultdict(int), int(form.value)
-                for item in DeployRequest.objects.all():
+                for item in resources.visible(request.user, DeployRequest.objects.all(), owned=True):
                     counter[item.deploy_id] += 1
                     if counter[item.deploy_id] > form.value:
-                        count += 1
-                        item.delete()
+                        pending.append(item)
             elif form.mode == 'expire':
-                for item in DeployRequest.objects.filter(created_at__lt=form.value):
-                    count += 1
-                    item.delete()
+                for item in resources.visible(request.user, DeployRequest.objects.filter(created_at__lt=form.value), owned=True):
+                    pending.append(item)
             elif form.mode == 'deploy':
                 app_id, env_id = str(form.value).split(',')
-                for item in DeployRequest.objects.filter(deploy__app_id=app_id, deploy__env_id=env_id):
-                    count += 1
-                    item.delete()
-            return json_response(count)
+                for item in resources.visible(request.user, DeployRequest.objects.filter(deploy__app_id=app_id, deploy__env_id=env_id), owned=True):
+                    pending.append(item)
+            # Validate the whole selection before deleting the first artifact.
+            for item in pending:
+                resources.authorize(request.user, item, manage=True, owned=True)
+            for item in pending:
+                resources.authorize(request.user, item, manage=True, owned=True)
+                item.delete()
+            return json_response(len(pending))
         return json_response(error=error)
 
 
-class RequestDetailView(View):
+class RequestDetailView(resources.ResourceView):
     @auth('deploy.request.view')
     def get(self, request, r_id):
         req = DeployRequest.objects.filter(pk=r_id).first()
         if not req:
             return json_response(error='未找到指定发布申请')
+        resources.authorize(request.user, req, owned=True)
         response = AttrDict(status=req.status)
         hosts = Host.objects.filter(id__in=json.loads(req.host_ids))
         outputs = {x.id: {'id': x.id, 'title': x.name, 'data': ''} for x in hosts}
@@ -119,6 +126,7 @@ class RequestDetailView(View):
         response.index = Helper.fill_outputs(outputs, req.deploy_key)
         response.token = req.deploy_key
         response.outputs = outputs
+        resources.authorize(request.user, req, owned=True)
         return json_response(response)
 
     @auth('deploy.request.do')
@@ -136,6 +144,7 @@ class RequestDetailView(View):
             req = DeployRequest.objects.filter(**query).first()
             if not req:
                 return json_response(error='未找到指定发布申请')
+            resources.authorize(request.user, req, manage=True, owned=True)
             if req.status not in ('1', '-3', '4'):
                 return json_response(error='该申请单当前状态还不能执行发布')
 
@@ -149,6 +158,9 @@ class RequestDetailView(View):
             else:
                 host_ids = json.loads(req.host_ids)
 
+            resources.validate_targets(request.user, req.deploy, host_ids)
+            if not set(host_ids).issubset(json.loads(req.host_ids)):
+                return json_response(error='目标不属于保存的发布申请')
             with_local = False
             hosts = Host.objects.filter(id__in=host_ids)
             message = Helper.term_message('等待调度...        ')
@@ -200,6 +212,7 @@ class RequestDetailView(View):
             req = DeployRequest.objects.filter(pk=r_id).first()
             if not req:
                 return json_response(error='未找到指定申请')
+            resources.authorize(request.user, req, manage=True, owned=True)
             if not form.is_pass and not form.reason:
                 return json_response(error='请输入驳回原因')
             if req.status != '0':
@@ -209,11 +222,12 @@ class RequestDetailView(View):
             req.status = '1' if form.is_pass else '-1'
             req.reason = form.reason
             req.save()
-            Thread(target=Helper.send_deploy_notify, args=(req, 'approve_rst')).start()
+            Thread(target=Helper.send_deploy_notify, args=(req, 'approve_rst', request.user.pk, 'deploy.request.approve')).start()
         return json_response(error=error)
 
 
 @auth('deploy.request.add|deploy.request.edit')
+@resources.errors
 def post_request_ext1(request):
     form, error = JsonParser(
         Argument('id', type=int, required=False),
@@ -227,6 +241,10 @@ def post_request_ext1(request):
     ).parse(request.body)
     if error is None:
         deploy = Deploy.objects.get(pk=form.deploy_id)
+        access.require(request.user, 'deploy.request.edit' if form.id else 'deploy.request.add')
+        resources.validate_targets(request.user, deploy, form.host_ids)
+        if form.id:
+            resources.authorize(request.user, DeployRequest.objects.get(pk=form.id), manage=True, owned=True)
         form.spug_version = Repository.make_spug_version(deploy.id)
         # reset the link to a built artifact, an edit may switch back to git
         form.repository_id = None
@@ -242,6 +260,9 @@ def post_request_ext1(request):
             if not form.extra[1]:
                 return json_response(error='请选择要发布的版本')
             repository = Repository.objects.get(pk=form.extra[1])
+            resources.authorize(request.user, repository, owned=True)
+            if repository.deploy_id != deploy.pk:
+                raise ValueError('构建版本不属于该发布配置')
             form.repository_id = repository.id
             form.version = repository.version
             form.spug_version = repository.spug_version
@@ -260,11 +281,13 @@ def post_request_ext1(request):
             req = DeployRequest.objects.create(created_by=request.user, **form)
             is_required_notify = deploy.is_audit
         if is_required_notify:
-            Thread(target=Helper.send_deploy_notify, args=(req, 'approve_req')).start()
+            Thread(target=Helper.send_deploy_notify, args=(req, 'approve_req', request.user.pk,
+                'deploy.request.edit' if form.id else 'deploy.request.add')).start()
     return json_response(error=error)
 
 
 @auth('deploy.request.do')
+@resources.errors
 def post_request_ext1_rollback(request):
     form, error = JsonParser(
         Argument('request_id', type=int, help='请选择要回滚的版本'),
@@ -274,6 +297,8 @@ def post_request_ext1_rollback(request):
     ).parse(request.body)
     if error is None:
         req = DeployRequest.objects.get(pk=form.pop('request_id'))
+        resources.authorize(request.user, req, manage=True, owned=True)
+        resources.validate_targets(request.user, req.deploy, form.host_ids)
         requests = DeployRequest.objects.filter(deploy=req.deploy, status__in=('3', '-3'))
         versions = list({x.spug_version: 1 for x in requests}.keys())
         if req.spug_version not in versions[:req.deploy.extend_obj.versions + 1]:
@@ -293,11 +318,12 @@ def post_request_ext1_rollback(request):
             **form
         )
         if req.deploy.is_audit:
-            Thread(target=Helper.send_deploy_notify, args=(new_req, 'approve_req')).start()
+            Thread(target=Helper.send_deploy_notify, args=(new_req, 'approve_req', request.user.pk, 'deploy.request.do')).start()
     return json_response(error=error)
 
 
 @auth('deploy.request.add|deploy.request.edit')
+@resources.errors
 def post_request_ext2(request):
     form, error = JsonParser(
         Argument('id', type=int, required=False),
@@ -314,10 +340,15 @@ def post_request_ext2(request):
         deploy = Deploy.objects.filter(pk=form.deploy_id).first()
         if not deploy:
             return json_response(error='未找到该发布配置')
+        access.require(request.user, 'deploy.request.edit' if form.id else 'deploy.request.add')
+        resources.validate_targets(request.user, deploy, form.host_ids)
+        if form.id:
+            resources.authorize(request.user, DeployRequest.objects.get(pk=form.id), manage=True, owned=True)
         extra = form.pop('extra')
         if DeployExtend2.objects.filter(deploy=deploy, host_actions__contains='"src_mode": "1"').exists():
             if not extra:
                 return json_response(error='该应用的发布配置中使用了数据传输动作且设置为发布时上传，请上传要传输的数据')
+            resources.require_upload(request.user, deploy.pk, extra)
             form.spug_version = extra['path']
             form.extra = json.dumps(extra)
         else:
@@ -334,17 +365,20 @@ def post_request_ext2(request):
             req = DeployRequest.objects.create(created_by=request.user, **form)
             is_required_notify = deploy.is_audit
         if is_required_notify:
-            Thread(target=Helper.send_deploy_notify, args=(req, 'approve_req')).start()
+            Thread(target=Helper.send_deploy_notify, args=(req, 'approve_req', request.user.pk,
+                'deploy.request.edit' if form.id else 'deploy.request.add')).start()
     return json_response(error=error)
 
 
 @auth('deploy.request.view')
+@resources.errors
 def get_request_info(request):
     form, error = JsonParser(
         Argument('id', type=int, help='参数错误')
     ).parse(request.GET)
     if error is None:
         req = DeployRequest.objects.get(pk=form.id)
+        resources.authorize(request.user, req, owned=True)
         response = req.to_dict(selects=('status', 'reason'))
         response['deploy_status'] = json.loads(req.deploy_status)
         response['status_alias'] = req.get_status_display()
@@ -353,20 +387,36 @@ def get_request_info(request):
 
 
 @auth('deploy.request.add')
+@resources.errors
 def do_upload(request):
     repos_dir = settings.REPOS_DIR
     file = request.FILES['file']
     deploy_id = request.POST.get('deploy_id')
+    if not str(deploy_id).isdigit():
+        return HttpResponseBadRequest('发布配置编号无效')
+    deploy = Deploy.objects.get(pk=int(deploy_id))
+    resources.authorize(request.user, deploy, manage=True)
+    deploy_id = str(deploy.pk)
     if file and deploy_id:
+        from uuid import uuid4
+        from pathlib import Path
+        from apps.deploy.models import DeployUpload
+        if not file.name or file.name in ('.', '..') or '/' in file.name or '\\' in file.name:
+            return HttpResponseBadRequest('文件名无效')
         dir_name = os.path.join(repos_dir, deploy_id)
-        file_name = datetime.now().strftime("%Y%m%d%H%M%S")
-        command = f'mkdir -p {dir_name} && cd {dir_name} && ls | sort  -rn | tail -n +11 | xargs rm -rf'
-        code, outputs = subprocess.getstatusoutput(command)
-        if code != 0:
-            return json_response(error=outputs)
-        with open(os.path.join(dir_name, file_name), 'wb') as f:
-            for chunk in file.chunks():
-                f.write(chunk)
+        file_name = uuid4().hex
+        Path(dir_name).mkdir(parents=True, exist_ok=True)
+        filepath = Path(dir_name, file_name)
+        try:
+            with filepath.open('xb') as f:
+                for chunk in file.chunks():
+                    resources.authorize(request.user, Deploy.objects.get(pk=deploy.pk), manage=True)
+                    f.write(chunk)
+            resources.authorize(request.user, Deploy.objects.get(pk=deploy.pk), manage=True)
+            DeployUpload.objects.create(deploy=deploy, owner=request.user, path=file_name, name=file.name)
+        except BaseException:
+            filepath.unlink(missing_ok=True)
+            raise
         return json_response(file_name)
     else:
         return HttpResponseBadRequest()

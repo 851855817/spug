@@ -1,0 +1,40 @@
+{
+  "revision": "78936d7e8d893309c135c416e46634eb267c0fef",
+  "previous_revision": "8e874e3a24eb93b40fca8841ae406097004a1da9",
+  "published": true,
+  "backup": "/opt/spug/backups/20261105-105333-before-upgrade-78936d7-8a8b4d2c",
+  "cached_ssl_listing_rows": 11,
+  "cached_listing_reminder_metadata_verified": true,
+  "listing_did_not_write_preferences": true,
+  "paired_backup_valid": true,
+  "business_and_schema_unchanged": true,
+  "preservation_objects": 69,
+  "ssl_table_counts_preserved": {
+    "monitor_ssl_certificates": 11,
+    "monitor_ssl_jobs": 14,
+    "monitor_ssl_leases": 2,
+    "monitor_ssl_reminder_preferences": 0,
+    "monitor_ssl_reminders": 0,
+    "monitor_ssl_sources": 4
+  },
+  "existing_ssl_switches_and_reminders_preserved": true,
+  "complete_api_trees_preserved_except_reviewed_service": true,
+  "api_overlay_paths": [
+    "apps/monitor/ssl/service.py"
+  ],
+  "api_tree_sizes": [
+    247,
+    287
+  ],
+  "api_and_ui_receipts_valid": true,
+  "services_running": 9,
+  "original_preserved_pids": true,
+  "health_checks_ok": 15,
+  "health_timer": "active",
+  "internal_http": 200,
+  "server_https": 200,
+  "compiled_release_binding": true,
+  "browser_tested_asset_binding": true,
+  "original_license": true,
+  "public_https": 200
+}

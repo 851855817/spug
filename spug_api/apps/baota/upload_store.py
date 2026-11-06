@@ -95,6 +95,8 @@ def _permission(user):
     if user is None or not getattr(user, 'pk', None):
         raise PermissionError('权限拒绝')
     permission(user, 'create')
+    from .task_service import action_permission
+    action_permission(user, 'file_upload')
 
 
 def _identifier(value):
@@ -384,6 +386,9 @@ def cleanup_expired():
             _quota_lock()
             bundle = PanelUploadBundle.objects.select_for_update().get(pk=bundle_id)
             if bundle.updated_at >= now - _DAY:
+                continue
+            from apps.schedule.panel_tasks import retained_bundle
+            if retained_bundle(bundle.pk):
                 continue
             bindings = list(bundle.bindings.select_related('target__task'))
             if bindings:

@@ -1,10 +1,22 @@
+.navTools { padding: 2px 12px 8px; min-height: 40px;
+  :global(.ant-btn) { color: var(--kops-sidebar-text); font-size: 12px; }
+  :global(.ant-btn:hover) { color: var(--kops-sidebar-text); background: #ffffff15; }
+  small { display: block; color: var(--kops-sidebar-text); font-size: 11px; padding: 4px 7px; line-height: 16px; }
+  small[role=alert] { color: #ffccc7; }
+}
+.navLabel { display: inline-flex; align-items: center; gap: 7px; width: 100%;
+  &[draggable=true] { cursor: grab; }
+  &:focus-visible { outline: 1px solid var(--kops-primary); outline-offset: 2px; }
+}
+.navDrop { box-shadow: inset 0 2px var(--kops-primary); background: #ffffff15; }
+
 .header {
   display: flex;
   flex-direction: row;
   padding: 0 12px 0 0;;
   height: 48px;
   line-height: 48px;
-  background: #fff;
+  background: var(--kops-surface);
   box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
   z-index: 2;
 
@@ -21,7 +33,7 @@
     align-items: center;
 
     &:hover {
-      background: rgba(0, 0, 0, 0.025);
+      background: var(--kops-subtle);
     }
   }
 
@@ -35,7 +47,7 @@
     }
 
     .action:hover {
-      background: rgba(0, 0, 0, 0.025);
+      background: var(--kops-subtle);
     }
   }
 
@@ -46,7 +58,7 @@
   }
 
   .trigger:hover {
-    background: rgba(0, 0, 0, 0.025);
+    background: var(--kops-subtle);
   }
 }
 
@@ -61,19 +73,19 @@
   }
 
   .item:hover {
-    background-color: rgb(233, 247, 254);
+    background-color: var(--kops-selected);
   }
 
   .btn {
     line-height: 46px;
     text-align: center;
     cursor: pointer;
-    border-top: 1px solid #e8e8e8;
+    border-top: 1px solid var(--kops-border);
   }
 }
 
 .notify :global(.ant-dropdown-menu-item:hover) {
-  background-color: #fff;
+  background-color: var(--kops-surface);
 }
 
 .content {

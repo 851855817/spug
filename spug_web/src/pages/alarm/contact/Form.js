@@ -61,11 +61,11 @@ export default observer(function () {
     return (
       <div style={{position: 'absolute', right: -30, top: 8}}>
         {testLoading === props.mode ? (
-          <LoadingOutlined style={{fontSize: 18, color: '#faad14'}}/>
+          <LoadingOutlined style={{fontSize: 18, color: 'var(--kops-warning)'}}/>
         ) : (
           <Tooltip title={t('执行测试')}>
             <ThunderboltOutlined
-              style={{fontSize: 18, color: '#faad14'}}
+              style={{fontSize: 18, color: 'var(--kops-warning)'}}
               onClick={() => handleTest(props.mode, props.name)}/>
           </Tooltip>
         )}

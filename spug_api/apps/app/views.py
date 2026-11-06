@@ -10,10 +10,13 @@ from apps.app.utils import fetch_versions, remove_repo
 from apps.setting.utils import AppSetting
 from libs.gitlib import is_valid_git_url
 import json
+from types import SimpleNamespace
+from apps.deploy import resources as deploy_resources
+from apps.account import access
 import re
 
 
-class AppView(View):
+class AppView(deploy_resources.ResourceView):
     def get(self, request):
         form, error = JsonParser(
             Argument('id', type=int, required=False)
@@ -40,6 +43,13 @@ class AppView(View):
             Argument('desc', required=False)
         ).parse(request.body)
         if error is None:
+            current, granted = access.permissions(request.user)
+            action = 'edit' if form.id else 'add'
+            codes = {'deploy.app.' + action, 'config.app.' + action}
+            if not current.is_supper and not codes.intersection(granted):
+                access.reject(current, '权限拒绝', codes=sorted(codes))
+            if form.id:
+                deploy_resources.application(request.user, form.id, manage=True)
             if not re.fullmatch(r'\w+', form.key, re.ASCII):
                 return json_response(error='标识符必须为字母、数字和下划线的组合')
 
@@ -66,18 +76,23 @@ class AppView(View):
             Argument('sort', filter=lambda x: x in ('up', 'down'), required=False)
         ).parse(request.body)
         if error is None:
+            deploy_resources.application(request.user, form.id, manage=True)
             app = App.objects.filter(pk=form.id).first()
             if not app:
                 return json_response(error='未找到指定应用')
             if form.rel_apps is not None:
+                for pk in access.identifiers(form.rel_apps):
+                    deploy_resources.application(request.user, pk)
                 app.rel_apps = json.dumps(form.rel_apps)
             if form.rel_services is not None:
+                if not request.user.is_supper:
+                    access.require(request.user, 'config.src.view_config')
                 app.rel_services = json.dumps(form.rel_services)
             if form.sort:
                 if form.sort == 'up':
-                    tmp = App.objects.filter(sort_id__gt=app.sort_id).last()
+                    tmp = App.objects.filter(pk__in=request.user.deploy_perms['apps'], sort_id__gt=app.sort_id).last() if not request.user.is_supper else App.objects.filter(sort_id__gt=app.sort_id).last()
                 else:
-                    tmp = App.objects.filter(sort_id__lt=app.sort_id).first()
+                    tmp = App.objects.filter(pk__in=request.user.deploy_perms['apps'], sort_id__lt=app.sort_id).first() if not request.user.is_supper else App.objects.filter(sort_id__lt=app.sort_id).first()
                 if tmp:
                     tmp.sort_id, app.sort_id = app.sort_id, tmp.sort_id
                     tmp.save()
@@ -90,6 +105,7 @@ class AppView(View):
             Argument('id', type=int, help='请指定操作对象')
         ).parse(request.GET)
         if error is None:
+            deploy_resources.application(request.user, form.id, manage=True)
             if Deploy.objects.filter(app_id=form.id).exists():
                 return json_response(error='该应用在应用发布中已存在关联的发布配置，请删除相关发布配置后再尝试删除')
             # auto delete configs
@@ -105,7 +121,7 @@ class AppView(View):
         return json_response(error=error)
 
 
-class DeployView(View):
+class DeployView(deploy_resources.ResourceView):
     @auth('deploy.app.view|deploy.request.view')
     def get(self, request):
         form, error = JsonParser(
@@ -118,7 +134,7 @@ class DeployView(View):
         deploys = Deploy.objects.filter(**form) \
             .annotate(app_name=F('app__name'), app_key=F('app__key')) \
             .order_by('-app__sort_id')
-        return json_response(deploys)
+        return json_response(deploy_resources.visible(request.user, deploys))
 
     @auth('deploy.app.edit')
     def post(self, request):
@@ -133,6 +149,10 @@ class DeployView(View):
             Argument('is_audit', type=bool, default=False)
         ).parse(request.body)
         if error is None:
+            deploy_resources.authorize(request.user, SimpleNamespace(app_id=form.app_id, env_id=form.env_id,
+                host_ids=json.dumps(form.host_ids)), manage=True)
+            if form.id:
+                deploy_resources.authorize(request.user, Deploy.objects.get(pk=form.id), manage=True)
             deploy = Deploy.objects.filter(app_id=form.app_id, env_id=form.env_id).first()
             if deploy and deploy.id != form.id:
                 return json_response(error='应用在该环境下已经存在发布配置')
@@ -155,6 +175,8 @@ class DeployView(View):
                     return json_response(error=error)
                 extend_form.dst_dir = extend_form.dst_dir.rstrip('/')
                 extend_form.filter_rule = json.dumps(extend_form.filter_rule)
+                deploy_resources.authorize(request.user, SimpleNamespace(**form,
+                    extend_obj=SimpleNamespace(**extend_form)), manage=True)
                 if form.id:
                     extend = DeployExtend1.objects.filter(deploy_id=form.id).first()
                     if extend.git_repo != extend_form.git_repo:
@@ -176,6 +198,8 @@ class DeployView(View):
                 extend_form.require_upload = any(x.get('src_mode') == '1' for x in extend_form.host_actions)
                 extend_form.server_actions = json.dumps(extend_form.server_actions)
                 extend_form.host_actions = json.dumps(extend_form.host_actions)
+                deploy_resources.authorize(request.user, SimpleNamespace(**form,
+                    extend_obj=SimpleNamespace(**extend_form)), manage=True)
                 if form.id:
                     Deploy.objects.filter(pk=form.id).update(**form)
                     DeployExtend2.objects.filter(deploy_id=form.id).update(**extend_form)
@@ -191,6 +215,7 @@ class DeployView(View):
         ).parse(request.GET)
         if error is None:
             deploy = Deploy.objects.get(pk=form.id)
+            deploy_resources.authorize(request.user, deploy, manage=True)
             if deploy.deployrequest_set.exists():
                 return json_response(error='已存在关联的发布记录，请删除关联的发布记录后再尝试删除发布配置')
             for item in deploy.repository_set.all():
@@ -200,13 +225,15 @@ class DeployView(View):
 
 
 @auth('deploy.app.config|deploy.repository.add|deploy.request.add|deploy.request.edit')
+@deploy_resources.errors
 def get_versions(request, d_id):
     deploy = Deploy.objects.filter(pk=d_id).first()
     if not deploy:
         return json_response(error='未找到指定应用')
+    deploy_resources.authorize(request.user, deploy)
     if deploy.extend == '2':
         return json_response(error='该应用不支持此操作')
-    branches, tags = fetch_versions(deploy)
+    branches, tags = fetch_versions(deploy, user=request.user)
     return json_response({'branches': branches, 'tags': tags})
 
 

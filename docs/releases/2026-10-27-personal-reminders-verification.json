@@ -1,0 +1,57 @@
+{
+  "browser": {
+    "revision": "46a5d9f28cfd2d967ad1fa34188f39ac58248c35",
+    "real_headless_browser": true,
+    "home_dismiss": true,
+    "home_replacement": true,
+    "refresh_persistent": true,
+    "restore": true,
+    "date_change_reminds": true,
+    "second_account_unaffected": true,
+    "expiry_shared_identity": true,
+    "notification_list_dismiss": true,
+    "old_message_popup_suppressed": true,
+    "new_id_identical_content_still_alerts": true,
+    "popup_dismiss": true,
+    "customer_requests": "mocked",
+    "writes_only_simulated_personal_settings": 7,
+    "runtime_exceptions": []
+  },
+  "source": {
+    "revision": "46a5d9f28cfd2d967ad1fa34188f39ac58248c35",
+    "public": true,
+    "anonymous_exact_commit": true,
+    "anonymous_source_archive": true,
+    "license_and_changed_sources_match": true,
+    "archive_bytes": 4120766
+  },
+  "publication": {
+    "revision": "46a5d9f28cfd2d967ad1fa34188f39ac58248c35",
+    "published": true,
+    "paired_backup_valid": true,
+    "preservation_objects": 63,
+    "business_schema_keys_unchanged": true,
+    "original_process_identity": true,
+    "full_api_unchanged": true,
+    "api_files": [
+      233,
+      273
+    ],
+    "ui_files_before": [
+      106,
+      106
+    ],
+    "ui_files_after": [
+      111,
+      111
+    ],
+    "ui_receipt_valid": true,
+    "services_running": 9,
+    "health_checks_ok": 15,
+    "health_timer": "active",
+    "server_and_public_revision": true,
+    "public_brand_title": true,
+    "public_license_exact_original": true,
+    "source_commit_binding_in_bundle": true
+  }
+}

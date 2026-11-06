@@ -182,9 +182,9 @@ function ComTable() {
     return (
       <Popover trigger="click" zIndex={2} title={t('确认发布方式')} content={(
         <div>
-          <div style={{color: '#999', fontSize: 12}}>{t('全量：发布所有主机（包含已成功的）。')}</div>
-          <div style={{color: '#999', fontSize: 12}}>{t('补偿：仅发布上次发布失败的主机。')}</div>
-          <div style={{color: '#999', fontSize: 12}}>{t('灰度：选择指定主机发布。')}</div>
+          <div style={{color: 'var(--kops-muted)', fontSize: 12}}>{t('全量：发布所有主机（包含已成功的）。')}</div>
+          <div style={{color: 'var(--kops-muted)', fontSize: 12}}>{t('补偿：仅发布上次发布失败的主机。')}</div>
+          <div style={{color: 'var(--kops-muted)', fontSize: 12}}>{t('灰度：选择指定主机发布。')}</div>
           <Space style={{width: '100%', justifyContent: 'flex-end', marginTop: 16}}>
             <Button size="small" disabled={!lds.findKey(deploy_status, x => x !== '2')}
                     onClick={() => handleDeploy(props.info, 'fail')}>{t('补偿')}</Button>

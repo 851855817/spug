@@ -2,22 +2,61 @@ name: Baota module checks
 
 on:
   push:
-    branches: [feature/baota-panel-tasks, feature/server-resource-monitor]
+    branches: [feature/baota-panel-tasks, feature/server-resource-monitor, feature/operations-reliability]
   pull_request:
     paths:
+      - 'spug_api/**'
+      - 'deploy/account-resources/**'
       - 'spug_api/apps/baota/**'
+      - 'spug_api/apps/ops/**'
+      - 'spug_api/apps/schedule/**'
+      - 'spug_api/apps/monitor/**'
+      - 'spug_api/spug/settings.py'
+      - 'spug_api/spug/urls.py'
+      - 'spug_api/apps/setting/health*.py'
+      - 'spug_api/apps/setting/test_health.py'
+      - 'spug_api/apps/setting/appearance.py'
+      - 'spug_api/apps/setting/test_appearance.py'
+      - 'spug_api/apps/setting/urls.py'
       - 'spug_api/spug/test_*.py'
+      - 'spug_web/src/**'
       - 'spug_web/src/pages/baota/**'
       - 'spug_web/src/pages/exec/panel/**'
+      - 'spug_web/src/pages/exec/operations/**'
+      - 'spug_web/src/pages/panel-inventory/**'
+      - 'spug_web/src/pages/server-expiry/**'
       - 'spug_web/src/pages/server-monitor/**'
+      - 'spug_web/src/pages/home/**'
+      - 'spug_web/src/layout/**'
+      - 'spug_web/src/branding/**'
+      - 'spug_web/src/pages/login/**'
+      - 'spug_web/src/pages/system/setting/**'
+      - 'spug_web/src/appearance/**'
+      - 'spug_web/src/index.js'
+      - 'spug_web/src/**/*.less'
+      - 'spug_web/src/**/*.css'
+      - 'spug_web/src/pages/system/role/**'
+      - 'spug_web/public/**'
       - 'spug_web/src/pages/host/Table.js'
+      - 'spug_web/src/pages/host/index.js'
       - 'spug_web/src/components/ResourceMonitor*'
       - 'spug_web/src/components/ResizableTable*'
+      - 'spug_web/src/components/ReminderDismiss*'
+      - 'spug_web/src/components/personalReminders*'
+      - 'spug_web/src/components/reminderDismiss*'
+      - 'spug_api/apps/setting/test_reminder_preferences.py'
       - 'spug_web/src/components/TableCard.js'
       - 'spug_web/src/components/useResourceMonitorSources.js'
       - 'spug_web/src/routes.js'
+      - 'spug_web/src/pages/system/health/**'
       - 'deploy/baota/**'
       - 'deploy/resource-monitor/**'
+      - 'deploy/platform-health/**'
+      - 'deploy/operations/**'
+      - 'deploy/inventory/**'
+      - 'deploy/expiry/**'
+      - 'deploy/upgrade-review/**'
+      - 'deploy/ssl-monitor/**'
       - '.github/workflows/baota-checks.yml'
   workflow_dispatch:
 
@@ -38,36 +77,45 @@ jobs:
           fetch-depth: 2
       - name: Pull fixed production runtime
         run: docker pull ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c
-      - name: Run all Baota tests in isolation
+      - name: Run every backend test in isolation
         run: |
-          baota_test_modules=()
-          for baota_test_file in spug_api/apps/baota/test*.py; do
-            baota_test_module=${baota_test_file#spug_api/}
-            baota_test_module=${baota_test_module%.py}
-            baota_test_modules+=("${baota_test_module//\//.}")
-          done
+          mapfile -t backend_test_modules < <(python3 deploy/account-resources/ci_tests.py)
+          test "${#backend_test_modules[@]}" -gt 0
           docker run --rm --network none --read-only --tmpfs /tmp:rw,nosuid,size=128m \
             --memory 768m --cpus 2 --pids-limit 128 \
             -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONUNBUFFERED=1 \
+            -e KOPS_RESOURCE_AUDIT_LOG=/tmp/resource-access.log \
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api \
             --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test "${baota_test_modules[@]}" --settings=spug.test_settings --noinput
+            manage.py test "${backend_test_modules[@]}" --settings=spug.test_settings --noinput
+      - name: Test independent host diagnostics
+        run: python3 -m unittest discover -s deploy/platform-health/tests
+      - name: Test release backup failure handling
+        run: python3 -m unittest discover -s deploy/inventory -p 'test_*.py'
+      - name: Test expiry release failure handling
+        run: python3 -m unittest discover -s deploy/expiry -p 'test_*.py'
+      - name: Test upgrade review release failure handling
+        run: python3 -m unittest discover -s deploy/upgrade-review -p 'test_*.py'
+      - name: Test SSL additive release failure handling
+        run: python3 -m unittest discover -s deploy/ssl-monitor -p 'test_*.py'
+      - name: Test account resource release contracts
+        run: python3 -m unittest discover -s deploy/account-resources -p 'test_*.py'
       - name: Check whitespace
         run: git diff --check HEAD^ HEAD
       - name: Build worker image with disposable static assets
         run: |
           baota_context="$RUNNER_TEMP/baota-image-context"
-          mkdir -p "$baota_context/spug_api/apps" "$baota_context/spug_api/spug" "$baota_context/spug_web/build"
-          cp -a spug_api/apps/baota "$baota_context/spug_api/apps/"
-          cp spug_api/spug/settings.py spug_api/spug/urls.py "$baota_context/spug_api/spug/"
+          mkdir -p "$baota_context/spug_web/build"
+          cp -a spug_api "$baota_context/"
           cp -a deploy "$baota_context/"
           printf '<html>CI image wiring check only</html>\n' > "$baota_context/spug_web/build/index.html"
           docker build --network none --build-arg SOURCE_REVISION="$GITHUB_SHA" \
             -f "$baota_context/deploy/baota/Dockerfile" -t baota-worker-ci "$baota_context"
-          docker run --rm --network none --read-only --memory 128m --pids-limit 32 \
+          docker run --rm --network none --read-only --tmpfs /tmp:rw,nosuid,size=64m --memory 256m --pids-limit 64 \
+            -e PYTHONDONTWRITEBYTECODE=1 \
             -v "$GITHUB_WORKSPACE/deploy/baota/test_image.py:/test_image.py:ro" \
-            --entrypoint python3 baota-worker-ci /test_image.py worker
+            --entrypoint python3 baota-worker-ci /test_image.py account-resources
           docker build --network none --build-arg ROLLBACK_IMAGE=baota-worker-ci \
             -f "$baota_context/deploy/baota/upload-rollback.Dockerfile" -t baota-upload-rollback-ci "$baota_context"
           docker run --rm --network none --read-only --memory 128m --pids-limit 32 \
@@ -118,19 +166,18 @@ jobs:
             sleep 1
           done
           exit 1
-      - name: Check task transactions and concurrent claims
+      - name: Check every backend test on MariaDB
         run: |
-          if [ ! -f spug_api/apps/baota/test_tasks.py ]; then
-            echo 'Task tests have not been committed yet.'
-            exit 0
-          fi
+          mapfile -t backend_test_modules < <(python3 deploy/account-resources/ci_tests.py)
+          test "${#backend_test_modules[@]}" -gt 0
           docker run --rm --network baota-ci --read-only --tmpfs /tmp:rw,nosuid,size=128m \
             --memory 768m --cpus 2 --pids-limit 128 \
             -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONUNBUFFERED=1 \
+            -e KOPS_RESOURCE_AUDIT_LOG=/tmp/resource-access.log \
             -e BAOTA_CI_DB_HOST=baota-ci-db -e BAOTA_CI_DB_PASSWORD=disposable-ci-password \
             -v "$GITHUB_WORKSPACE:/source:ro" --workdir /source/spug_api --entrypoint python3 \
             ghcr.io/openspug/spug@sha256:13fe7c547932e9479dc8181648ec257b91a18e941ef3f2687d9aeb79882de90c \
-            manage.py test apps.baota.test_tasks apps.baota.test_upload_store apps.baota.test_upload_tasks apps.baota.test_resource_monitor --settings=spug.baota_ci_settings --noinput
+            manage.py test "${backend_test_modules[@]}" --settings=spug.baota_ci_settings --noinput
       - name: Remove disposable database
         if: always()
         run: |
@@ -161,4 +208,5 @@ jobs:
           CI: 'false'
           NODE_OPTIONS: --openssl-legacy-provider
           GENERATE_SOURCEMAP: 'false'
+          REACT_APP_RELEASE_REVISION: ${{ github.sha }}
         run: node node_modules/react-app-rewired/bin/index.js build

@@ -22,7 +22,7 @@ function Search(props) {
       allowClear
       style={{width: '280px'}}
       placeholder={t('输入检索')}
-      prefix={<SearchOutlined style={{color: '#c0c0c0'}}/>}
+      prefix={<SearchOutlined style={{color: 'var(--kops-muted)'}}/>}
       onChange={e => props.onChange(key, e.target.value)}
       addonBefore={(
         <Select value={key} onChange={setKey}>

@@ -109,6 +109,7 @@ def read_output(channel, deadline):
 
 
 def run_probe(host):
+    from libs.worker_authorization import authorize_remote
     deadline = Deadline()
     ssh = channel = None
     try:
@@ -117,11 +118,14 @@ def run_probe(host):
         ssh.arguments.update(timeout=remaining, banner_timeout=remaining,
                              auth_timeout=remaining, channel_timeout=remaining,
                              allow_agent=False, look_for_keys=False)
+        authorize_remote()
         client = ssh.get_client()
+        authorize_remote()
         channel = client.get_transport().open_session(timeout=deadline.remaining())
         channel.settimeout(deadline.remaining())
         # The command is constant and sent directly: existing helpers that upload a
         # script or invoke an interactive login shell are deliberately not used.
+        authorize_remote()
         channel.exec_command(PROBE_SCRIPT)
         return read_output(channel, deadline)
     except ProbeError:

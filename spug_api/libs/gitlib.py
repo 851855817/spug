@@ -2,10 +2,11 @@
 # Copyright: (c) <spug.dev@gmail.com>
 # Released under the AGPL-3.0 License.
 from git import Repo, RemoteReference, TagReference, InvalidGitRepositoryError, GitCommandError
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 from datetime import datetime
 from io import StringIO
 from functools import partial
+from libs.executor import run_authorized
 import subprocess
 import shutil
 import shlex
@@ -49,13 +50,20 @@ def _make_askpass_body(credential):
 
 
 class Git:
-    def __init__(self, git_repo, repo_dir, pkey=None):
+    def __init__(self, git_repo, repo_dir, pkey=None, authorize=None, public_only=False):
         self.git_repo = git_repo
         self.repo_dir = repo_dir
         self.repo = None
         self.pkey = pkey
         self.fd = None
         self.env = {}
+        self.authorize = authorize
+        self.public_only = public_only
+        self.home_dir = None
+
+    def _check(self):
+        if self.authorize:
+            self.authorize()
 
     def archive(self, filepath, commit):
         with open(filepath, 'wb') as f:
@@ -84,21 +92,23 @@ class Git:
         return branches, dict(tags)
 
     def fetch(self):
+        self._check()
         kwargs = dict(f=True, p=True)
         if self.repo.git.version_info >= (2, 17, 0):
             kwargs.update(P=True)
-        try:
-            self.repo.remotes.origin.fetch(**kwargs)
-        except GitCommandError as e:
-            if self.env:
-                self.repo.remotes.origin.fetch(env=self.env, **kwargs)
-            else:
-                raise e
+        self.repo.remotes.origin.fetch(env=self.env, kill_after_timeout=30, **kwargs)
+        self._check()
 
     def _get_repo(self):
+        self._check()
+        validate_git_url(self.git_repo)
         if os.path.exists(self.repo_dir):
             try:
-                return Repo(self.repo_dir)
+                repo = Repo(self.repo_dir)
+                # A changed configured URL must never retain another repository's credentials.
+                if repo.remotes.origin.url != self.git_repo:
+                    repo.remotes.origin.set_url(self.git_repo)
+                return repo
             except InvalidGitRepositoryError:
                 if os.path.isdir(self.repo_dir):
                     shutil.rmtree(self.repo_dir)
@@ -107,13 +117,11 @@ class Git:
         validate_git_url(self.git_repo)
         os.makedirs(self.repo_dir, exist_ok=True)
         try:
-            repo = Repo.clone_from(self.git_repo, self.repo_dir)
+            repo = Repo.clone_from(self.git_repo, self.repo_dir, env=self.env, kill_after_timeout=30)
         except GitCommandError as e:
             shutil.rmtree(self.repo_dir, ignore_errors=True)
-            if self.env:
-                repo = Repo.clone_from(self.git_repo, self.repo_dir, env=self.env)
-            else:
-                raise e
+            raise e
+        self._check()
         return repo
 
     def _get_commits(self, branch, count=10):
@@ -136,17 +144,35 @@ class Git:
         return timestamp
 
     def __enter__(self):
+        self._check()
+        if self.public_only:
+            self.home_dir = TemporaryDirectory(prefix='kops-git-')
+            self.env = dict(HOME=self.home_dir.name, XDG_CONFIG_HOME=self.home_dir.name,
+                GIT_TERMINAL_PROMPT='0', GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
+                GIT_ASKPASS='false', GIT_SSH_COMMAND='false', SSH_AUTH_SOCK='',
+                GIT_ALLOW_PROTOCOL='https:http', GIT_CONFIG_COUNT='2',
+                GIT_CONFIG_KEY_0='credential.helper', GIT_CONFIG_VALUE_0='',
+                GIT_CONFIG_KEY_1='core.hooksPath', GIT_CONFIG_VALUE_1=os.devnull)
         if self.pkey:
             self.fd = NamedTemporaryFile()
             self.fd.write(self.pkey.encode())
             self.fd.flush()
-            self.env = {'GIT_SSH_COMMAND': f'ssh -o StrictHostKeyChecking=no -i {self.fd.name}'}
-        self.repo = self._get_repo()
-        return self
+            self.env.update(GIT_SSH_COMMAND=f'ssh -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -i {shlex.quote(self.fd.name)}')
+        try:
+            self.repo = self._get_repo()
+            self._check()
+            return self
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.fd:
             self.fd.close()
+        if self.repo:
+            self.repo.close()
+        if self.home_dir:
+            self.home_dir.cleanup()
 
 
 class RemoteGit:
@@ -194,7 +220,14 @@ class RemoteGit:
     @classmethod
     def _make_local_ask_env(cls, credential=None):
         # the returned files must stay referenced while the git command runs
-        env, files = dict(), []
+        isolated_home = TemporaryDirectory(prefix='kops-git-auth-')
+        env = dict(HOME=isolated_home.name, XDG_CONFIG_HOME=isolated_home.name,
+            GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM='1', GIT_TERMINAL_PROMPT='0',
+            GIT_ASKPASS='false', SSH_AUTH_SOCK='',
+            GIT_CONFIG_COUNT='2', GIT_CONFIG_KEY_0='credential.helper', GIT_CONFIG_VALUE_0='',
+            GIT_CONFIG_KEY_1='core.hooksPath', GIT_CONFIG_VALUE_1=os.devnull,
+            GIT_SSH_COMMAND=f'ssh -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -i {os.devnull}')
+        files = [isolated_home]
         if credential:
             if credential.type == 'pw':
                 ask_command = _make_askpass_body(credential)
@@ -209,19 +242,22 @@ class RemoteGit:
                 key_file.write(credential.secret.encode())
                 key_file.flush()
                 os.chmod(key_file.name, 0o600)
-                ask_command = f'ssh -o StrictHostKeyChecking=no -i {key_file.name} $@'
+                ask_command = f'ssh -o IdentitiesOnly=yes -o IdentityAgent=none -o StrictHostKeyChecking=no -i {shlex.quote(key_file.name)} "$@"'
                 ask_file = NamedTemporaryFile()
                 ask_file.write(ask_command.encode())
                 ask_file.flush()
                 os.chmod(ask_file.name, 0o755)
                 env.update(GIT_SSH=ask_file.name)
+                env.pop('GIT_SSH_COMMAND', None)
                 files.extend([key_file, ask_file])
         # 不经 shell 直接执行 git，需要显式带上 PATH
         env.update(PATH=os.environ.get('PATH', os.defpath))
         return env, files
 
     @classmethod
-    def check_auth(cls, url, credential=None):
+    def check_auth(cls, url, credential=None, authorize=None):
+        if authorize:
+            authorize()
         url = (url or '').strip()
         if not is_valid_git_url(url):
             return False, f'不支持的Git仓库地址：{url}'
@@ -229,7 +265,8 @@ class RemoteGit:
         # 参数列表方式执行，不经 shell；url 已拒绝 - 开头，避免被当成 --upload-pack 等选项
         command = ['git', 'ls-remote', '-h', url]
         try:
-            res = subprocess.run(command, capture_output=True, env=env, timeout=30)
+            res = (run_authorized(command, authorize, env=env, timeout=30) if authorize else
+                   subprocess.run(command, capture_output=True, env=env, timeout=30))
         except subprocess.TimeoutExpired:
             return False, f'git ls-remote timeout: {url}'
         if res.returncode == 0:
@@ -239,16 +276,19 @@ class RemoteGit:
         return False, res.stderr.decode()
 
     @classmethod
-    def fetch_remote_tags(cls, url, credential=None):
+    def fetch_remote_tags(cls, url, credential=None, authorize=None):
         """List remote tag names via a local `git ls-remote`, newest last."""
         url = (url or '').strip()
+        if authorize:
+            authorize()
         if not is_valid_git_url(url):
             return False, f'不支持的Git仓库地址：{url}'
         env, files = cls._make_local_ask_env(credential)
         command = ['git', 'ls-remote', '--tags', '--refs', url]
         # 在请求线程内同步执行，必须限时，避免不可达的 git 服务拖死 worker
         try:
-            res = subprocess.run(command, capture_output=True, env=env, timeout=15)
+            res = (run_authorized(command, authorize, env=env, timeout=15) if authorize else
+                   subprocess.run(command, capture_output=True, env=env, timeout=15))
         except subprocess.TimeoutExpired:
             return False, f'git ls-remote timeout: {url}'
         if res.returncode == 0:

@@ -14,10 +14,11 @@ class Channel:
         return uuid.uuid4().hex
 
     @staticmethod
-    def send_notify(title, content):
+    def send_notify(title, content, **metadata):
         message = {
             'type': 'notify.message',
             'title': title,
             'content': content
         }
+        message.update(metadata)
         async_to_sync(layer.group_send)('notify', message)

@@ -5,7 +5,7 @@
  */
 import { t } from 'libs';
 
-export default [{
+const codes = [{
   key: 'dashboard',
   label: t('Dashboard'),
   pages: [{
@@ -45,6 +45,7 @@ export default [{
     label: t('面板记录'),
     perms: [
       {key: 'view', label: t('查看面板')},
+      {key: 'login', label: t('一键登录宝塔主管理员')},
       {key: 'add', label: t('添加面板')},
       {key: 'edit', label: t('编辑面板')},
       {key: 'del', label: t('删除面板')},
@@ -227,3 +228,26 @@ export default [{
     ]
   }]
 }]
+
+const extra = (module, page, rows) => codes.find(item => item.key === module).pages.find(item => item.key === page).perms
+  .push(...rows.map(([key, label]) => ({key, label: t(label)})));
+extra('host', 'host', [['verify', '验证主机'], ['import', '导入主机'], ['export', '导出主机']]);
+codes.find(item => item.key === 'host').pages.push({key: 'group', label: '主机分组', perms:
+  [['view', '查看分组'], ['add', '新建分组'], ['edit', '编辑分组'], ['del', '删除分组'], ['move', '移动分组']].map(([key, label]) => ({key, label}))});
+extra('baota', 'panel', [['test', '测试面板连接']]);
+extra('schedule', 'schedule', [['enable', '启停计划'], ['run', '手动运行或预检计划']]);
+codes.find(item => item.key === 'exec').pages.push({key: 'panel_action', label: '面板具体动作（需同时授权创建或执行）', perms:
+  [['panel_upgrade', '升级面板'], ['site_add', '创建网站'], ['site_basedir', '配置防跨站'], ['site_rewrite', '配置伪静态'],
+    ['ssl_apply', '申请证书'], ['ssl_renew', '续签证书'], ['software_install', '安装软件'], ['software_uninstall', '卸载软件'],
+    ['php_extension_install', '安装 PHP 扩展'], ['php_update', '更新 PHP'], ['file_upload', '上传面板文件']].map(([key, label]) => ({key, label}))});
+codes.find(item => item.key === 'monitor').pages.push(...[
+  {key: 'server', label: '服务器监控', perms: [['view', '查看监控'], ['configure', '配置监控与关联'], ['collect', '采集监控']]},
+  {key: 'ssl', label: 'SSL 巡检', perms: [['view', '查看证书'], ['configure', '配置巡检来源'], ['collect', '立即巡检'], ['renew', '续签证书']]},
+].map(page => ({...page, perms: page.perms.map(([key, label]) => ({key, label}))})));
+codes.push({key: 'ops', label: '运维管理', pages: [
+  {key: 'inventory', label: '网站与证书盘点', perms: [['view', '查看盘点'], ['collect', '采集盘点']]},
+  {key: 'job', label: '运维作业', perms: [['view', '查看作业'], ['create', '创建作业'], ['continue', '继续执行作业'], ['cancel', '取消作业'], ['baseline', '创建采集基线']]},
+  {key: 'expiry', label: '到期管理', perms: [['view', '查看到期'], ['edit', '编辑到期与续费']]},
+].map(page => ({...page, perms: page.perms.map(([key, label]) => ({key, label}))}))});
+
+export default codes;

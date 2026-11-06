@@ -13,13 +13,21 @@ import { t } from 'libs';
 import hStore from './store';
 import store from './store2';
 import styles from './selector.module.less';
+import {useResourceAccess} from 'resources/ResourceAccess';
+import {canChangeResourceGroups, canManageGroup, manageableGroupTree} from 'resources/groupAccess';
 
 function HostSelector(props) {
+  const access = useResourceAccess();
+  const allowed = id => props.readOnlySelection || (access.canManage('host', id, props.permission) &&
+    (props.mode !== 'group' || canChangeResourceGroups(access, 'host', id)));
   const [visible, setVisible] = useState(false)
   const [isReady, setIsReady] = useState(false)
   const [loading, setLoading] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [expands, setExpands] = useState([]);
+  const groupAllowed = () => props.mode !== 'group' ||
+    (canManageGroup(store.treeData, store.group.key, access) && canManageGroup(hStore.treeData, hStore.group.key, access) &&
+      selectedRowKeys.every(id => canChangeResourceGroups(access, 'host', id)));
 
   useEffect(() => {
     store.onlySelf = props.onlySelf;
@@ -61,6 +69,7 @@ function HostSelector(props) {
   }, [store.group])
 
   function handleClickRow(record) {
+    if (!allowed(record.id)) return;
     let tmp = new Set(selectedRowKeys)
     if (!tmp.delete(record.id)) {
       if (props.onlyOne) tmp.clear()
@@ -70,6 +79,8 @@ function HostSelector(props) {
   }
 
   function handleSubmit() {
+    if (!groupAllowed()) return;
+    if (selectedRowKeys.some(id => !allowed(id))) return;
     if (props.mode === 'ids') {
       props.onChange(props.onlyOne ? selectedRowKeys[0] : selectedRowKeys)
       handleClose()
@@ -93,7 +104,7 @@ function HostSelector(props) {
   function handleSelectAll(selected) {
     let tmp = new Set(selectedRowKeys)
     for (let item of store.dataSource) {
-      if (selected) {
+      if (selected && allowed(item.id)) {
         tmp.add(item.id)
       } else {
         tmp.delete(item.id)
@@ -140,7 +151,7 @@ function HostSelector(props) {
         <Alert
           type="info"
           className={styles.area}
-          message={<div>{t('已选择')} <b style={{fontSize: 18, color: '#1890ff'}}>{props.value.length}</b> {t('台主机')}</div>}
+          message={<div>{t('已选择')} <b style={{fontSize: 18, color: 'var(--kops-primary)'}}>{props.value.length}</b> {t('台主机')}</div>}
           onClick={() => setVisible(true)}/>
       )
     }
@@ -169,9 +180,11 @@ function HostSelector(props) {
         className={styles.modal}
         title={props.title || t('主机列表')}
         onOk={handleSubmit}
-        okButtonProps={{disabled: selectedRowKeys.length === 0 && !props.nullable}}
+        okButtonProps={{disabled: !groupAllowed() || (selectedRowKeys.length === 0 && !props.nullable) || selectedRowKeys.some(id => !allowed(id))}}
         confirmLoading={loading}
         onCancel={handleClose}>
+        <Alert type="info" message="仅可选择当前账号可管理的主机；只读或未授权目标不可执行操作。"/>
+        {props.mode === 'group' && <Alert type="info" message="移动或复制时，来源分组和目标分组都须可管理；仅资源归属账号或管理员可改组。"/>}
         <Row>
           <Col span={6} style={{borderRight: '8px solid #f0f0f0', paddingRight: 12}}>
             <div className={styles.gTitle}>{t('分组列表')}</div>
@@ -181,10 +194,12 @@ function HostSelector(props) {
               expandAction="doubleClick"
               selectedKeys={[store.group.key]}
               expandedKeys={expands}
-              treeData={store.treeData}
+              treeData={props.mode === 'group' ? manageableGroupTree(store.treeData, access) : store.treeData}
               titleRender={treeRender}
               onExpand={handleExpand}
-              onSelect={(_, {node}) => store.group = node}
+              onSelect={(_, {node}) => {
+                if (props.mode !== 'group' || canManageGroup(store.treeData, node.key, access)) store.group = node;
+              }}
             />
           </Col>
           <Col span={18} style={{paddingLeft: 12}}>
@@ -207,6 +222,7 @@ function HostSelector(props) {
               }}
               rowSelection={{
                 selectedRowKeys,
+                getCheckboxProps: record => ({disabled: !allowed(record.id)}),
                 hideSelectAll: props.onlyOne,
                 onSelect: handleClickRow,
                 onSelectAll: handleSelectAll

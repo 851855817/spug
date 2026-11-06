@@ -16,6 +16,7 @@ class PHPUpdateFixture(PanelFixture):
         self.actual_version = '7.4.32'
         self.actual_bin = '/www/server/php/74/bin/php'
         self.actual_ini = '/www/server/php/74/etc/php.ini'
+        self.actual_modules = 'Core date json standard PDO pdo_mysql Zend OPcache'
         self.attribute_overrides = {}
         self.software['php-7.4'] = {
             'name': 'php-7.4', 'setup': True, 'version': '7.4.32', 'type': 5,
@@ -32,6 +33,7 @@ class PHPUpdateFixture(PanelFixture):
             if action == 'php_info':
                 return {'phpinfo': {'php_version': self.actual_version, 'php_path': '/www/server/php/',
                                     'php_bin': self.actual_bin, 'php_ini': self.actual_ini,
+                                    'modules': self.actual_modules,
                                     'ini': {'private_secret': 'SECRET'}}}
             if action == 'get_file_attribute':
                 filename = p['filename']
@@ -311,3 +313,107 @@ class PHPUpdateTests(TestCase):
         self.client.actual_version = '7.4.34'
         self.assertEqual(self.module.update_options(self.client), {'php_updates': []})
         self.assertEqual(self.mutations(), [])
+
+    def test_preflight_freezes_cli_modules_from_the_same_php_info_read(self):
+        item = self.item()
+        self.assertEqual(item['plan'].get('health_policy'), 'php_cli_modules_v1')
+        self.assertEqual(item['before']['runtime'].get('cli_modules'),
+                         ['core', 'date', 'json', 'pdo', 'pdo_mysql', 'standard', 'zend_opcache'])
+        self.assertEqual(len([c for c in self.client.calls if c[1] == 'php_info']), 1)
+        self.assertNotIn('SECRET', str(item))
+        self.assertEqual(self.mutations(), [])
+
+    def test_unverifiable_cli_modules_block_new_updates_without_mutation(self):
+        for modules in (None, '', '  ', [], {}, ['Core', None], [''], 'Core <script>',
+                        'Core\nstandard', 'Core ' + 'x' * 101, ['a'] * 501,
+                        'redis', ['redis'], 'Core standard CORE'):
+            with self.subTest(modules=modules):
+                self.client = PHPUpdateFixture()
+                self.client.actual_modules = modules
+                item = self.item()
+                self.assertEqual(item['state'], 'failed')
+                self.assertEqual(self.mutations(), [])
+
+    def test_module_drift_between_preflight_and_dispatch_blocks_update(self):
+        item = self.item()
+        self.client.actual_modules += ' redis'
+        self.assertEqual(self.op.execute(self.client, item)['state'], 'failed')
+        self.assertEqual(self.mutations(), [])
+
+    def finished(self, modules):
+        item = self.item()
+        self.client.actual_version = '7.4.33'
+        self.client.actual_modules = modules
+        self.client.tasks = [{'id': 1, 'name': 'upgrade[php-7.4]', 'status': '1'}]
+        return item, self.op.reconcile(self.client, item, {'phase': 'apply', 'task_ids': [1]})
+
+    def test_finished_update_with_missing_cli_module_is_uncertain_not_success(self):
+        _, output = self.finished('Core date json standard PDO Zend OPcache')
+        self.assertEqual(output['state'], 'uncertain')
+        check = output['evidence'].get('cli_module_check', {})
+        self.assertEqual(check.get('state'), 'changed')
+        self.assertEqual(check.get('removed'), ['pdo_mysql'])
+        self.assertEqual(check.get('added'), [])
+        self.assertIs(output['evidence'].get('fpm_runtime_verified'), False)
+        self.assertEqual(self.mutations(), [])
+
+    def test_added_cli_module_is_reported_and_does_not_imply_fpm_health(self):
+        _, output = self.finished('Core date json standard PDO pdo_mysql redis Zend OPcache')
+        self.assertEqual(output['state'], 'success')
+        check = output['evidence'].get('cli_module_check', {})
+        self.assertEqual(check.get('added'), ['redis'])
+        self.assertEqual(check.get('removed'), [])
+        self.assertIs(output['evidence'].get('fpm_runtime_verified'), False)
+        self.assertNotIn('SECRET', str(output))
+
+    def test_missing_module_readback_cannot_complete_new_policy_update(self):
+        _, output = self.finished(None)
+        self.assertEqual(output['state'], 'uncertain')
+        self.assertEqual(output['evidence'].get('cli_module_check', {}).get('state'), 'unavailable')
+        self.assertEqual(self.mutations(), [])
+
+    def test_old_inflight_snapshot_keeps_version_contract_and_marks_missing_baseline(self):
+        item, _ = self.finished(self.client.actual_modules)
+        item['plan'].pop('health_policy', None)
+        item['before']['runtime'].pop('cli_modules', None)
+        output = self.op.reconcile(self.client, item, {'phase': 'apply', 'task_ids': [1]})
+        self.assertEqual(output['state'], 'success')
+        check = output['evidence'].get('cli_module_check', {})
+        self.assertEqual(check.get('state'), 'unavailable')
+        self.assertEqual(check.get('reason'), 'baseline_unavailable')
+
+    def test_module_observation_never_overrides_queue_collision_or_ambiguity(self):
+        item, _ = self.finished(self.client.actual_modules)
+        for remote in ({'phase': 'apply', 'ambiguous': True}, {'phase': 'apply', 'collision': True}):
+            self.assertEqual(self.op.reconcile(self.client, item, remote)['state'], 'uncertain')
+        self.client.tasks[0]['status'] = '0'
+        self.assertEqual(self.op.reconcile(self.client, item, {})['state'], 'remote')
+        self.assertEqual(self.mutations(), [])
+
+    def test_cli_module_order_case_and_known_multiword_names_are_canonical(self):
+        self.client.actual_modules = ['standard', 'Core', 'Zend OPcache', 'ionCube Loader']
+        item = self.item()
+        self.assertEqual(item['state'], 'ready')
+        self.assertEqual(item['before']['runtime'].get('cli_modules'),
+                         ['core', 'ioncube_loader', 'standard', 'zend_opcache'])
+        self.client.actual_modules = 'IONCUBE Loader Zend OPcache core STANDARD'
+        self.assertEqual(self.op.execute(self.client, item)['state'], 'remote')
+        self.assertEqual(len(self.mutations()), 1)
+
+    def test_new_dispatch_cannot_suppress_health_policy_and_unknown_baseline_cannot_succeed(self):
+        item = self.item()
+        item['plan'].pop('health_policy', None)
+        self.assertEqual(self.op.execute(self.client, item)['state'], 'failed')
+        self.assertEqual(self.mutations(), [])
+        item = self.item()
+        item['before']['runtime']['cli_modules'] = None
+        self.client.actual_version = '7.4.33'
+        self.client.tasks = [{'id': 1, 'name': 'upgrade[php-7.4]', 'status': '1'}]
+        self.assertEqual(self.op.reconcile(self.client, item, {'phase': 'apply'})['state'], 'uncertain')
+
+    def test_partial_module_readback_is_unavailable_even_when_both_lists_would_match(self):
+        item, _ = self.finished('redis')
+        item['before']['runtime']['cli_modules'] = ['redis']
+        output = self.op.reconcile(self.client, item, {'phase': 'apply'})
+        self.assertEqual(output['state'], 'uncertain')
+        self.assertEqual(output['evidence'].get('cli_module_check', {}).get('state'), 'unavailable')

@@ -10,11 +10,15 @@ import { ConfigProvider } from 'antd';
 import zhCN from 'antd/es/locale/zh_CN';
 import enUS from 'antd/es/locale/en_US';
 import './index.less';
+// A separate Less compilation avoids import-once suppressing scoped dark components.
+import './appearance/antd.dark.less';
+import './appearance/theme.less';
 import App from './App';
 import moment from 'moment';
 import 'moment/locale/zh-cn';
 import * as serviceWorker from './serviceWorker';
 import { history, updatePermissions, isEN } from 'libs';
+import AppearanceProvider from './appearance/Provider';
 
 moment.locale(isEN ? 'en' : 'zh-cn');
 updatePermissions();
@@ -22,7 +26,7 @@ updatePermissions();
 ReactDOM.render(
   <Router history={history}>
     <ConfigProvider locale={isEN ? enUS : zhCN} getPopupContainer={() => document.fullscreenElement || document.body}>
-      <App/>
+      <AppearanceProvider><App/></AppearanceProvider>
     </ConfigProvider>
   </Router>,
   document.getElementById('root')

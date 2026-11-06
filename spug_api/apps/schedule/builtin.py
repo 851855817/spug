@@ -58,7 +58,8 @@ def auto_run_by_day():
         for task in Task.objects.all():
             try:
                 record = TaskHistory.objects.filter(task_id=task.id)[50]
-                TaskHistory.objects.filter(task_id=task.id, id__lt=record.id).delete()
+                TaskHistory.objects.filter(task_id=task.id, id__lt=record.id).exclude(
+                    pk=task.latest_id).exclude(status=0).delete()
             except IndexError:
                 pass
 

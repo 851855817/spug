@@ -4,10 +4,20 @@
 from django.views.generic import View
 from libs import json_response, JsonParser, Argument
 from apps.home.models import Notice
+from apps.account import access
 import json
 
 
 class NoticeView(View):
+    def dispatch(self, request, *args, **kwargs):
+        try:
+            access.current_user(request.user)
+            if request.method in ('POST', 'DELETE'):
+                access.admin(request.user)
+            return super().dispatch(request, *args, **kwargs)
+        except access.AccessDenied as error:
+            return json_response(error=str(error))
+
     def get(self, request):
         notices = Notice.objects.all()
         return json_response([x.to_view() for x in notices])
@@ -37,6 +47,8 @@ class NoticeView(View):
             Argument('read', required=False)
         ).parse(request.body)
         if error is None:
+            if form.sort:
+                access.admin(request.user)
             notice = Notice.objects.filter(pk=form.id).first()
             if not notice:
                 return json_response(error='未找到指定记录')

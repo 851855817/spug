@@ -22,7 +22,7 @@ function FeishuIcon({size}) {
       width: size,
       height: size,
       borderRadius: '50%',
-      backgroundColor: '#fff',
+      backgroundColor: 'var(--kops-surface)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',

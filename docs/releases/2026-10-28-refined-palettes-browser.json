@@ -1,0 +1,314 @@
+{
+  "revision": "4564925c09969e0133b6250cd597bf3c80cd68c2",
+  "real_headless_browser": true,
+  "paletteChecks": [
+    {
+      "id": "obsidian-gold",
+      "mode": "dark",
+      "primary": "#D6BA83",
+      "surface": "#1B1D20",
+      "raised": "#23262A",
+      "focus": "#D6BA8333"
+    },
+    {
+      "id": "midnight-teal",
+      "mode": "dark",
+      "primary": "#75C8BD",
+      "surface": "#15272D",
+      "raised": "#1C3239",
+      "focus": "#75C8BD33"
+    },
+    {
+      "id": "moonlit-violet",
+      "mode": "dark",
+      "primary": "#BCACE2",
+      "surface": "#252330",
+      "raised": "#302D3B",
+      "focus": "#BCACE233"
+    },
+    {
+      "id": "porcelain",
+      "mode": "light",
+      "primary": "#795B46",
+      "surface": "#FFFDF9",
+      "raised": "#F7F4EF",
+      "focus": "#795B4633"
+    },
+    {
+      "id": "pine-mist",
+      "mode": "light",
+      "primary": "#426858",
+      "surface": "#FCFEFC",
+      "raised": "#F2F6F2",
+      "focus": "#42685833"
+    },
+    {
+      "id": "champagne",
+      "mode": "light",
+      "primary": "#785B35",
+      "surface": "#FFFEFA",
+      "raised": "#F8F5EC",
+      "focus": "#785B3533"
+    },
+    {
+      "id": "night",
+      "mode": "dark",
+      "primary": "#60A5FA",
+      "surface": "#172234",
+      "raised": "#1E2C42",
+      "focus": "#60A5FA33"
+    },
+    {
+      "id": "classic-blue",
+      "mode": "light",
+      "primary": "#2563FC",
+      "surface": "#FFFFFF",
+      "raised": "#F8FAFC",
+      "focus": "#2563FC33"
+    },
+    {
+      "id": "jade",
+      "mode": "light",
+      "primary": "#0F766E",
+      "surface": "#FFFFFF",
+      "raised": "#F8FAFC",
+      "focus": "#0F766E33"
+    },
+    {
+      "id": "indigo",
+      "mode": "light",
+      "primary": "#6D28D9",
+      "surface": "#FFFFFF",
+      "raised": "#F8FAFC",
+      "focus": "#6D28D933"
+    },
+    {
+      "id": "graphite",
+      "mode": "light",
+      "primary": "#475569",
+      "surface": "#FFFFFF",
+      "raised": "#F8FAFC",
+      "focus": "#47556933"
+    }
+  ],
+  "pageChecks": [
+    {
+      "id": "obsidian-gold",
+      "route": "/home",
+      "width": 1152
+    },
+    {
+      "id": "obsidian-gold",
+      "route": "/host",
+      "width": 1152
+    },
+    {
+      "id": "obsidian-gold",
+      "route": "/baota",
+      "width": 1152
+    },
+    {
+      "id": "obsidian-gold",
+      "route": "/exec/panel",
+      "width": 1152
+    },
+    {
+      "id": "obsidian-gold",
+      "route": "/monitor/servers",
+      "width": 1152
+    },
+    {
+      "id": "obsidian-gold",
+      "route": "/host/expiry",
+      "width": 1152
+    },
+    {
+      "id": "obsidian-gold",
+      "route": "/system/role",
+      "width": 1152
+    },
+    {
+      "id": "midnight-teal",
+      "route": "/home",
+      "width": 1152
+    },
+    {
+      "id": "midnight-teal",
+      "route": "/host",
+      "width": 1152
+    },
+    {
+      "id": "midnight-teal",
+      "route": "/baota",
+      "width": 1152
+    },
+    {
+      "id": "midnight-teal",
+      "route": "/exec/panel",
+      "width": 1152
+    },
+    {
+      "id": "midnight-teal",
+      "route": "/monitor/servers",
+      "width": 1152
+    },
+    {
+      "id": "midnight-teal",
+      "route": "/host/expiry",
+      "width": 1152
+    },
+    {
+      "id": "midnight-teal",
+      "route": "/system/role",
+      "width": 1152
+    },
+    {
+      "id": "moonlit-violet",
+      "route": "/home",
+      "width": 1152
+    },
+    {
+      "id": "moonlit-violet",
+      "route": "/host",
+      "width": 1152
+    },
+    {
+      "id": "moonlit-violet",
+      "route": "/baota",
+      "width": 1152
+    },
+    {
+      "id": "moonlit-violet",
+      "route": "/exec/panel",
+      "width": 1152
+    },
+    {
+      "id": "moonlit-violet",
+      "route": "/monitor/servers",
+      "width": 1152
+    },
+    {
+      "id": "moonlit-violet",
+      "route": "/host/expiry",
+      "width": 1152
+    },
+    {
+      "id": "moonlit-violet",
+      "route": "/system/role",
+      "width": 1152
+    },
+    {
+      "id": "porcelain",
+      "route": "/home",
+      "width": 1152
+    },
+    {
+      "id": "porcelain",
+      "route": "/host",
+      "width": 1152
+    },
+    {
+      "id": "porcelain",
+      "route": "/baota",
+      "width": 1152
+    },
+    {
+      "id": "porcelain",
+      "route": "/exec/panel",
+      "width": 1152
+    },
+    {
+      "id": "porcelain",
+      "route": "/monitor/servers",
+      "width": 1152
+    },
+    {
+      "id": "porcelain",
+      "route": "/host/expiry",
+      "width": 1152
+    },
+    {
+      "id": "porcelain",
+      "route": "/system/role",
+      "width": 1152
+    },
+    {
+      "id": "pine-mist",
+      "route": "/home",
+      "width": 1152
+    },
+    {
+      "id": "pine-mist",
+      "route": "/host",
+      "width": 1152
+    },
+    {
+      "id": "pine-mist",
+      "route": "/baota",
+      "width": 1152
+    },
+    {
+      "id": "pine-mist",
+      "route": "/exec/panel",
+      "width": 1152
+    },
+    {
+      "id": "pine-mist",
+      "route": "/monitor/servers",
+      "width": 1152
+    },
+    {
+      "id": "pine-mist",
+      "route": "/host/expiry",
+      "width": 1152
+    },
+    {
+      "id": "pine-mist",
+      "route": "/system/role",
+      "width": 1152
+    },
+    {
+      "id": "champagne",
+      "route": "/home",
+      "width": 1152
+    },
+    {
+      "id": "champagne",
+      "route": "/host",
+      "width": 1152
+    },
+    {
+      "id": "champagne",
+      "route": "/baota",
+      "width": 1152
+    },
+    {
+      "id": "champagne",
+      "route": "/exec/panel",
+      "width": 1152
+    },
+    {
+      "id": "champagne",
+      "route": "/monitor/servers",
+      "width": 1152
+    },
+    {
+      "id": "champagne",
+      "route": "/host/expiry",
+      "width": 1152
+    },
+    {
+      "id": "champagne",
+      "route": "/system/role",
+      "width": 1152
+    }
+  ],
+  "new_palettes": 6,
+  "total_palettes": 11,
+  "preview_only_until_apply": true,
+  "portaled_modals_and_dropdowns": true,
+  "narrow_layout": true,
+  "shared_focus_sync": true,
+  "customer_requests": "mocked",
+  "runtime_exceptions": []
+}

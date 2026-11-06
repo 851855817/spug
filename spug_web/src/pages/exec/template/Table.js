@@ -10,18 +10,23 @@ import { PlusOutlined } from '@ant-design/icons';
 import { http, hasPermission, t } from 'libs';
 import { Action, TableCard, AuthButton } from "components";
 import store from './store';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
-@observer
 class ComTable extends React.Component {
+  canWrite = record => this.props.access.is_supper === true ||
+    (Number.isInteger(this.props.access.user_id) && record.created_by_id === this.props.access.user_id);
+
   componentDidMount() {
     store.fetchRecords()
   }
 
   handleDelete = (text) => {
+    if (!this.canWrite(text) || !hasPermission('exec.template.del')) return;
     Modal.confirm({
       title: t('删除确认'),
       content: t('确定要删除【{}】?', text['name']),
       onOk: () => {
+        if (!this.canWrite(text) || !hasPermission('exec.template.del')) return;
         return http.delete('/api/exec/template/', {params: {id: text.id}})
           .then(() => {
             message.success(t('删除成功'));
@@ -60,8 +65,10 @@ class ComTable extends React.Component {
         {hasPermission('exec.template.edit|exec.template.del') && (
           <Table.Column title={t('操作')} render={info => (
             <Action>
-              <Action.Button auth="exec.template.edit" onClick={() => store.showForm(info)}>{t('编辑')}</Action.Button>
-              <Action.Button danger auth="exec.template.del" onClick={() => this.handleDelete(info)}>{t('删除')}</Action.Button>
+              <Action.Button auth="exec.template.edit" disabled={!this.canWrite(info)} onClick={() => {
+                if (this.canWrite(info) && hasPermission('exec.template.edit')) store.showForm(info);
+              }}>{t('编辑')}</Action.Button>
+              <Action.Button danger auth="exec.template.del" disabled={!this.canWrite(info)} onClick={() => this.handleDelete(info)}>{t('删除')}</Action.Button>
             </Action>
           )}/>
         )}
@@ -70,4 +77,8 @@ class ComTable extends React.Component {
   }
 }
 
-export default ComTable
+const ObservedTable = observer(ComTable);
+export default function TemplateTable(props) {
+  const access = useResourceAccess();
+  return <ObservedTable {...props} access={access}/>;
+}

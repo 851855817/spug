@@ -2,6 +2,7 @@
 import copy
 import threading
 import time
+import uuid
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -14,6 +15,8 @@ from .client import PanelClient
 from .models import Panel, PanelTask, PanelTaskTarget, PanelLock
 from .operations import get_operation
 from . import task_service as s
+from .authorization import AuthorizedClient
+from libs.worker_authorization import guard
 
 
 POLL_INTERVAL_SECONDS = 5
@@ -23,6 +26,37 @@ MAX_POLLS = 180
 
 class WorkerStopping(Exception):
     pass
+
+
+class SSLAuthorizedClient:
+    """Re-read opt-in SSL authorization immediately before each mutation."""
+    def __init__(self, client, task):
+        self.client, self.task = client, task
+
+    def authorize(self, mutating=False):
+        from apps.monitor.ssl.renewal import panel_runtime_authorized
+        if not panel_runtime_authorized(self.task.pk, mutating=mutating):
+            from .client import PanelAPIError
+            raise PanelAPIError('SSL 来源或账号授权已变化，未发送请求')
+
+    def request(self, *args, **kwargs):
+        self.authorize(bool(kwargs.get('mutating')))
+        return self.client.request(*args, **kwargs)
+
+    def read_site_web_config(self, *args, **kwargs):
+        self.authorize()
+        return self.client.read_site_web_config(*args, **kwargs)
+
+    def read_site_public_certificate(self, *args, **kwargs):
+        self.authorize()
+        return self.client.read_site_public_certificate(*args, **kwargs)
+
+    def read_issued_certificate(self, *args, **kwargs):
+        self.authorize()
+        return self.client.read_issued_certificate(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self.client, name)
 
 
 class StopAwareClient:
@@ -91,6 +125,9 @@ def recover_interrupted():
     for target_id in ids:
         with transaction.atomic():
             task, target = locked_target(target_id)
+            if task.execution_policy.get('deployment'):
+                task.execution_policy = {key: value for key, value in task.execution_policy.items() if key != 'deployment'}
+                task.save(update_fields=['execution_policy', 'updated_at'])
             if target.state == 'preflighting':
                 target.state = 'cancelled' if task.cancel_requested else 'preflight_queued'
                 target.save(update_fields=['state', 'updated_at'])
@@ -137,9 +174,18 @@ class PanelWorker:
                         continue
                     target.state = 'preflighting'
                 elif target.state in ('queued', 'remote', 'uncertain'):
+                    if task.execution_policy:
+                        # Remote/uncertain targets can only enter an explicitly
+                        # requested read-only reconciliation, even while held.
+                        if target.state in ('remote', 'uncertain'):
+                            authorized = any(s.deployment_authorized(task, target, child) for child in target.children)
+                            if not target.reconcile_requested and not authorized:
+                                continue
+                        elif not s.batch_allows(task, target):
+                            continue
                     if target.state == 'uncertain' and not target.reconcile_requested:
                         continue
-                    if target.state == 'remote' and not target.reconcile_requested:
+                    if target.state == 'remote' and not target.reconcile_requested and not task.execution_policy:
                         pending = next((c for c in target.children if c['state'] == 'remote'), None)
                         if not pending or pending.get('next_poll_at', '') > s.now():
                             continue
@@ -167,9 +213,10 @@ class PanelWorker:
         return True
 
     @contextmanager
-    def client(self, panel):
-        with self.client_factory(panel) as client:
-            yield StopAwareClient(client, self.stop_event)
+    def client(self, panel, task, mutating=False):
+        authorize = lambda: s.runtime_authorized(task.pk, mutating=mutating)
+        with guard(authorize), self.client_factory(panel) as client:
+            yield AuthorizedClient(StopAwareClient(client, self.stop_event), authorize)
 
     def process_target(self, target_id):
         target = PanelTaskTarget.objects.select_related('task', 'panel').get(pk=target_id)
@@ -188,7 +235,8 @@ class PanelWorker:
             remote = child.get('result', {}).get('remote', {})
             if (child['state'] == 'remote' and remote.get('next_action') == 'deploy'
                     and not remote.get('ambiguous') and not child.get('uncertain_provenance')
-                    and not target.task.cancel_requested):
+                    and not target.task.cancel_requested and (not target.task.execution_policy
+                        or s.deployment_authorized(target.task, target, child))):
                 self.dispatch(target_id, index, 'deploy')
             else:
                 self.readback(target_id, index)
@@ -205,7 +253,9 @@ class PanelWorker:
     def preflight(self, target):
         try:
             s.configured(target.panel, target.panel_snapshot['api_config_revision'])
-            with self.client(target.panel) as client:
+            with self.client(target.panel, target.task) as client:
+                if any(a.get('action') == 'ssl_monitor' for a in target.task.audit):
+                    client = SSLAuthorizedClient(client, target.task)
                 preview = get_operation(target.task.operation).preflight(client, copy.deepcopy(target.params))
             s.bounded(preview)
             items = preview['items']
@@ -257,6 +307,8 @@ class PanelWorker:
 
     def begin_dispatch(self, target_id, index, phase):
         with transaction.atomic():
+            from apps.schedule.panel_tasks import lock_for_intent
+            lock_for_intent(PanelTaskTarget.objects.values_list('task_id', flat=True).get(pk=target_id))
             task, target = locked_target(target_id)
             if target.state != 'running' or phase not in ('apply', 'deploy'):
                 return None
@@ -265,6 +317,20 @@ class PanelWorker:
                 s.refresh_task(task)
                 return None
             child = target.children[index]
+            if task.execution_policy:
+                if phase == 'deploy':
+                    allowed = s.deployment_authorized(task, target, child)
+                    task.execution_policy.pop('deployment', None)
+                    task.save(update_fields=['execution_policy', 'updated_at'])
+                    if not allowed:
+                        child.pop('deploy_verification', None)
+                        s.settle_target(target)
+                        s.refresh_task(task)
+                        return None
+                elif not s.batch_allows(task, target):
+                    s.settle_target(target)
+                    s.refresh_task(task)
+                    return None
             if task.cancel_requested:
                 if not child['intents']:
                     child['state'] = 'cancelled'
@@ -274,6 +340,13 @@ class PanelWorker:
                 s.refresh_task(task)
                 return None
             try:
+                s.runtime_authorized(task.pk, mutating=True)
+                from apps.schedule.panel_tasks import before_mutation
+                before_mutation(task)
+                if any(a.get('action') == 'ssl_monitor' for a in task.audit):
+                    from apps.monitor.ssl.renewal import panel_runtime_authorized
+                    if not panel_runtime_authorized(task.pk):
+                        raise ValueError('SSL 来源或账号授权已变化')
                 s.configured(target.panel, target.panel_snapshot['api_config_revision'])
                 required = child['snapshot'].get('plan', {}).get('required_acknowledgements', [])
                 if (any(code not in s.ACK_CODES for code in required)
@@ -310,7 +383,11 @@ class PanelWorker:
             return
         child = target.children[index]
         try:
-            with self.client(target.panel) as client:
+            with self.client(target.panel, target.task, mutating=True) as client:
+                from apps.schedule.panel_tasks import authorized_client
+                client = authorized_client(client, target.task)
+                if any(a.get('action') == 'ssl_monitor' for a in target.task.audit):
+                    client = SSLAuthorizedClient(client, target.task)
                 result = get_operation(target.task.operation).dispatch(
                     client, copy.deepcopy(child['snapshot']), phase,
                     copy.deepcopy(child.get('result', {}).get('remote', {})))
@@ -334,13 +411,16 @@ class PanelWorker:
             if target.state != 'running':
                 return
             child = target.children[index]
+            if task.execution_policy.get('deployment', {}).get('target_id') == target.pk:
+                task.execution_policy.pop('deployment')
+                task.save(update_fields=['execution_policy', 'updated_at'])
             target.state = 'reconciling'
             target.reconcile_requested = False
             target.save(update_fields=['state', 'reconcile_requested', 'updated_at'])
         try:
             # Never use edited API credentials/base URL to infer the old request's outcome.
             s.configured(target.panel, target.panel_snapshot['api_config_revision'])
-            with self.client(target.panel) as client:
+            with self.client(target.panel, target.task) as client:
                 result = get_operation(task.operation).reconcile(
                     client, copy.deepcopy(child['snapshot']), copy.deepcopy(child.get('result', {}).get('remote', {})))
             result = self.result(result)
@@ -365,6 +445,9 @@ class PanelWorker:
                           'remote': {**previous_remote, **result.get('remote', {}), 'ambiguous': True}}
                 result['remote'].pop('next_action', None)
             child['state'], child['result'] = result['state'], result
+            child.pop('deploy_verification', None)
+            if not dispatched and child['state'] == 'remote' and result.get('remote', {}).get('next_action') == 'deploy':
+                child['deploy_verification'] = {'token': uuid.uuid4().hex, 'remote': copy.deepcopy(result['remote']), 'at': s.now()}
             if child['state'] == 'remote':
                 child.setdefault('poll_started_at', s.now())
                 child['polls'] = child.get('polls', 0) + (0 if dispatched else 1)
@@ -392,11 +475,16 @@ class PanelWorker:
 
     def run(self):
         from .upload_store import cleanup_expired
+        from apps.schedule.panel_tasks import tick
         next_cleanup = 0
+        next_schedule_tick = 0
         # SQLite's in-memory connection cannot be shared safely by this queue's
         # coordinator and worker threads; production uses MariaDB.
         if connection.vendor == 'sqlite':
             while not self.stop_event.is_set():
+                if time.monotonic() >= next_schedule_tick:
+                    tick()
+                    next_schedule_tick = time.monotonic() + 1
                 if time.monotonic() >= next_cleanup:
                     cleanup_expired()
                     next_cleanup = time.monotonic() + 3600
@@ -407,6 +495,9 @@ class PanelWorker:
         failed = False
         with ThreadPoolExecutor(max_workers=self.max_parallel) as pool:
             while not self.stop_event.is_set() or futures:
+                if not self.stop_event.is_set() and time.monotonic() >= next_schedule_tick:
+                    tick()
+                    next_schedule_tick = time.monotonic() + 1
                 if not self.stop_event.is_set() and time.monotonic() >= next_cleanup:
                     cleanup_expired()
                     next_cleanup = time.monotonic() + 3600

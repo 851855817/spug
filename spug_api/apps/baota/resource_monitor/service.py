@@ -11,6 +11,8 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.host.models import Host, Group
+from apps.account import access as resources
+from libs.worker_authorization import guard
 from apps.setting.models import Setting
 from apps.baota.models import Panel
 from apps.baota.validation import positive_id
@@ -42,8 +44,7 @@ def collect_host(host):
 
 class Access:
     def __init__(self, user):
-        self.user = user
-        self.permissions = set() if user.is_supper else user.page_perms
+        self.user, self.permissions = resources.permissions(user)
         self.group_ids = None
 
     def has(self, *permissions):
@@ -54,22 +55,12 @@ class Access:
             raise ValueError('权限拒绝')
 
     def groups(self):
-        if self.group_ids is None and not self.user.is_supper:
-            allowed = set(self.user.group_perms)
-            edges = list(Group.objects.values_list('id', 'parent_id'))
-            while True:
-                expanded = allowed | {pk for pk, parent in edges if parent in allowed}
-                if expanded == allowed:
-                    break
-                allowed = expanded
-            self.group_ids = allowed
+        if self.group_ids is None:
+            self.group_ids = resources.group_ids(self.user, 'host')
         return self.group_ids
 
     def hosts(self):
-        query = Host.objects.all()
-        if not self.user.is_supper:
-            query = query.filter(groups__id__in=self.groups()).distinct()
-        return query
+        return resources.scope(self.user, 'host')
 
     def can_host(self, host_id):
         return self.has('host.host.view') and self.hosts().filter(pk=host_id).exists()
@@ -84,9 +75,10 @@ def _kind(value):
 def _source(access, kind, record_id, edit=False):
     kind = _kind(kind)
     prefix = SOURCE_PERMISSIONS[kind]
-    access.require(prefix + '.view', *([prefix + '.edit'] if edit else []))
+    access.require(prefix + '.view')
+    resources.require_resources(access.user, kind, [positive_id(record_id)], manage=edit)
     query = (access.hosts().prefetch_related('groups') if kind == 'host' else
-             Panel.objects.select_related('group'))
+             resources.scope(access.user, 'panel').select_related('group'))
     source = query.filter(pk=positive_id(record_id)).first()
     if source is None:
         raise ValueError('来源不存在或无权访问')
@@ -106,6 +98,8 @@ def _address(source, kind):
 def _source_meta(access, kind, source, preference, accessible_hosts):
     groups = (_host_groups(access, source) if kind == 'host' else
               [{'key': 'panel:' + str(source.group_id), 'name': source.group.name}])
+    visible_groups = resources.group_ids(access.user, kind)
+    groups = [g for g in groups if int(g['key'].split(':')[1]) in visible_groups]
     return {'id': source.pk, 'kind': kind, 'name': source.name, 'address': _address(source, kind),
             'enabled': bool(preference and preference.enabled),
             'group_ids': ([int(g['key'].split(':')[1]) for g in groups]), 'groups': groups,
@@ -119,7 +113,7 @@ def sources(user, kind):
     visible_hosts = (list(access.hosts().prefetch_related('groups'))
                      if access.has('host.host.view') else [])
     host_ids = {h.pk for h in visible_hosts}
-    records = visible_hosts if kind == 'host' else list(Panel.objects.select_related('group'))
+    records = visible_hosts if kind == 'host' else list(resources.scope(user, 'panel').select_related('group'))
     prefs = {getattr(p, kind + '_id'): p for p in
              Preference.objects.filter(**{kind + '_id__in': [r.pk for r in records]})}
     return {'sources': [_source_meta(access, kind, source, prefs.get(source.pk), host_ids)
@@ -137,6 +131,7 @@ def _invalidate(preference):
 
 
 def settings(user, data):
+    resources.require(user, 'monitor.server.configure')
     kind = _kind(data.get('kind'))
     if type(data.get('enabled')) is not bool:
         raise ValueError('监控状态必须为布尔值')
@@ -145,6 +140,8 @@ def settings(user, data):
     with transaction.atomic():
         preference, _ = Preference.objects.get_or_create(**{kind: source})
         preference = Preference.objects.select_for_update().get(pk=preference.pk)
+        resources.require(user, 'monitor.server.configure')
+        _source(Access(user), kind, source.pk, edit=True)
         if preference.enabled != data['enabled']:
             preference.enabled = data['enabled']
             preference.revision = uuid.uuid4().hex
@@ -156,13 +153,19 @@ def settings(user, data):
 
 
 def link(user, data):
+    resources.admin(user)
     access = Access(user)
     panel = _source(access, 'panel', data.get('panel_id'), edit=True)
     # null explicitly means unlink; missing, booleans and strings are rejected.
     if 'host_id' not in data or (data['host_id'] is not None and type(data['host_id']) is not int):
         raise ValueError('请选择有效主机或取消关联')
     host = _source(access, 'host', data['host_id'], edit=True) if data['host_id'] is not None else None
-    with transaction.atomic():
+    affected = lambda: resources.affected_accounts('panel', [panel.pk])
+    with resources.quota_guard(affected, actor=user):
+        resources.admin(user)
+        access = Access(user)
+        panel = _source(access, 'panel', panel.pk, edit=True)
+        host = _source(access, 'host', host.pk, edit=True) if host else None
         preference, _ = Preference.objects.get_or_create(panel=panel)
         preference = Preference.objects.select_for_update().get(pk=preference.pk)
         if preference.linked_host_id:
@@ -170,11 +173,14 @@ def link(user, data):
         else:
             access.require('host.host.view', 'host.host.edit')
         if preference.linked_host_id != (host.pk if host else None):
+            before = preference.linked_host_id
             _invalidate(preference)
             preference.linked_host = host
             preference.revision = uuid.uuid4().hex
             preference.save(update_fields=['linked_host', 'revision'])
             _invalidate(preference)
+            resources.audit(resources.current_user(user), panel.created_by, 'resource_link_changed',
+                            panel_id=panel.pk, before_host_id=before, after_host_id=host.pk if host else None)
     return {'ok': True}
 
 
@@ -198,10 +204,10 @@ def _digest(card, global_key):
 
 
 def _cards(access, key=None):
-    access.require('monitor.monitor.view')
+    access.require('monitor.server.view')
     allowed = Q(pk__in=[])
     if access.has('baota.panel.view'):
-        allowed |= Q(panel__isnull=False)
+        allowed |= Q(panel_id__in=resources.allowed_ids(access.user, 'panel'))
     host_ids = set(access.hosts().values_list('id', flat=True)) if access.has('host.host.view') else set()
     if host_ids:
         allowed |= Q(host_id__in=host_ids)
@@ -241,11 +247,12 @@ def _cards(access, key=None):
                                    'linked_host_id': None, '_preferences': [],
                                    '_target': host_key if pref.linked_host_id else card_key}
             card = result[card_key]
-            card['groups'].append({'key': 'panel:' + str(pref.panel.group_id), 'name': pref.panel.group.name})
+            if pref.panel.group_id in resources.group_ids(access.user, 'panel'):
+                card['groups'].append({'key': 'panel:' + str(pref.panel.group_id), 'name': pref.panel.group.name})
             if card['panel_id'] is None:
                 card['panel_id'] = pref.panel_id
                 card['linked_host_id'] = pref.linked_host_id if pref.linked_host_id in host_ids else None
-            card['can_link'] = access.has('baota.panel.edit', 'host.host.view', 'host.host.edit') and (
+            card['can_link'] = access.user.is_supper and access.has('baota.panel.edit', 'host.host.view', 'host.host.edit') and (
                 not pref.linked_host_id or pref.linked_host_id in host_ids)
             card['_preferences'].append(pref)
             card['sources'].append({'kind': 'panel', 'id': pref.panel_id, 'name': pref.panel.name})
@@ -261,7 +268,7 @@ def _cards(access, key=None):
         card['_uses_global_key'] = any(p.host_id and not p.host.pkey for p in card['_preferences'])
         card['groups'] = list({g['key']: g for g in card['groups']}.values())
         for pref in card['_preferences']:
-            if pref.host_id and not pref.host.pkey:
+            if pref.host_id and not pref.host.pkey and pref.host.created_by.is_supper:
                 pref.host.pkey = global_key
     return selected
 
@@ -387,6 +394,7 @@ def _current(user, key):
 
 
 def sample(user, data):
+    resources.require(user, 'monitor.server.collect')
     key, interval = data.get('key'), data.get('interval', 60)
     if type(interval) is not int or interval not in (30, 60, 300):
         raise ValueError('采样间隔必须为 30、60 或 300 秒')
@@ -395,6 +403,9 @@ def sample(user, data):
     card = _current(user, key)
     if card is None:
         raise ValueError('来源未开启或无权访问')
+    for pref in card['_preferences']:
+        resources.require_resources(user, 'panel' if pref.panel_id else 'host',
+                                    [pref.panel_id or pref.host_id], manage=True)
     now = timezone.now()
     cached = Snapshot.objects.filter(pk=card['_digest']).first()
     retry, reason = _retry_state(cached, interval, card['_target'], now)
@@ -428,11 +439,27 @@ def sample(user, data):
             if fresh is None or fresh['_digest'] != card['_digest']:
                 return {'key': key, 'snapshot': None, 'retry_after': 1, 'retry_reason': 'busy'}
             try:
-                raw = collect_panel(pref.panel) if pref.panel_id else collect_host(pref.host)
+                resources.require(user, 'monitor.server.collect')
+                resources.require_resources(user, 'panel' if pref.panel_id else 'host',
+                                            [pref.panel_id or pref.host_id], manage=True)
+                if pref.host_id:
+                    pref.host.private_key  # Enforce the shared credential policy before transport.
+                def authorize():
+                    resources.require(user, 'monitor.server.collect')
+                    fresh = _current(user, key)
+                    if fresh is None or fresh['_digest'] != card['_digest']:
+                        resources.reject(user, '监控来源或授权已变化，采集已停止')
+                    for target in card['_preferences']:
+                        resources.require_resources(user, 'panel' if target.panel_id else 'host',
+                            [target.panel_id or target.host_id], manage=True)
+                with guard(authorize):
+                    raw = collect_panel(pref.panel) if pref.panel_id else collect_host(pref.host)
                 metrics = clean_metrics(raw)
                 source_kind = 'panel' if pref.panel_id else 'host'
                 message = '采集成功'
                 break
+            except resources.AccessDenied:
+                raise
             except Exception as exc:
                 message = ERROR_MESSAGES.get(getattr(exc, 'code', ''), ERROR_MESSAGES['collection_failed'])
         finished = timezone.now()
@@ -451,6 +478,10 @@ def sample(user, data):
             list(Preference.objects.select_for_update().filter(pk__in=[p.pk for p in card['_preferences']])
                  .order_by('pk'))
             fresh = _current(user, key)
+            resources.require(user, 'monitor.server.collect')
+            for pref in card['_preferences']:
+                resources.require_resources(user, 'panel' if pref.panel_id else 'host',
+                                            [pref.panel_id or pref.host_id], manage=True)
             if fresh is None or fresh['_digest'] != card['_digest']:
                 return {'key': key, 'snapshot': None, 'retry_after': 1, 'retry_reason': 'busy'}
             recent = _latest_attempt(card['_target'])

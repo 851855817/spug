@@ -1,3 +1,4 @@
+// Modified by K on 2026-10-27 for KOps · 云枢 branding.
 /**
  * Copyright (c) OpenSpug Organization. https://github.com/openspug/spug
  * Copyright (c) <spug.dev@gmail.com>
@@ -73,14 +74,14 @@ function Setting(props) {
           <Space wrap className={css.theme} size={12}>
             {Object.entries(themes).map(([key, item]) => (
               <pre key={key} style={{background: item.background, color: item.foreground}}
-                   onClick={() => setTheme(key)}>spug</pre>))}
+                   onClick={() => setTheme(key)}>KOps</pre>))}
           </Space>
         </Form.Item>
         <Form.Item label={t('预览')}>
           <div className={css.preview}
                style={{fontSize, fontFamily, background: styles.background, color: styles.foreground}}>
-            <div>Welcome to Spug !</div>
-            <div>* Website: https://spug.cc</div>
+            <div>Welcome to KOps · 云枢 !</div>
+            <div>* KOps · 云枢 · Web 终端</div>
             <div>[root@iZ8vb48roZ ~]# ls</div>
             <div>
               <span style={{color: styles.brightBlue}}>apps </span>

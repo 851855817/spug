@@ -82,7 +82,7 @@ export default observer(function AutoDeploy() {
               </Select>
             </Form.Item>
             <Form.Item style={{display: 'inline-block', width: 82, textAlign: 'center', marginBottom: 0}}>
-              {fetching ? <LoadingOutlined style={{fontSize: 18, color: '#1890ff'}}/> :
+              {fetching ? <LoadingOutlined style={{fontSize: 18, color: 'var(--kops-primary)'}}/> :
                 <Button type="link" icon={<SyncOutlined/>} disabled={fetching || tagMode}
                         onClick={fetchVersions}>{t('刷新')}</Button>
               }
@@ -98,7 +98,7 @@ export default observer(function AutoDeploy() {
         )}
         {type === 'branch' && !branch ? (
           <Form.Item label="Webhook URL">
-            <div style={{color: '#ff4d4f'}}>{t('请指定分支名称。')}</div>
+            <div style={{color: 'var(--kops-error)'}}>{t('请指定分支名称。')}</div>
           </Form.Item>
         ) : (
           <Form.Item label="Webhook URL" extra={t('点击复制链接，目前支持Gitee、Github、Gitlab、Gogs、Coding和Codeup(阿里云)。')}>
@@ -114,7 +114,7 @@ export default observer(function AutoDeploy() {
           </Form.Item>
         ) : (
           <Form.Item label="Secret Token" tooltip={t('调用该Webhook接口的访问凭据，在Gitee中为WebHook密码，Gogs中为密钥文本。')}>
-            <div style={{color: '#ff4d4f'}}>
+            <div style={{color: 'var(--kops-error)'}}>
               {isAdmin ? t('请在系统管理/系统设置/开放服务设置中设置。') : t('Secret Token 仅管理员可见，请联系管理员获取。')}
             </div>
           </Form.Item>

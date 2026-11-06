@@ -1,6 +1,7 @@
 """Private subprocess entry point: credentials in stdin, normalized metrics in stdout."""
 import json
 import logging
+from libs.worker_authorization import configure_child
 import sys
 from types import SimpleNamespace
 
@@ -11,10 +12,11 @@ def main():
     logging.disable(logging.CRITICAL)
     try:
         # Payload contains only locally saved connection credentials. Bound it before JSON parsing.
-        wire = sys.stdin.buffer.read(256 * 1024 + 1)
+        wire = sys.stdin.buffer.readline(256 * 1024 + 1)
         if len(wire) > 256 * 1024:
             raise CollectorError('collection_failed')
         payload = json.loads(wire)
+        configure_child(payload)
         if payload['kind'] == 'panel':
             panel = SimpleNamespace(api_base_url=payload['api_base_url'], tls_ca=payload['tls_ca'],
                                     tls_fingerprint=payload['tls_fingerprint'],

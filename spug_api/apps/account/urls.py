@@ -5,6 +5,7 @@ from django.urls import path
 
 from apps.account.views import *
 from apps.account.history import *
+from apps.account.resource_views import ResourceView
 
 urlpatterns = [
     path('login/', login),
@@ -12,5 +13,6 @@ urlpatterns = [
     path('user/', UserView.as_view()),
     path('role/', RoleView.as_view()),
     path('self/', SelfView.as_view()),
+    path('resources/', ResourceView.as_view()),
     path('login/history/', HistoryView.as_view())
 ]

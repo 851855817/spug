@@ -115,7 +115,7 @@ export default observer(function () {
               format="YYYY-MM-DD HH:mm"
               placeholder={t('请设置发布时间')}
               onChange={setPlan}/>
-            {plan ? <span style={{marginLeft: 24, fontSize: 12, color: '#888'}}>{t('大约 {}', plan.fromNow())}</span> : null}
+            {plan ? <span style={{marginLeft: 24, fontSize: 12, color: 'var(--kops-muted)'}}>{t('大约 {}', plan.fromNow())}</span> : null}
           </Form.Item>
         )}
       </Form>

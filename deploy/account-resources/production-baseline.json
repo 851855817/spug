@@ -1,0 +1,325 @@
+{
+  "applied_migrations": [
+    "account/0001_initial",
+    "alarm/0001_initial",
+    "app/0001_initial",
+    "baota/0001_initial",
+    "baota/0002_paneltask_panel_api_base_url_panel_api_checked_at_and_more",
+    "baota/0003_paneluploadbundle_paneluploadfile_paneluploadquota_and_more",
+    "baota/0004_resourcemonitorlease_resourcemonitorsnapshot_and_more",
+    "baota/0005_paneltask_execution_policy",
+    "baota/0006_panelinventorylease_panelinventorysnapshot_and_more",
+    "config/0001_initial",
+    "credential/0001_initial",
+    "deploy/0001_initial",
+    "exec/0001_initial",
+    "home/0001_initial",
+    "host/0001_initial",
+    "monitor/0001_initial",
+    "monitor/0002_ssl_monitor",
+    "notify/0001_initial",
+    "ops/0001_initial",
+    "ops/0002_expiryaudit_expirycheck_expirylock_expirymetadata_and_more",
+    "pipeline/0001_initial",
+    "repository/0001_initial",
+    "schedule/0001_initial",
+    "setting/0001_initial"
+  ],
+  "migration_graph": {
+    "account/0001_initial": {
+      "parents": [],
+      "sha256": "7b2d00bd5e36c205761277318155a01bd9c868bbe2cc9f006bd0f316f66af2b4"
+    },
+    "alarm/0001_initial": {
+      "parents": [
+        "account/0001_initial"
+      ],
+      "sha256": "e1220ecbaf93aea7d0719eeb4925410b61577bafaf47b370dcc1a6a5b1c9d0fa"
+    },
+    "app/0001_initial": {
+      "parents": [
+        "account/0001_initial",
+        "config/0001_initial"
+      ],
+      "sha256": "283a367911f8153064796f8d1a52699e61fdb7f41ec3ed10b6b89c57b537c719"
+    },
+    "baota/0001_initial": {
+      "parents": [
+        "account/0001_initial"
+      ],
+      "sha256": "d110c8d708753a5e30174b0ae298fd733c428c7b53edb7845ddb7d2a2a5e32e3"
+    },
+    "baota/0002_paneltask_panel_api_base_url_panel_api_checked_at_and_more": {
+      "parents": [
+        "account/0001_initial",
+        "baota/0001_initial"
+      ],
+      "sha256": "d291fab5ae088c6fa8f4ea5d0f54e4eb5aa6f155c1a0d396e621cdb491b0194e"
+    },
+    "baota/0003_paneluploadbundle_paneluploadfile_paneluploadquota_and_more": {
+      "parents": [
+        "account/0001_initial",
+        "baota/0002_paneltask_panel_api_base_url_panel_api_checked_at_and_more"
+      ],
+      "sha256": "c2a36788478b347c09385ad0ae2e62f1fe311c7c9f6e86034f134bf2ae116474"
+    },
+    "baota/0004_resourcemonitorlease_resourcemonitorsnapshot_and_more": {
+      "parents": [
+        "baota/0003_paneluploadbundle_paneluploadfile_paneluploadquota_and_more",
+        "host/0001_initial"
+      ],
+      "sha256": "44f1885dc584789a8dfaafc92072cafc0581dcfc9e0c8d633026a664529a8888"
+    },
+    "baota/0005_paneltask_execution_policy": {
+      "parents": [
+        "baota/0004_resourcemonitorlease_resourcemonitorsnapshot_and_more"
+      ],
+      "sha256": "b6422b6a80e4bbe4e7d1e1f3cbc953250226413a48a47641cae92e3fed188b5d"
+    },
+    "baota/0006_panelinventorylease_panelinventorysnapshot_and_more": {
+      "parents": [
+        "baota/0005_paneltask_execution_policy"
+      ],
+      "sha256": "5c19aac0c30cac90694e8a27c4a5e370e6c826c2b16ac0a21adc4a98a521dfcd"
+    },
+    "config/0001_initial": {
+      "parents": [
+        "account/0001_initial"
+      ],
+      "sha256": "5dca6896c0e0e43a18b650f3fdffa7abf57f25a5f0fd673378adaea6df989ade"
+    },
+    "credential/0001_initial": {
+      "parents": [
+        "account/0001_initial"
+      ],
+      "sha256": "2bc22eaa5311e4eb46a54406c1fd14db012acc78eb3edd171e332ac79a829379"
+    },
+    "deploy/0001_initial": {
+      "parents": [
+        "account/0001_initial",
+        "app/0001_initial",
+        "repository/0001_initial"
+      ],
+      "sha256": "5e514399ecb36ba71a975ab0916ea5ff0ef8d9dc7f48add79b9a49978b77ab2f"
+    },
+    "exec/0001_initial": {
+      "parents": [
+        "account/0001_initial"
+      ],
+      "sha256": "eb133596261e4c4aa23c7f499a0cd6179687687996993201faa0a044910be1fe"
+    },
+    "home/0001_initial": {
+      "parents": [],
+      "sha256": "8db6524fb1442808e8416c7af468eee6abc516711cc901319e23276ba1c58aa6"
+    },
+    "host/0001_initial": {
+      "parents": [
+        "account/0001_initial"
+      ],
+      "sha256": "dcf6eebf672577478ac562d573e1f796ff28862c775389a35dd24e78e66ceaa7"
+    },
+    "monitor/0001_initial": {
+      "parents": [
+        "account/0001_initial"
+      ],
+      "sha256": "3ee951389d4e536367c60259a0493389a4bda36cf93e2c3b229dd097a08a5a23"
+    },
+    "monitor/0002_ssl_monitor": {
+      "parents": [
+        "account/0001_initial",
+        "baota/0006_panelinventorylease_panelinventorysnapshot_and_more",
+        "monitor/0001_initial"
+      ],
+      "sha256": "35df9b5a53a044a5311303a96f9db0340b87c628a7e1a2cee775a8696a8a54ee"
+    },
+    "notify/0001_initial": {
+      "parents": [],
+      "sha256": "622cc3caab80acb209fca13f1b6c8ae5df90f88c416e0df8d29c4f69618f9fde"
+    },
+    "ops/0001_initial": {
+      "parents": [
+        "account/0001_initial",
+        "host/0001_initial"
+      ],
+      "sha256": "daae49ee45dc6d5dd4a4ba14e0153c25203ac70293669537e27fb9f2f720cec7"
+    },
+    "ops/0002_expiryaudit_expirycheck_expirylock_expirymetadata_and_more": {
+      "parents": [
+        "account/0001_initial",
+        "ops/0001_initial"
+      ],
+      "sha256": "cba3f8e9695f9d14416e8b4feb83efeb32641eb783b082f62562a90152b34187"
+    },
+    "pipeline/0001_initial": {
+      "parents": [
+        "account/0001_initial"
+      ],
+      "sha256": "fecdce5e67670c2bdabcf88ed5b6ba5220d1eb54aafe8b5dafbd86cbce27ac14"
+    },
+    "repository/0001_initial": {
+      "parents": [
+        "account/0001_initial",
+        "app/0001_initial",
+        "config/0001_initial"
+      ],
+      "sha256": "31aeb3d00e42f82937e36153fc7aaed55a52dd93c2dffac64508ebc5c4141a2c"
+    },
+    "schedule/0001_initial": {
+      "parents": [
+        "account/0001_initial"
+      ],
+      "sha256": "7adf83c376e5204cf2653904b54463c7d4df0f6121fd4a953be33fce5b51edc9"
+    },
+    "setting/0001_initial": {
+      "parents": [
+        "account/0001_initial"
+      ],
+      "sha256": "7a5c9dd861ef4afc1004fe7940729a4a3956a1315f4f8abf1ca47050d36eb2a8"
+    }
+  },
+  "previous_revision": "4739172403439e5e5a0ab37c733509714d4c35ee",
+  "profile": "account-resources-v1",
+  "schema": {
+    "alarm_contacts": "14f456042252a42fd22fa012db4756a9839ae3315a4832575bf86e4742ac0546",
+    "alarm_groups": "9c039039734726ef3f76f8b9b4739edf945d3fe2dfe0a7f61103b3599adf3338",
+    "alarms": "966de2b6a2ca8c8d3b9cfa91a2976904bd7d8ba58bec60a1870df81bb2fd2b22",
+    "apps": "056a27934d57c5ef6d80344aed82275d8a287b632620d2bfdf97a942b2738ac1",
+    "baota_groups": "4e779aad5e3fca1777fa2c66287347a34f15128d2a360ed0ff8c5a26ca4ccc55",
+    "baota_inventory_leases": "434dec39f9e894a97a6d2fb1c31b68ec82097f51059694fcbf3a8d2cf0b46825",
+    "baota_inventory_snapshots": "93e8583a9e4249c5b348789baeb2a81eee6c178247ab5c5f89d41a8df10893b0",
+    "baota_monitor_leases": "8c39cfa4edc7ac5fb72fbf5746f9e6479eb0c60f50a8b4908be97e81f2fb7727",
+    "baota_monitor_preferences": "85e34f2dd91a98b5b165dbe1090e710980049339780f486d2546ce945a31184b",
+    "baota_monitor_snapshots": "5525d28ce61e6141d8bb6a5d706831de51a725554f317abd2f9253109737a3a6",
+    "baota_panel_locks": "ff4e83dcc5e9afd9fd7384cb78730d6123d1a9ed60e0ee43bfbb79e9c1caef86",
+    "baota_panels": "e00b7005fdd937c4d6eecaff9188d25caf83b6277f31688d5f5458915268635a",
+    "baota_task_targets": "b84533a0c5b9fcc90c12afe8088119d853f55549a47d52b3aa7281a04a94af4c",
+    "baota_tasks": "e5c6aaae0b24a9c59ada2a48cd311f0525fff02dad526ec3c63ae9239010ab27",
+    "baota_upload_bindings": "605c38c3c6c9fca39c3a616ef91af32d27986931482f72b0fef82b5c695a6322",
+    "baota_upload_bundles": "0ec3170f7877c011284c4182f96489746f54afe21beb59a3268c857ccd1b80dd",
+    "baota_upload_files": "bb44a70cfe215e832c1ab9ee060cf0dc86788bd31d305795b5e1f25dae5a2945",
+    "baota_upload_quota": "c1135c58fe142744da79f08a37acdbe0e327f29c5a0e36b8bb3740f21f4a3e80",
+    "baota_upload_results": "cddd0884d1449041eda045c61bfb77dbb3f1dd4d2238ce0765661d56bf05b673",
+    "config_histories": "50b2f3439fd4a4d7b08bae83bade6b40904eee1e72c4ae699dc6deb74f825556",
+    "configs": "e624a95e5de384e6852e46b85a4b9c25170e13ef1ded50fcf53e7753a49bed84",
+    "credentials": "a77f399d9dc8f47ef1f5583b9bc73b8098d063dd2130ff8e9e4ae1c3221bf9d7",
+    "deploy_extend1": "006a23f06f315afbf8df19af975a9a92d44460cd49f49b48dfe7bb0eb7709975",
+    "deploy_extend2": "03a6bc323ca92a964d0eb4901263b86a5589d2c3a5af55544cfbf874bde9e56b",
+    "deploy_requests": "2f65e92a9ab721212d2125bb902e8a303edbf123b14c11e5b8f8171603027857",
+    "deploys": "824a1420430560ce15c6d67ba3fa509ccc6682f119aea636030bdac53bf7445c",
+    "detections": "0dc356161d7363571f31ce292df1eba8ce553c0a44c588233d3edf08da520deb",
+    "django_migrations": "3c8e965868d71b7618d2c1e5ed301115c6833ce35218a87376b9df8c8c53540d",
+    "environments": "c102eae3d6531eb75e24423e35597c7efbdf4d7f04a0d9c93eb785d04e4d226f",
+    "exec_histories": "6bd1aaf9151205db98f1c4733eebb9ab2ae7f1aa48a703d46c856f3ce382aa7b",
+    "exec_templates": "f19dc6da643fc7fd2e358b5409a1f180f7ce5d2484d43633e9b1726a5cf278b5",
+    "exec_transfer": "13327cbdf5867a882bd5121edccfc0473eb63cd1cebe801d40ab5b5e031fc803",
+    "host_extend": "9bedfa9721e3c57c36f042251ec289fc56b12c008a24254d5def37c2eca72b13",
+    "host_groups": "69e79b0e064d27abd89927f2e897f36b6f610c16bcdd11fb0e3f2b2ae3fc7f04",
+    "host_groups_hosts": "892c4c3bb98222202ed95c12cedfb5d00f5507b52ed281d8ff35f4ca3e34d549",
+    "hosts": "e73bc8fad4eda2ef2483e7134b75ee913d7e275648fdcfd7770cbc3a4adda321",
+    "login_histories": "541f4e5289d2d71a0af7846d5a9a6353afe87d50cf44da26fc2a076de5cce63f",
+    "monitor_ssl_certificates": "e424f89c6f80d1ab2711edae87393f7f3cd00d679849c4f7d723ce38861accc4",
+    "monitor_ssl_jobs": "703a891f264a900f8bb31efaf95c263a24c53ec85249c97280049edee6f9cee5",
+    "monitor_ssl_leases": "0652b750209c0049275c057cc95e512e8d84aae12ba34a263973374da1fcbf03",
+    "monitor_ssl_reminder_preferences": "9fe4017e64abedaffaf3121e400c7bb178e77cae6d43cada6cf9aa162c5148a1",
+    "monitor_ssl_reminders": "a8c7272a3ad7ee22adb1b6fe2256ca6d7ca3963eeb5bc08983b5650438789fa0",
+    "monitor_ssl_sources": "f8b46b583291cd3a86f99f3ab2c35a2e517d73acdca45bb6c9344ac6fe3df095",
+    "navigations": "b37261210e3618c38d0a121e49c652f0ae10283bad9b73058ee5832a0cfffd48",
+    "notices": "6d6ca3e9d15ebebbd4bc2e3cc8b006b1ab6d2cdacf30013a14eff03a167cbd41",
+    "notifies": "fff636b6a40fd6fd6e2c9d3bc18b68dcee71f1b0633ae03ad0755d752e68662f",
+    "ops_audit": "c47147d1c99c813dfe628c62ddfa493871391f1d74bfd768a8dfc8106f0e7acf",
+    "ops_baselines": "c32c7c2a448f391f4089bcd446f0435bfcd304f8d420c253e01aa7a4f611f4ae",
+    "ops_expiry_audit": "de9b9204299a0f68bd986dd105e8a15e2d52ddcc044e20160f6f517cc74b0dbd",
+    "ops_expiry_check": "af61a1a965079444e7c1a5071cefcd86304afb7bd86fda713d6c6904129896a6",
+    "ops_expiry_lock": "f7756182274ab2e54afdc0f7662f0c9d40589074171aabd0e4507cff3ed260c3",
+    "ops_expiry_metadata": "e543278c64c2e946c40a9c99bd7445e1141bd07d31f6b56a2f4e30d80363ecba",
+    "ops_expiry_reminder_reads": "8aecf01a49d7ef1ed4cd585ab9008aa7923268d4154762b5b2b8db320f7eae13",
+    "ops_expiry_reminders": "5c1379d5bb001fd84482fb7cd39525f77d572f9e72890c99ff01a204b38dddef",
+    "ops_runs": "4ad3db4fea26b01be531f0069ac773f9718d9f37210a7e1e25ae8824a86d211e",
+    "ops_targets": "3618e3c4a724c7fd343c57bc8915deaeba065d41863a56aa3266c1fbee2c1e67",
+    "pipeline_histories": "a2375532b31da1947c5aeda5fa8b1cd6bf4cd46b0f79da829fda9b3e442c3ed3",
+    "pipelines": "87af3fadf69248929ad324f5ec09f8f55ba226b96d854fcf1c519904909e8264",
+    "repositories": "778b6113e4cf34f8d42372b093d6400ed880a1c14b7d39a16c6281ad180c72ff",
+    "roles": "9a3903d0b7bbd8aabcfb35a245465e3cea67f107d0d411d5bc8601244a512fce",
+    "services": "180acf12172c1cc5975b48ebeff1571be08486f3c42f7c09b88c76348e008472",
+    "settings": "158bcf2d520b6ae21b8ad5294fe31c620f1b750e4ae95accd0781d77ba9edde6",
+    "task_histories": "6adfeb549d7d81ab25ffcad9402a0d686b91afe0968b8692d31f0f6540812ede",
+    "tasks": "2b59976a4c13ba738da63be33430eea5820a932abca36cad292faa44e1b3ff07",
+    "user_role_rel": "09ca144deec6c54c1447673ceaa9315d1f3f06afe21d65284beae8d4dbe5f9a3",
+    "user_settings": "b1393b832b7d6749f9037811ff50eda75f59cd0895fd58c6dbde13e1c6990464",
+    "users": "c1da347908e2d3786593b4bc2550044b0315a5caebe830eec42c6587628417b7"
+  },
+  "image_tag": "spug-baota:d48d73b",
+  "image_id": "sha256:752af29ea640270dc857178beebdde7a2ff8ac25ad1016b139f49e4e79388ce6",
+  "restart_count": 0,
+  "entrypoint_updatedb_lines": 1,
+  "observed_date": "2026-11-06",
+  "compose_image_tag": "spug-baota:4739172",
+  "migration_source_roots": {
+    "/opt/spug/spug_api": {
+      "apps/account/migrations/0001_initial.py": null,
+      "apps/alarm/migrations/0001_initial.py": null,
+      "apps/app/migrations/0001_initial.py": null,
+      "apps/baota/migrations/0001_initial.py": null,
+      "apps/baota/migrations/0002_paneltask_panel_api_base_url_panel_api_checked_at_and_more.py": null,
+      "apps/baota/migrations/0003_paneluploadbundle_paneluploadfile_paneluploadquota_and_more.py": null,
+      "apps/baota/migrations/0004_resourcemonitorlease_resourcemonitorsnapshot_and_more.py": null,
+      "apps/baota/migrations/0005_paneltask_execution_policy.py": null,
+      "apps/baota/migrations/0006_panelinventorylease_panelinventorysnapshot_and_more.py": null,
+      "apps/config/migrations/0001_initial.py": null,
+      "apps/credential/migrations/0001_initial.py": null,
+      "apps/deploy/migrations/0001_initial.py": null,
+      "apps/exec/migrations/0001_initial.py": null,
+      "apps/home/migrations/0001_initial.py": null,
+      "apps/host/migrations/0001_initial.py": null,
+      "apps/monitor/migrations/0001_initial.py": null,
+      "apps/monitor/migrations/0002_ssl_monitor.py": "35df9b5a53a044a5311303a96f9db0340b87c628a7e1a2cee775a8696a8a54ee",
+      "apps/notify/migrations/0001_initial.py": null,
+      "apps/ops/migrations/0001_initial.py": null,
+      "apps/ops/migrations/0002_expiryaudit_expirycheck_expirylock_expirymetadata_and_more.py": null,
+      "apps/pipeline/migrations/0001_initial.py": null,
+      "apps/repository/migrations/0001_initial.py": null,
+      "apps/schedule/migrations/0001_initial.py": null,
+      "apps/setting/migrations/0001_initial.py": null
+    },
+    "/data/spug/spug_api": {
+      "apps/account/migrations/0001_initial.py": "7b2d00bd5e36c205761277318155a01bd9c868bbe2cc9f006bd0f316f66af2b4",
+      "apps/alarm/migrations/0001_initial.py": "e1220ecbaf93aea7d0719eeb4925410b61577bafaf47b370dcc1a6a5b1c9d0fa",
+      "apps/app/migrations/0001_initial.py": "283a367911f8153064796f8d1a52699e61fdb7f41ec3ed10b6b89c57b537c719",
+      "apps/baota/migrations/0001_initial.py": "d110c8d708753a5e30174b0ae298fd733c428c7b53edb7845ddb7d2a2a5e32e3",
+      "apps/baota/migrations/0002_paneltask_panel_api_base_url_panel_api_checked_at_and_more.py": "d291fab5ae088c6fa8f4ea5d0f54e4eb5aa6f155c1a0d396e621cdb491b0194e",
+      "apps/baota/migrations/0003_paneluploadbundle_paneluploadfile_paneluploadquota_and_more.py": "c2a36788478b347c09385ad0ae2e62f1fe311c7c9f6e86034f134bf2ae116474",
+      "apps/baota/migrations/0004_resourcemonitorlease_resourcemonitorsnapshot_and_more.py": "44f1885dc584789a8dfaafc92072cafc0581dcfc9e0c8d633026a664529a8888",
+      "apps/baota/migrations/0005_paneltask_execution_policy.py": "b6422b6a80e4bbe4e7d1e1f3cbc953250226413a48a47641cae92e3fed188b5d",
+      "apps/baota/migrations/0006_panelinventorylease_panelinventorysnapshot_and_more.py": "5c19aac0c30cac90694e8a27c4a5e370e6c826c2b16ac0a21adc4a98a521dfcd",
+      "apps/config/migrations/0001_initial.py": "5dca6896c0e0e43a18b650f3fdffa7abf57f25a5f0fd673378adaea6df989ade",
+      "apps/credential/migrations/0001_initial.py": "2bc22eaa5311e4eb46a54406c1fd14db012acc78eb3edd171e332ac79a829379",
+      "apps/deploy/migrations/0001_initial.py": "5e514399ecb36ba71a975ab0916ea5ff0ef8d9dc7f48add79b9a49978b77ab2f",
+      "apps/exec/migrations/0001_initial.py": "eb133596261e4c4aa23c7f499a0cd6179687687996993201faa0a044910be1fe",
+      "apps/home/migrations/0001_initial.py": "8db6524fb1442808e8416c7af468eee6abc516711cc901319e23276ba1c58aa6",
+      "apps/host/migrations/0001_initial.py": "dcf6eebf672577478ac562d573e1f796ff28862c775389a35dd24e78e66ceaa7",
+      "apps/monitor/migrations/0001_initial.py": "3ee951389d4e536367c60259a0493389a4bda36cf93e2c3b229dd097a08a5a23",
+      "apps/monitor/migrations/0002_ssl_monitor.py": "35df9b5a53a044a5311303a96f9db0340b87c628a7e1a2cee775a8696a8a54ee",
+      "apps/notify/migrations/0001_initial.py": "622cc3caab80acb209fca13f1b6c8ae5df90f88c416e0df8d29c4f69618f9fde",
+      "apps/ops/migrations/0001_initial.py": "daae49ee45dc6d5dd4a4ba14e0153c25203ac70293669537e27fb9f2f720cec7",
+      "apps/ops/migrations/0002_expiryaudit_expirycheck_expirylock_expirymetadata_and_more.py": "cba3f8e9695f9d14416e8b4feb83efeb32641eb783b082f62562a90152b34187",
+      "apps/pipeline/migrations/0001_initial.py": "fecdce5e67670c2bdabcf88ed5b6ba5220d1eb54aafe8b5dafbd86cbce27ac14",
+      "apps/repository/migrations/0001_initial.py": "31aeb3d00e42f82937e36153fc7aaed55a52dd93c2dffac64508ebc5c4141a2c",
+      "apps/schedule/migrations/0001_initial.py": "7adf83c376e5204cf2653904b54463c7d4df0f6121fd4a953be33fce5b51edc9",
+      "apps/setting/migrations/0001_initial.py": "7a5c9dd861ef4afc1004fe7940729a4a3956a1315f4f8abf1ca47050d36eb2a8"
+    }
+  },
+  "data_mount": {
+    "Type": "volume",
+    "Name": "spug_spug-data",
+    "Source": "/var/lib/docker/volumes/spug_spug-data/_data",
+    "Destination": "/data",
+    "RW": true
+  },
+  "data_volume": {
+    "Name": "spug_spug-data",
+    "Driver": "local",
+    "Mountpoint": "/var/lib/docker/volumes/spug_spug-data/_data",
+    "Scope": "local",
+    "Options": null
+  }
+}

@@ -8,6 +8,9 @@ from django.utils.decorators import method_decorator
 from django.views import View
 
 from libs import human_datetime, json_response
+from libs.worker_authorization import guard
+from apps.account import access
+from .authorization import panel_access
 from .client import PanelClient
 from .models import Panel, PanelGroup, PanelTaskTarget
 from .operations import operation_descriptors
@@ -21,6 +24,8 @@ class TaskBaseView(View):
     def dispatch(self, request, *args, **kwargs):
         try:
             return super().dispatch(request, *args, **kwargs)
+        except access.AccessDenied as exc:
+            return json_response(error=str(exc))
         except PermissionError:
             return json_response(error='权限拒绝或任务不存在')
         except ValueError as exc:
@@ -53,16 +58,16 @@ class TasksView(TaskBaseView):
                     raise ValueError('筛选条件无效')
                 qs = qs.filter(**{name: value})
         return json_response({'total': qs.count(), 'page': page, 'page_size': size,
-                              'items': [s.task_view(t, detail=False) for t in qs[(page - 1) * size:page * size]]})
+                              'items': [s.task_view(t, detail=False, user=request.user) for t in qs[(page - 1) * size:page * size]]})
 
     def post(self, request):
         task = s.prepare(request.user, self.body(request))
-        return json_response(s.task_view(task))
+        return json_response(s.task_view(task, user=request.user))
 
 
 class TaskDetailView(TaskBaseView):
     def get(self, request, task_id):
-        return json_response(s.task_view(s.owned(request.user, task_id, 'view')))
+        return json_response(s.task_view(s.owned(request.user, task_id, 'view'), user=request.user))
 
 
 class TaskActionView(TaskBaseView):
@@ -70,26 +75,28 @@ class TaskActionView(TaskBaseView):
         data = self.body(request)
         if action == 'start':
             task = s.start(request.user, task_id, data)
+        elif action == 'continue':
+            task = s.continue_batch(request.user, task_id, data)
         elif action == 'resolve':
             task = s.resolve(request.user, task_id, data)
         else:
             s.strict(data, ())
             task = {'cancel': s.cancel, 'reconcile': s.reconcile, 'retry': s.retry}[action](request.user, task_id)
-        return json_response(s.task_view(task))
+        return json_response(s.task_view(task, user=request.user))
 
 
 def read_permission(user):
-    if not user.has_perms(['exec.panel.create', 'exec.panel.view']):
-        raise PermissionError('权限拒绝')
+    return access.require(user, 'exec.panel.create', 'exec.panel.view')
 
 
 class TaskOptionsView(TaskBaseView):
     def get(self, request):
         read_permission(request.user)
         from .upload_store import limits
-        return json_response({'panels': [s.safe_panel(p) for p in Panel.objects.select_related('group').order_by('id')],
-                              'groups': [g.to_view() for g in PanelGroup.objects.all()],
-                              'operations': operation_descriptors(),
+        current, granted = access.permissions(request.user)
+        return json_response({'panels': [s.safe_panel(p, current) for p in access.scope(current, 'panel', manage=True).select_related('group').order_by('id')],
+                              'groups': [g.to_view() for g in PanelGroup.objects.filter(pk__in=access.group_ids(current, 'panel'))],
+                              'operations': [op for op in operation_descriptors() if current.is_supper or 'exec.panel_action.' + op['code'] in granted],
                               'limits': {'panels': s.MAX_PANELS, 'children': s.MAX_CHILDREN, 'parallel': 2},
                               'upload_limits': limits(),
                               'acknowledgements': {
@@ -121,18 +128,23 @@ class TaskResourcesView(TaskBaseView):
     def get(self, request):
         read_permission(request.user)
         s.strict(request.GET, ('panel_id', 'kind', 'site_id', 'php_version'), ('panel_id', 'kind'))
-        panel = Panel.objects.get(pk=positive_id(request.GET['panel_id']))
+        panel_id = positive_id(request.GET['panel_id'])
+        def authorize():
+            read_permission(request.user.pk)
+            return panel_access(request.user.pk, panel_id, manage=True)
+        panel = authorize()
         s.configured(panel)
         revision = panel.api_config_revision
         # TaskBaseView is non_atomic even with production ATOMIC_REQUESTS=True.
         site_id = positive_id(request.GET['site_id']) if 'site_id' in request.GET else None
         try:
-            with PanelClient(panel) as client:
+            with guard(authorize), PanelClient(panel) as client:
                 result = get_resource(client, request.GET['kind'], site_id=site_id,
                                       php_version=request.GET.get('php_version'))
         except Exception:
             raise ValueError('资源读取失败，请核对 API 配置、资源类型及选择参数') from None
         payload = s.safe_tree(s.bounded(result, maximum=4 * s.MAX_JSON_BYTES))
+        authorize()
         # Reuse the live identity already fetched by get_resource. An external
         # upgrade must not leave the task/list version at the last connection test.
         if not Panel.objects.filter(pk=panel.pk, api_config_revision=revision).update(

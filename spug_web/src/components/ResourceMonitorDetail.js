@@ -3,14 +3,16 @@ import { Alert, Button, Empty, Modal, Spin } from 'antd';
 import { hasPermission } from 'libs';
 import ResourceCard from 'pages/server-monitor/ResourceCard';
 import useServerMonitor, { usePageVisibility } from 'pages/server-monitor/useServerMonitor';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 export default function ResourceMonitorDetail({kind, id, name, onCancel}) {
-  const monitor = useServerMonitor(hasPermission('monitor.monitor.view'));
+  const access = useResourceAccess();
+  const monitor = useServerMonitor(hasPermission('monitor.server.view'));
   const visible = usePageVisibility();
   const card = monitor.cards.find(row => row.sources.some(source => source.kind === kind && source.id === id));
   const key = card?.key;
   const sampler = monitor.sampler;
-  const active = !!key && monitor.ready && !monitor.loading && visible;
+  const active = !!key && monitor.ready && !monitor.loading && visible && access.canManage(kind, id, 'monitor.server.collect');
   useEffect(() => {
     sampler.update({keys: key ? [key] : [], interval: 60, active});
     return () => sampler.stop();

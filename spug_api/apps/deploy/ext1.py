@@ -76,6 +76,7 @@ def ext1_deploy(req, helper, env):
 
 
 def _deploy_ext1_host(req, helper, h_id, env):
+    helper.authorize()
     flag = time.time()
     helper.set_deploy_process(h_id)
     helper.send_clear(h_id)
@@ -83,6 +84,7 @@ def _deploy_ext1_host(req, helper, h_id, env):
     host = Host.objects.filter(pk=h_id).first()
     if not host:
         helper.send_error(h_id, 'no such host')
+    host.resource_guard = helper.authorize
     env.update({'SPUG_HOST_ID': h_id, 'SPUG_HOST_NAME': host.hostname})
     extend = req.deploy.extend_obj
     extend.dst_dir = render_str(extend.dst_dir, env)

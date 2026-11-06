@@ -3,7 +3,7 @@
  * Copyright (c) <spug.dev@gmail.com>
  * Released under the AGPL-3.0 License.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { observer } from 'mobx-react';
 import { Form, Tabs, DatePicker, InputNumber, Input, Button, Cascader } from 'antd';
 import { LoadingOutlined, MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
@@ -14,20 +14,25 @@ import moment from 'moment';
 import lds from 'lodash';
 import styles from './index.module.less';
 import mStore from '../monitor/store';
+import { validPanelTrigger } from './panelPlan';
 
 let lastFetchId = 0;
 
 export default observer(function (props) {
   const [nextRunTime, setNextRunTime] = useState(null);
+  const isPanel = S.record.interpreter === 'baota';
+  const monitorInitialized = useRef(false);
 
   useEffect(() => {
+    if (!props.visible || isPanel || monitorInitialized.current) return;
+    monitorInitialized.current = true;
     if (mStore.records.length === 0) {
       mStore.fetchRecords()
         .then(_initial)
     } else {
       _initial()
     }
-  }, [])
+  }, [isPanel, props.visible]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function _initial() {
     if (S.trigger_args?.monitor) {
@@ -62,6 +67,7 @@ export default observer(function (props) {
   }
 
   function isValid() {
+    if (isPanel) return validPanelTrigger(S.trigger, S.trigger_args);
     switch (S.trigger) {
       case 'cron':
         return lds.get(S.trigger_args, 'cron.rule')
@@ -86,9 +92,9 @@ export default observer(function (props) {
           .then(res => {
             if (fetchId !== lastFetchId) return;
             if (res.success) {
-              setNextRunTime(<span style={{fontSize: 12, color: '#52c41a'}}>{res.msg}</span>)
+              setNextRunTime(<span style={{fontSize: 12, color: 'var(--kops-success)'}}>{res.msg}</span>)
             } else {
-              setNextRunTime(<span style={{fontSize: 12, color: '#ff4d4f'}}>{res.msg}</span>)
+              setNextRunTime(<span style={{fontSize: 12, color: 'var(--kops-error)'}}>{res.msg}</span>)
             }
           })
       } else {
@@ -111,9 +117,10 @@ export default observer(function (props) {
                 key: 'interval',
                 label: t('普通间隔'),
                 children: (
-                  <Form.Item required label={t('间隔时间(秒)')} extra={t('每隔指定n秒执行一次。')}>
+                  <Form.Item required label={t('间隔时间(秒)')} extra={isPanel ? '宝塔计划间隔至少 300 秒；上次运行未结束时跳过本次触发。' : t('每隔指定n秒执行一次。')}>
                     <InputNumber
-                      min={10}
+                      min={isPanel ? 300 : 10}
+                      precision={0}
                       style={{width: 200}}
                       placeholder={t('请输入')}
                       value={S.trigger_args.interval}
@@ -142,7 +149,7 @@ export default observer(function (props) {
                 label: 'UNIX Cron',
                 children: (
                   <>
-                    <Form.Item required label={t('执行规则')} extra={t('兼容Cron风格，可参考官方例子。')}>
+                    <Form.Item required label={t('执行规则')} extra={isPanel ? '到点重新预检，通过后自动执行；实际下发至少间隔 300 秒，密集触发会跳过且不补跑。' : t('兼容Cron风格，可参考官方例子。')}>
                       <Input
                         suffix={nextRunTime || <span/>}
                         value={S.trigger_args.cron?.rule}
@@ -197,7 +204,7 @@ export default observer(function (props) {
                   </>
                 )
               }
-            ]}/>
+            ].filter(item => !isPanel || item.key !== 'monitor')}/>
         </Form.Item>
         <Form.Item wrapperCol={{span: 14, offset: 6}}>
           <Button type="primary" disabled={!isValid()} onClick={() => S.page += 1}>{t('下一步')}</Button>

@@ -10,26 +10,38 @@ from apps.repository.models import Repository
 from apps.config.utils import compose_configs
 from apps.app.utils import fetch_repo
 from apps.deploy.helper import Helper, SpugError
+from apps.deploy import resources
 import json
 import uuid
 import time
 import os
+import shlex
+from pathlib import PurePosixPath
 
 REPOS_DIR = settings.REPOS_DIR
 BUILD_DIR = settings.BUILD_DIR
 
 
 def dispatch(rep: Repository, helper=None, language='zh'):
+    if rep.pk:
+        rep = Repository.objects.get(pk=rep.pk)
+    try:
+        authorize = resources.execution_guard(rep, parent=getattr(helper, 'authorize', None))
+    except (ValueError, PermissionError):
+        if rep.pk:
+            Repository.objects.filter(pk=rep.pk, status__in=['0', '1']).update(status='2')
+        raise
     rep.status = '1'
     alone_build = helper is None
     if not helper:
         rds = get_redis_connection()
         helper = Helper.make(rds, rep.deploy_key, ['local'], language)
         rep.save()
+    helper.authorize = authorize
     try:
         helper.set_deploy_process('local')
         api_token = uuid.uuid4().hex
-        helper.rds.setex(api_token, 60 * 60, f'{rep.app_id},{rep.env_id}')
+        resources.issue_config_token(helper.rds, api_token, getattr(helper, 'execution_record', rep), authorize())
         env = AttrDict(
             SPUG_APP_NAME=rep.app.name,
             SPUG_APP_KEY=rep.app.key,
@@ -76,7 +88,14 @@ def dispatch(rep: Repository, helper=None, language='zh'):
     finally:
         # cleanup must never mask the build result, local_raw raises on failure
         try:
-            helper.local_raw(f'cd {REPOS_DIR} && rm -rf {rep.spug_version}')
+            # Cleanup is a fixed, validated workspace operation, not a user hook.
+            from pathlib import Path
+            import shutil
+            root = Path(REPOS_DIR).resolve()
+            workspace = (root / rep.spug_version).resolve()
+            if workspace.parent != root or workspace.name == str(rep.deploy_id):
+                raise ValueError('Invalid build workspace')
+            shutil.rmtree(workspace, ignore_errors=True)
         except Exception as e:
             print(f'clean build workspace of {rep.spug_version} error: {e}')
         close_old_connections()
@@ -97,10 +116,10 @@ def _build(rep: Repository, helper, env):
     build_dir = os.path.join(REPOS_DIR, rep.spug_version)
     tar_file = os.path.join(BUILD_DIR, f'{rep.spug_version}.tar.gz')
     env.update(SPUG_DST_DIR=render_str(extend.dst_dir, env))
-    fetch_repo(rep.deploy_id, extend.git_repo)
+    fetch_repo(rep.deploy_id, extend.git_repo, user=helper.authorize(), authorize=helper.authorize)
     helper.send_success('local', '完成√\r\n')
 
-    with Executor(env) as et:
+    with Executor(env, authorize=helper.authorize) as et:
         helper.save_pid(et.pid, 'local')
         if extend.hook_pre_server:
             helper.send_info('local', '检出前任务...\r\n')
@@ -108,7 +127,9 @@ def _build(rep: Repository, helper, env):
 
         helper.send_info('local', '执行检出...        ')
         tree_ish = env.get('SPUG_GIT_COMMIT_ID') or env.get('SPUG_GIT_TAG')
-        command = f'cd {git_dir} && git archive --prefix={rep.spug_version}/ {tree_ish} | (cd .. && tar xf -)'
+        if not isinstance(tree_ish, str) or not tree_ish or tree_ish.startswith('-'):
+            raise ValueError('构建版本无效')
+        command = f'cd {shlex.quote(git_dir)} && git archive --prefix={shlex.quote(rep.spug_version + "/")} {shlex.quote(tree_ish)} | (cd .. && tar xf -)'
         helper.local_raw(command)
         helper.send_success('local', '完成√\r\n')
 
@@ -117,20 +138,22 @@ def _build(rep: Repository, helper, env):
             helper.local(et, f'cd {build_dir} && {extend.hook_post_server}')
 
         helper.send_info('local', '执行打包...        ')
-        filter_rule, exclude, contain = json.loads(extend.filter_rule), '', rep.spug_version
+        filter_rule, exclude, contain = json.loads(extend.filter_rule), '', shlex.quote(rep.spug_version)
         files = helper.parse_filter_rule(filter_rule['data'], env=env)
+        if any('..' in PurePosixPath(x).parts for x in files):
+            raise ValueError('构建文件范围不能超出工作目录')
         if files:
             if filter_rule['type'] == 'exclude':
                 excludes = []
                 for x in files:
                     if x.startswith('/'):
-                        excludes.append(f'--exclude={rep.spug_version}{x}')
+                        excludes.append(shlex.quote(f'--exclude={rep.spug_version}{x}'))
                     else:
-                        excludes.append(f'--exclude={x}')
+                        excludes.append(shlex.quote(f'--exclude={x}'))
                 exclude = ' '.join(excludes)
             else:
-                contain = ' '.join(f'{rep.spug_version}/{x}' for x in files)
-        helper.local_raw(f'mkdir -p {BUILD_DIR} && cd {REPOS_DIR} && tar zcf {tar_file} {exclude} {contain}')
+                contain = ' '.join(shlex.quote(f'{rep.spug_version}/{x.lstrip("/")}') for x in files)
+        helper.local_raw(f'mkdir -p {shlex.quote(BUILD_DIR)} && cd {shlex.quote(REPOS_DIR)} && tar zcf {shlex.quote(tar_file)} {exclude} {contain}')
         helper.send_success('local', '完成√\r\n')
         helper.set_cross_env(rep.spug_version, et.get_envs())
         human_time = human_seconds_time(time.time() - flag)

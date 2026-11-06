@@ -1,0 +1,305 @@
+{
+  "fixture": "http://127.0.0.1:57580",
+  "real_headless_browser": true,
+  "fresh_temporary_profile": true,
+  "resolver_blocks_non_loopback": true,
+  "mocked_api_only": true,
+  "assertions": [
+    "no batch or trip inputs",
+    "continuous behavior described",
+    "confirmation directly opens specific failure result",
+    "next target completes without continue action",
+    "detail remains visible in compact theme",
+    "historical manual results remain readable",
+    "exactly one mock create POST despite double click; continuous policy; no continue request",
+    "all page traffic stays on loopback"
+  ],
+  "runtime_exceptions": [],
+  "console_errors": [],
+  "network_requests": [
+    {
+      "url": "http://127.0.0.1:57580/exec/panel?type=inspection",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/static/js/2.a19215ae.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/static/js/main.39b30fea.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/ops/catalog/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/ops/runs/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/ops/runs/8/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/ops/runs/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/ops/runs/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/ops/runs/8/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/exec/panel?type=inspection&run_id=8",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/static/js/2.a19215ae.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/static/js/main.39b30fea.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/ops/runs/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/ops/runs/8/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/ops/catalog/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/exec/panel?type=inspection&run_id=7",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/static/js/2.a19215ae.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/static/js/main.39b30fea.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/ops/runs/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/ops/runs/7/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/ops/catalog/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:57580/kops-20261027/favicon.svg",
+      "method": "GET"
+    }
+  ],
+  "blocked_outbound_requests": [],
+  "screenshots": [
+    "docs/releases/continuous-inspections-shots/01-continuous-form.png",
+    "docs/releases/continuous-inspections-shots/02-failed-then-success.png",
+    "docs/releases/continuous-inspections-shots/03-dark-result.png"
+  ],
+  "revision": "61980491e2565c2c9b68f9a08717ebc69f2b308b",
+  "working_tree_dirty": false,
+  "tested_ui_source_sha256": {
+    "src/pages/exec/operations/RunForm.js": "33eec58b672ec6674f4c95f499c5ca28fca43787b8f631227c6c8d25558f58fc",
+    "src/pages/exec/operations/RunDetail.js": "2d6301c42e8bc6594fa54c64ffe9c382cdacdcb3de0acd9208fd49404d37d423"
+  },
+  "mock_requests": [
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/catalog/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "POST",
+      "path": "/api/ops/runs/",
+      "payload": {
+        "job": "linux_inspection",
+        "host_ids": [],
+        "group_ids": [
+          1
+        ],
+        "params": {},
+        "execution_mode": "continuous",
+        "confirmed": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/8/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/8/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/8/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/catalog/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/7/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/catalog/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    }
+  ],
+  "passed": true,
+  "mock_writes": 1,
+  "build_asset": "/static/js/main.39b30fea.chunk.js",
+  "build_asset_sha256": "937dde552fea4b8e23eff8aa8db88ae3f5a21a412e6f9befd6502ccd3ddb367e"
+}

@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom';
 import { act, Simulate } from 'react-dom/test-utils';
 import { http } from 'libs';
 import TaskForm from './TaskForm';
+import {useResourceAccess} from 'resources/ResourceAccess';
+import {createResourceAccess} from 'resources/access';
+jest.mock('resources/ResourceAccess', () => ({useResourceAccess: jest.fn()}));
 
 jest.mock('libs', () => ({http: {get: jest.fn(), post: jest.fn()}}));
 jest.mock('../../baota/helpers', () => ({buildGroupTree: () => [], descendantIds: () => new Set()}));
@@ -18,14 +21,14 @@ jest.mock('antd', () => {
   const Wrapper = ({children}) => <div>{children}</div>;
   const Select = ({value, onChange, mode, options = [], placeholder, disabled}) => <select disabled={disabled} aria-label={placeholder} multiple={mode === 'multiple'}
     value={value || (mode ? [] : '')} onChange={e => onChange(mode ? [...e.target.selectedOptions].map(x => Number(x.value)) : e.target.value)}>
-    <option value="">选择</option>{options.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+    <option value="">选择</option>{options.map(item => <option key={item.value} value={item.value} disabled={item.disabled}>{item.label}</option>)}
   </select>;
   return {Card: Wrapper, Space: Wrapper, Typography: {Paragraph: Wrapper, Text: Wrapper}, Form: Object.assign(Wrapper, {Item: Wrapper}),
     Alert: ({message, description}) => <div>{message}{description}</div>, Collapse: Object.assign(Wrapper, {Panel: ({header, children}) => <div>{header}{children}</div>}), Select, TreeSelect: () => null,
     Button: ({children, onClick, loading, disabled}) => <button onClick={onClick} disabled={loading || disabled}>{children}</button>, message: {error: jest.fn()}};
 });
 let container;
-beforeEach(() => {container = document.createElement('div'); document.body.appendChild(container); http.post.mockResolvedValue({id: 9});});
+beforeEach(() => {useResourceAccess.mockReturnValue(createResourceAccess({is_supper: true})); container = document.createElement('div'); document.body.appendChild(container); http.post.mockResolvedValue({id: 9});});
 afterEach(() => {act(() => {ReactDOM.unmountComponentAtNode(container);}); container.remove(); jest.clearAllMocks();});
 test('preflight submits separate panel parameters; preparing never sends start or mutable preview', async () => {
   const prepared = jest.fn();
@@ -40,6 +43,32 @@ test('preflight submits separate panel parameters; preparing never sends start o
   expect(http.post).toHaveBeenCalledTimes(1);
   expect(http.post).toHaveBeenCalledWith('/api/baota/tasks/', {operation: 'site_basedir', panel_ids: [1, 2], params_by_panel: {'1': {all_sites: true, enabled: true}, '2': {all_sites: true, enabled: false}}});
   expect(prepared).toHaveBeenCalledWith(9);
+});
+
+test('readonly panels are disabled and a mixed selection is rejected visibly without silently dropping targets', async () => {
+  useResourceAccess.mockReturnValue(createResourceAccess({permissions: ['exec.panel.create', 'exec.panel_action.site_basedir'],
+    panels: [{id: 1, level: 'read'}, {id: 2, level: 'manage'}]}));
+  const options = {panels: [{id: 1, name: '只读'}, {id: 2, name: '可管理'}], groups: [], operations: [{code: 'site_basedir', label: '防跨站'}]};
+  await act(async () => {ReactDOM.render(<TaskForm options={options}/>, container);});
+  const selects = container.querySelectorAll('select');
+  expect(selects[0].options[1].disabled).toBe(true);
+  act(() => {for (const option of selects[0].options) option.selected = ['1', '2'].includes(option.value); Simulate.change(selects[0]);
+    selects[1].value = 'site_basedir'; Simulate.change(selects[1]);});
+  expect(container.textContent).toContain('包含只读或未授权面板');
+  expect([...container.querySelectorAll('button')].find(item => item.textContent === '生成冻结预检').disabled).toBe(true);
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('a renewal-only action grant keeps renewal reachable without granting certificate creation', async () => {
+  useResourceAccess.mockReturnValue(createResourceAccess({permissions: ['exec.panel.create', 'exec.panel_action.ssl_renew'], panels: [{id: 1, level: 'manage'}]}));
+  const options = {panels: [{id: 1, name: 'A'}], groups: [], operations: [{code: 'ssl_apply', label: '申请'}, {code: 'ssl_renew', label: '续签'}]};
+  await act(async () => {ReactDOM.render(<TaskForm options={options}/>, container);});
+  const category = container.querySelectorAll('select')[1];
+  expect([...category.options].map(item => item.value)).toContain('ssl');
+  act(() => {category.value = 'ssl'; Simulate.change(category);});
+  const operation = container.querySelectorAll('select')[2];
+  expect(operation.value).toBe('ssl_renew');
+  expect([...operation.options].map(item => item.value)).not.toContain('ssl_apply');
 });
 
 test('the operation picker includes PHP updates and SSL has an explicit apply or renew choice', async () => {
@@ -82,5 +111,36 @@ test('file upload replaces generic operation forms and locks selectors during st
   act(() => {[...container.querySelectorAll('button')].find(item => item.textContent === '模拟完成').click();});
   expect(prepared).toHaveBeenCalledWith(13);
   expect([...container.querySelectorAll('select')].every(select => !select.disabled)).toBe(true);
+  expect(http.post).not.toHaveBeenCalled();
+});
+
+test('certificate inventory context selects only a configured panel and site without preparing or reading resources', async () => {
+  const options = {panels: [{id: 1, name: 'A', api_configured: true, api_checked: true, api_version: '13.1.0'}],
+    groups: [], operations: [{code: 'ssl_apply', label: 'SSL 申请'}, {code: 'ssl_renew', label: 'SSL 续签'}]};
+  await act(async () => {ReactDOM.render(<TaskForm options={options} onPrepared={() => {}} initialSearch="?panel_id=1&site_id=7&operation=ssl_apply&execute=true"/>, container);});
+  expect([...container.querySelectorAll('select')[0].selectedOptions].map(option => option.value)).toEqual(['1']);
+  expect(container.querySelectorAll('select')[1].value).toBe('ssl');
+  expect(container.querySelectorAll('select')[2].value).toBe('ssl_apply');
+  expect(http.get).not.toHaveBeenCalled();
+  expect(http.post).not.toHaveBeenCalled();
+  await act(async () => {[...container.querySelectorAll('button')].find(button => button.textContent === '生成冻结预检').click();});
+  expect(http.post).toHaveBeenCalledWith('/api/baota/tasks/', {
+    operation: 'ssl_apply', panel_ids: [1], params_by_panel: {'1': {sites: [7]}},
+  });
+});
+
+test.each(['?panel_id=8&site_id=7&operation=ssl_apply', '?panel_id=1&site_id=0&operation=ssl_apply',
+  '?panel_id=1&site_id=7&operation=site_add'])('invalid inventory context is ignored: %s', async initialSearch => {
+  const options = {panels: [{id: 1, name: 'A', api_configured: true}], groups: [], operations: [{code: 'ssl_apply', label: 'SSL'}]};
+  await act(async () => {ReactDOM.render(<TaskForm options={options} initialSearch={initialSearch}/>, container);});
+  expect([...container.querySelectorAll('select')[0].selectedOptions]).toHaveLength(0);
+  expect(container.querySelectorAll('select')[1].value).toBe('');
+  expect(http.get).not.toHaveBeenCalled(); expect(http.post).not.toHaveBeenCalled();
+});
+
+test('unconfigured panel cannot be preselected by certificate context', async () => {
+  const options = {panels: [{id: 1, name: 'A', api_configured: false}], groups: [], operations: [{code: 'ssl_apply', label: 'SSL'}]};
+  await act(async () => {ReactDOM.render(<TaskForm options={options} initialSearch="?panel_id=1&site_id=7&operation=ssl_apply"/>, container);});
+  expect([...container.querySelectorAll('select')[0].selectedOptions]).toHaveLength(0);
   expect(http.post).not.toHaveBeenCalled();
 });

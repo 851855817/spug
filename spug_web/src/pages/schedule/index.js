@@ -28,6 +28,7 @@ export default observer(function () {
             <Select.Option value={0}>{t('执行中')}</Select.Option>
             <Select.Option value={1}>{t('成功')}</Select.Option>
             <Select.Option value={2}>{t('失败')}</Select.Option>
+            <Select.Option value={3}>跳过</Select.Option>
           </Select>
         </SearchForm.Item>
         <SearchForm.Item span={6} title={t('类型')}>

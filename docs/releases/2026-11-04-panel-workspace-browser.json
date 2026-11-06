@@ -1,0 +1,386 @@
+{
+  "fixture": "http://127.0.0.1:51241",
+  "real_headless_browser": true,
+  "fresh_temporary_profile": true,
+  "resolver_blocks_non_loopback": true,
+  "mocked_api_only": true,
+  "assertions": [
+    "single visible sidebar entry",
+    "inspection type encoded in URL",
+    "Linux PHP and Web jobs available",
+    "historic results show specific cause",
+    "back restores inspection result",
+    "legacy links redirect and preserve result",
+    "SSL renewal prefill remains intact",
+    "compact task selector stays in viewport",
+    "all fixture requests are recognized GETs; no task submitted",
+    "all page traffic stays on loopback"
+  ],
+  "runtime_exceptions": [],
+  "console_errors": [],
+  "network_requests": [
+    {
+      "url": "http://127.0.0.1:51241/exec/panel",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/js/2.f8caf7ac.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/js/main.80e61e3c.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/baota/task-options/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/ops/catalog/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/ops/runs/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/ops/runs/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/ops/runs/7/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/baota/task-options/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/ops/runs/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/ops/runs/7/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/ops/catalog/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/exec/operations?run_id=7",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/js/2.f8caf7ac.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/js/main.80e61e3c.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/ops/runs/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/ops/runs/7/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/ops/catalog/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/exec/panel?panel_id=3&site_id=7&operation=ssl_renew",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/js/2.f8caf7ac.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/js/main.80e61e3c.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/baota/task-options/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/exec/panel?type=inspection&run_id=7",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/css/main.1f9e3667.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/js/2.f8caf7ac.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/static/js/main.80e61e3c.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/ops/runs/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/ops/runs/7/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/ops/catalog/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:51241/kops-20261027/favicon.svg",
+      "method": "GET"
+    }
+  ],
+  "blocked_outbound_requests": [],
+  "screenshots": [
+    "docs/releases/panel-workspace-shots/01-panel-operations.png",
+    "docs/releases/panel-workspace-shots/02-inspection-create.png",
+    "docs/releases/panel-workspace-shots/03-inspection-result.png",
+    "docs/releases/panel-workspace-shots/04-ssl-prefill.png",
+    "docs/releases/panel-workspace-shots/05-dark-compact-result.png"
+  ],
+  "revision": "e6ee4e3a5831ff79b9aebe56123ddbb3e7b34839",
+  "working_tree_dirty": false,
+  "tested_ui_source_sha256": {
+    "src/routes.js": "1bd0a9d8fcd10b57adb4e0be061577d2182ecfcead5858953e0188ab4175cc38",
+    "src/pages/exec/panel/index.js": "79e8768110bac3cc9dc624da12d700b8ef69937cedfa890f33231eedda898f85",
+    "src/pages/exec/panel/Workspace.js": "6132fa3e45f261af679c9bac704e8235cfce92af7fa96bb81cd6ca19666fd883",
+    "src/pages/exec/panel/TaskDetail.js": "489848507e34a028c2f48ff7431862e0e54bf85db8a387ec7a56cee17c11c828",
+    "src/pages/exec/operations/index.js": "e20b5db001df23a667002b9f8e0a88a45197117450d6926b4680bbc865e7362f"
+  },
+  "mock_requests": [
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/task-options/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/catalog/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/7/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/task-options/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/7/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/catalog/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/7/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/catalog/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/baota/task-options/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/runs/7/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ops/catalog/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    }
+  ],
+  "passed": true,
+  "mock_writes": 0,
+  "build_asset": "/static/js/main.80e61e3c.chunk.js",
+  "build_asset_sha256": "76d08fd4d822732706c0be41a43ef8e5d48d104fafc7197dfdfda5ea701e3a89"
+}

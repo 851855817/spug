@@ -3,6 +3,7 @@
 # Released under the AGPL-3.0 License.
 from django.core.cache import cache
 from django.conf import settings
+from django.db import transaction
 from django.http.response import HttpResponse
 from libs.mixins import AdminView, View
 from libs import JsonParser, Argument, human_datetime, json_response
@@ -11,7 +12,6 @@ from libs.spug import send_login_wx_code
 from apps.account.models import User, Role, History
 from apps.setting.utils import AppSetting
 from apps.account.utils import verify_password
-from libs.ldap import LDAP
 from functools import partial
 import user_agents
 import ipaddress
@@ -27,6 +27,8 @@ class UserView(AdminView):
             tmp = u.to_dict(excludes=('access_token', 'password_hash'))
             tmp['role_ids'] = [x.id for x in u.roles.all()]
             tmp['password'] = '******'
+            from .access import quota_usage
+            tmp['resource_quota'] = quota_usage(u) if u.is_active else None
             users.append(tmp)
         return json_response(users)
 
@@ -45,16 +47,33 @@ class UserView(AdminView):
                 return json_response(error=f'已存在登录名为【{form.username}】的用户')
 
             role_ids, password = form.pop('role_ids'), form.pop('password')
-            if form.id:
-                user = User.objects.get(pk=form.id)
-                user.update_by_dict(form)
-            else:
-                if not verify_password(password):
-                    return json_response(error='请设置至少8位包含数字、小写和大写字母的新密码')
-                form.password_hash = User.make_password(password)
-                user = User.objects.create(**form)
-            user.roles.set(role_ids)
-            user.set_perms_cache()
+            raw = json.loads(request.body)
+            try:
+                from .access import quota_transaction
+                with quota_transaction():
+                    from .access import admin
+                    request.user = admin(request.user)
+                    if form.id:
+                        user = User.objects.get(pk=form.id, is_deleted=False)
+                        user.update_by_dict(form)
+                    else:
+                        if not verify_password(password):
+                            return json_response(error='请设置至少8位包含数字、小写和大写字母的新密码')
+                        form.password_hash = User.make_password(password)
+                        user = User.objects.create(**form)
+                    if 'server_limit' in raw or 'resource_grants' in raw:
+                        from .resource_views import update_policy
+                        policy = {'user_id': user.pk}
+                        if 'server_limit' in raw:
+                            policy['limit'] = raw['server_limit']
+                        if 'resource_grants' in raw:
+                            policy['grants'] = raw['resource_grants']
+                        update_policy(request.user, user, policy)
+                    if not form.id or 'role_ids' in raw:
+                        user.roles.set(role_ids)
+                    user.set_perms_cache()
+            except ValueError as exc:
+                return json_response(error=str(exc))
         return json_response(error=error)
 
     def patch(self, request):
@@ -194,6 +213,7 @@ def login(request):
         if user and not user.is_active:
             return handle_response(error="账户已被系统禁用")
         if form.type == 'ldap':
+            from libs.ldap import LDAP
             config = LDAP.normalize_config(AppSetting.get_default('ldap_service'))
             if not config:
                 return handle_response(error='请在系统设置中配置LDAP后再尝试通过该方式登录')

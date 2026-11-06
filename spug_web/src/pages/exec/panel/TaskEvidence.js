@@ -35,6 +35,8 @@ const LABELS = {
   target_version_frozen: '实际目标版本已锁定', patch_pinned: '补丁已锁定', update_policy: '更新策略',
   php_service_may_restart: 'PHP 服务可能重启', website_refs: '使用此 PHP 分支的网站', impact: '影响范围',
   runtime_scope: '运行状态核验范围', cli_modules_verified: '目标 PHP CLI 模块已核实', fpm_runtime_verified: 'FPM 运行状态已核实',
+  cli_modules: '目标分支 CLI 模块清单', cli_module_check: '更新前后 CLI 模块对照', health_policy: '更新核验策略',
+  before_count: '更新前模块数', after_count: '读回模块数', added: '新增模块', removed: '缺失模块',
   selected_site_main_configuration_verified: '所选网站主配置已核实', selected_site_configuration_verified: '所选网站完整配置已核实',
   included_configuration_verified: '引用配置已核实', live_tls_verified: '线上 TLS 已核实',
   main_configuration: '网站主配置', certificate_path: '公开证书路径', includes_present: '存在引用配置',
@@ -54,6 +56,9 @@ const VALUES = {
   baota_legacy_stable_v1: '后台按宝塔官方稳定通道决定版本（不锁定候选）',
   php_update_restart: '确认 PHP 分支更新和网站短暂中断影响', official_same_branch: '官方同分支更新',
   branch_cli_binary: '目标分支的 PHP CLI 二进制（未证明 FPM 运行状态）',
+  php_cli_modules_v1: '对照目标分支 CLI 模块，缺失或无法核实时待人工核对',
+  unchanged: '清单一致', changed: '清单发生变化', unavailable: '缺少核验依据',
+  baseline_unavailable: '缺少更新前模块清单', readback_unavailable: '无法核实读回模块清单',
   success: '成功', failed: '失败', uncertain: '结果不确定', remote: '远端处理中',
 };
 

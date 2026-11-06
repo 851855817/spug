@@ -80,7 +80,7 @@ function Node(props) {
             {node.name ? (
               <div className={css.title}>{node.name}</div>
             ) : (
-              <div className={css.title} style={{color: '#595959'}}>{t('请选择节点模块')}</div>
+              <div className={css.title} style={{color: 'var(--kops-text)'}}>{t('请选择节点模块')}</div>
             )}
             <Dropdown dropdownRender={dropdownRender} className={css.action}
                       trigger="click" menu={{items: menus}} onMouseDown={handleActionClick}>

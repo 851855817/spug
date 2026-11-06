@@ -1,3 +1,4 @@
+// Modified by K on 2026-10-27 for KOps · 云枢 branding and legal notices.
 /**
  * Copyright (c) OpenSpug Organization. https://github.com/openspug/spug
  * Copyright (c) <spug.dev@gmail.com>
@@ -27,12 +28,14 @@ import Setting from './Setting';
 import { http, hasPermission, includes, t } from 'libs';
 import gStore from 'gStore';
 import styles from './index.module.less';
-import LogoSpugText from 'layout/logo-spug-white.png';
+import Brand from '../../branding/Brand';
 import lds from 'lodash';
+import {useResourceAccess} from 'resources/ResourceAccess';
 
 let posX = 0
 
 function WebSSH(props) {
+  const access = useResourceAccess();
   const [visible, setVisible] = useState(false);
   const [visible2, setVisible2] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -47,7 +50,7 @@ function WebSSH(props) {
   const [sshMode] = useState(hasPermission('host.console.view'))
 
   useEffect(() => {
-    window.document.title = 'Spug web terminal'
+    window.document.title = 'KOps · 云枢 · Web 终端'
     window.addEventListener('beforeunload', leaveTips)
     fetchNodes()
     gStore.fetchUserSettings()
@@ -98,6 +101,7 @@ function WebSSH(props) {
   }
 
   function _openNode(node, replace) {
+    if (!access.canManage('host', node.id, sshMode ? 'host.console.view' : 'host.console.list')) return;
     const newNode = {...node}
     newNode.vId = String(new Date().getTime())
     if (replace) {
@@ -217,23 +221,17 @@ function WebSSH(props) {
     )
   }
 
-  const spug_web_terminal =
-    '                                                 __       __                          _                __\n' +
-    '   _____ ____   __  __ ____ _   _      __ ___   / /_     / /_ ___   _____ ____ ___   (_)____   ____ _ / /\n' +
-    '  / ___// __ \\ / / / // __ `/  | | /| / // _ \\ / __ \\   / __// _ \\ / ___// __ `__ \\ / // __ \\ / __ `// / \n' +
-    ' (__  )/ /_/ // /_/ // /_/ /   | |/ |/ //  __// /_/ /  / /_ /  __// /   / / / / / // // / / // /_/ // /  \n' +
-    '/____// .___/ \\__,_/ \\__, /    |__/|__/ \\___//_.___/   \\__/ \\___//_/   /_/ /_/ /_//_//_/ /_/ \\__,_//_/   \n' +
-    '     /_/            /____/                                                                               \n'
+  const terminalWelcome = 'KOps · 云枢\nWeb 终端'
 
   return hasPermission('host.console.view|host.console.list') ? (
     <div className={styles.container} onMouseUp={() => posX = 0} onMouseMove={handleMouseMove}>
       <div className={styles.sider} style={{width}}>
         <a className={styles.logo} href="/host" target="_blank">
-          <img src={LogoSpugText} alt="logo"/>
+          <Brand light/>
         </a>
         <div className={styles.hosts}>
           <Spin spinning={fetching}>
-            <Input allowClear className={styles.search} prefix={<SearchOutlined style={{color: '#999'}}/>}
+            <Input allowClear className={styles.search} prefix={<SearchOutlined style={{color: 'var(--kops-muted)'}}/>}
                    placeholder={t('输入主机名/IP检索')} onChange={e => setSearchValue(e.target.value)}/>
             <Button icon={<SyncOutlined/>} type="link" loading={fetching} onClick={fetchNodes}/>
             {treeData.length > 0 ? (
@@ -255,7 +253,7 @@ function WebSSH(props) {
           type="editable-card"
           onTabClick={key => setActiveId(key)}
           onEdit={(key, action) => action === 'remove' ? handleRemove(key, 'self') : null}
-          style={{background: '#fff', width: `calc(100vw - ${width}px)`}}
+          style={{background: 'var(--kops-surface)', width: `calc(100vw - ${width}px)`}}
           tabBarExtraContent={hosts.length === 0 ? (
             <div className={styles.tips}>{t('小提示：双击标签快速复制窗口，右击标签展开更多操作。')}</div>
           ) : sshMode ? (
@@ -281,7 +279,7 @@ function WebSSH(props) {
             )
           }))}/>
         {hosts.length === 0 && (
-          <pre className={sshMode ? styles.fig : styles.fig2}>{spug_web_terminal}</pre>
+          <pre className={sshMode ? styles.fig : styles.fig2}>{terminalWelcome}</pre>
         )}
       </div>
       <Drawer

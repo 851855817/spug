@@ -171,11 +171,11 @@ function Console(props) {
                 {outputs[item.id]?.status === 'error' ? (
                   <ExclamationCircleOutlined style={{color: 'red'}}/>
                 ) : outputs[item.id]?.status === 'success' ? (
-                  <CheckCircleOutlined style={{color: '#52c41a'}}/>
+                  <CheckCircleOutlined style={{color: 'var(--kops-success)'}}/>
                 ) : outputs[item.id]?.status === 'doing' ? (
-                  <LoadingOutlined style={{color: '#1890ff'}}/>
+                  <LoadingOutlined style={{color: 'var(--kops-primary)'}}/>
                 ) : (
-                  <ClockCircleOutlined style={{color: '#faad14'}}/>
+                  <ClockCircleOutlined style={{color: 'var(--kops-warning)'}}/>
                 )}
                 {item.id === 'local' ? (
                   <div className={styles.text} style={{color: '#0E989A'}}>{localTitle}</div>
@@ -213,11 +213,11 @@ function Console(props) {
                     {outputs[item.id]?.status === 'error' ? (
                       <ExclamationCircleOutlined style={{color: 'red'}}/>
                     ) : outputs[item.id]?.status === 'success' ? (
-                      <CheckCircleOutlined style={{color: '#52c41a'}}/>
+                      <CheckCircleOutlined style={{color: 'var(--kops-success)'}}/>
                     ) : outputs[item.id]?.status === 'doing' ? (
-                      <LoadingOutlined style={{color: '#1890ff'}}/>
+                      <LoadingOutlined style={{color: 'var(--kops-primary)'}}/>
                     ) : (
-                      <ClockCircleOutlined style={{color: '#faad14'}}/>
+                      <ClockCircleOutlined style={{color: 'var(--kops-warning)'}}/>
                     )}
                     {item.id === 'local' ? (
                       <div className={styles.text} style={{color: '#0E989A'}}>{localTitle}</div>
@@ -232,13 +232,13 @@ function Console(props) {
               <div className={styles.header}>
                 <div className={styles.title}>{cItem.id === 'local' ? localTitle : cItem.title}</div>
                 {loading ? (
-                  <LoadingOutlined className={styles.icon} style={{color: '#faad14'}}/>
+                  <LoadingOutlined className={styles.icon} style={{color: 'var(--kops-warning)'}}/>
                 ) : (
                   <Tooltip title={t('终止发布')}>
                     {cItem.status === 'doing' ? (
-                      <StopOutlined className={styles.icon} style={{color: '#faad14'}} onClick={handleTerminate}/>
+                      <StopOutlined className={styles.icon} style={{color: 'var(--kops-warning)'}} onClick={handleTerminate}/>
                     ) : (
-                      <StopOutlined className={styles.icon} style={{color: '#dfdfdf'}}/>
+                      <StopOutlined className={styles.icon} style={{color: 'var(--kops-muted)'}}/>
                     )}
                   </Tooltip>
                 )}

@@ -76,7 +76,7 @@ class ComTable extends React.Component {
           <div style={{display: 'flex', alignItems: 'center'}}>
             <div>{t('报警历史记录')}</div>
             <Tooltip title={t('每天自动清理，仅保留最近30天的报警记录。')}>
-              <QuestionCircleOutlined style={{color: '#999', marginLeft: 8}}/>
+              <QuestionCircleOutlined style={{color: 'var(--kops-muted)', marginLeft: 8}}/>
             </Tooltip>
           </div>
         )}

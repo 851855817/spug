@@ -25,7 +25,8 @@ import BaotaIndex from './pages/baota';
 import ExecTask from './pages/exec/task';
 import ExecTemplate from './pages/exec/template';
 import ExecTransfer from './pages/exec/transfer';
-import ExecPanel from './pages/exec/panel';
+import ExecPanel, { LegacyOperations } from './pages/exec/panel';
+import { SiteInventory, BackupInventory } from './pages/panel-inventory';
 import DeployApp from './pages/deploy/app';
 import DeployRepository from './pages/deploy/repository';
 import DeployRequest from './pages/deploy/request';
@@ -36,12 +37,15 @@ import ConfigApp from './pages/config/app';
 import ConfigSetting from './pages/config/setting';
 import MonitorIndex from './pages/monitor';
 import ServerMonitor from './pages/server-monitor';
+import SSLMonitor from './pages/ssl-monitor';
+import ServerExpiry from './pages/server-expiry';
 import AlarmIndex from './pages/alarm/alarm';
 import AlarmGroup from './pages/alarm/group';
 import AlarmContact from './pages/alarm/contact';
 import SystemAccount from './pages/system/account';
 import SystemRole from './pages/system/role';
 import SystemSetting from './pages/system/setting';
+import SystemHealth from './pages/system/health';
 import SystemLogin from './pages/system/login';
 import SystemCredential from './pages/system/credential';
 import WelcomeIndex from './pages/welcome/index';
@@ -54,29 +58,34 @@ export default [
   {
     icon: <DashboardOutlined/>,
     title: 'Dashboard',
+    hidden: true,
     auth: 'dashboard.dashboard.view',
     path: '/dashboard',
     component: DashboardIndex
   },
   {icon: <CloudServerOutlined/>, title: t('主机管理'), auth: 'host.host.view', path: '/host', component: HostIndex},
+  {path: '/host/expiry', auth: 'ops.expiry.view', component: ServerExpiry},
   {icon: <CloudServerOutlined/>, title: t('宝塔面板管理'), auth: 'baota.panel.view', path: '/baota', component: BaotaIndex},
   {
-    icon: <CodeOutlined/>, title: t('批量执行'), auth: 'exec.task.do|exec.template.view|exec.panel.view', child: [
+    icon: <CodeOutlined/>, title: t('批量执行'), auth: 'exec.task.do|exec.transfer.do|exec.template.view|exec.panel.view|ops.job.view|ops.inventory.view', child: [
       {title: t('执行任务'), auth: 'exec.task.do', path: '/exec/task', component: ExecTask},
       {title: t('模板管理'), auth: 'exec.template.view', path: '/exec/template', component: ExecTemplate},
       {title: t('文件分发'), auth: 'exec.transfer.do', path: '/exec/transfer', component: ExecTransfer},
-      {title: t('面板任务'), auth: 'exec.panel.view', path: '/exec/panel', component: ExecPanel},
+      {title: t('面板任务'), auth: 'exec.panel.view|ops.job.view', path: '/exec/panel', component: ExecPanel},
+      {hidden: true, auth: 'ops.job.view', path: '/exec/operations', component: LegacyOperations},
+      {hidden: true, title: t('网站与证书'), auth: 'ops.inventory.view', path: '/exec/sites', component: SiteInventory},
+      {title: t('备份检查台'), auth: 'ops.inventory.view', path: '/exec/backups', component: BackupInventory},
     ]
   },
   {
-    icon: <FlagOutlined/>, title: t('应用发布'), auth: 'deploy.app.view|deploy.repository.view|deploy.request.view', child: [
+    icon: <FlagOutlined/>, title: t('应用发布'), hidden: true, auth: 'deploy.app.view|deploy.repository.view|deploy.request.view', child: [
       {title: t('发布配置'), auth: 'deploy.app.view', path: '/deploy/app', component: DeployApp},
       {title: t('构建仓库'), auth: 'deploy.repository.view', path: '/deploy/repository', component: DeployRepository},
       {title: t('发布申请'), auth: 'deploy.request.view', path: '/deploy/request', component: DeployRequest},
     ]
   },
   {path: '/pipeline/:id', component: PipelineEditor},
-  {icon: <FlagOutlined/>, title: t('流水线'), auth: 'pipeline.pipeline.view', path: '/pipeline', component: PipelineIndex},
+  {icon: <FlagOutlined/>, title: t('流水线'), hidden: true, auth: 'pipeline.pipeline.view', path: '/pipeline', component: PipelineIndex},
   {
     icon: <ScheduleOutlined/>,
     title: t('任务计划'),
@@ -85,15 +94,16 @@ export default [
     component: ScheduleIndex
   },
   {
-    icon: <DeploymentUnitOutlined/>, title: t('配置中心'), auth: 'config.env.view|config.src.view|config.app.view', child: [
+    icon: <DeploymentUnitOutlined/>, title: t('配置中心'), hidden: true, auth: 'config.env.view|config.src.view|config.app.view', child: [
       {title: t('环境管理'), auth: 'config.env.view', path: '/config/environment', component: ConfigEnvironment},
       {title: t('服务配置'), auth: 'config.src.view', path: '/config/service', component: ConfigService},
       {title: t('应用配置'), auth: 'config.app.view', path: '/config/app', component: ConfigApp},
       {path: '/config/setting/:type/:id', component: ConfigSetting},
     ]
   },
-  {icon: <MonitorOutlined/>, title: t('监控中心'), auth: 'monitor.monitor.view', child: [
-    {title: t('服务器监控'), auth: 'monitor.monitor.view', path: '/monitor/servers', component: ServerMonitor},
+  {icon: <MonitorOutlined/>, title: t('监控中心'), auth: 'monitor.monitor.view|monitor.server.view|monitor.ssl.view', child: [
+    {title: t('服务器监控'), auth: 'monitor.server.view', path: '/monitor/servers', component: ServerMonitor},
+    {title: 'SSL监控', auth: 'monitor.ssl.view', path: '/monitor/ssl', component: SSLMonitor},
     {title: t('监控任务'), auth: 'monitor.monitor.view', path: '/monitor', component: MonitorIndex},
   ]},
   {
@@ -110,6 +120,7 @@ export default [
       {title: t('账户管理'), auth: 'system.account.view', path: '/system/account', component: SystemAccount},
       {title: t('角色管理'), auth: 'system.role.view', path: '/system/role', component: SystemRole},
       {title: t('系统设置'), auth: 'system.setting.view', path: '/system/setting', component: SystemSetting},
+      {title: t('平台健康'), auth: 'admin', path: '/system/health', component: SystemHealth},
     ]
   },
   {path: '/welcome/index', component: WelcomeIndex},

@@ -10,8 +10,11 @@ import { t } from 'libs';
 import Basic from './Basic';
 import Reset from './Reset';
 import styles from './index.module.css';
+import {useResourceAccess} from '../../../resources/ResourceAccess';
+import {quotaText} from '../../../resources/access';
 
 function Index() {
+  const access = useResourceAccess();
   const [selectedKeys, setSelectedKeys] = useState(['basic'])
 
   return (
@@ -20,6 +23,7 @@ function Index() {
         <Breadcrumb.Item>{t('首页')}</Breadcrumb.Item>
         <Breadcrumb.Item>{t('个人中心')}</Breadcrumb.Item>
       </Breadcrumb>
+      <p>{quotaText(access.quota)} · SSH 与已关联宝塔共享额度</p>
       <div className={styles.container}>
         <div className={styles.left}>
           <Menu

@@ -9,4 +9,5 @@ urlpatterns = [
     path('', Schedule.as_view()),
     path('<int:t_id>/', HistoryView.as_view()),
     path('run_time/', next_run_time),
+    path('panel_templates/', PanelTemplatesView.as_view()),
 ]

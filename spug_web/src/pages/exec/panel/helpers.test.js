@@ -49,6 +49,14 @@ test('start includes only exact explicit acknowledgements and never edited param
   expect(() => startPayload({...task, state: 'running'}, ['ssl_panel_sync'])).toThrow();
 });
 
+test('optional batch policy validates integer bounds and leaves legacy starts unchanged', () => {
+  const task = {state: 'prepared', targets: [{children: [{state: 'ready'}]}]};
+  expect(startPayload(task, [], {batch_size: 2, failure_threshold: 1})).toEqual({acknowledgements: [], execution_policy: {batch_size: 2, failure_threshold: 1}});
+  expect(startPayload(task, [])).toEqual({acknowledgements: []});
+  [0, 11, 1.5, null].forEach(batch_size => expect(() => startPayload(task, [], {batch_size, failure_threshold: 1})).toThrow());
+  expect(() => startPayload(task, [], {batch_size: 2, failure_threshold: 3})).toThrow();
+});
+
 test('known blocked panels send empty parameters while ready panels remain strictly validated', () => {
   const ready = {...panels[0], api_configured: true, api_checked: true, api_version: '13.1.0'};
   const blocked = {...panels[1], api_configured: false, api_checked: false, api_version: ''};

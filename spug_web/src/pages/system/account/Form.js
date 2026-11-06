@@ -11,16 +11,22 @@ import http from 'libs/http';
 import { t, docsUrl } from 'libs';
 import store from './store';
 import rStore from '../role/store';
+import ResourcePolicy from './ResourcePolicy';
+import {accountResourceFields} from '../../../resources/access';
 
 
 export default observer(function () {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [policy, setPolicy] = useState({});
+  const [policyReady, setPolicyReady] = useState(!!store.record.is_supper);
 
   function handleSubmit() {
+    if (!policyReady) return;
     setLoading(true);
     const formData = form.getFieldsValue();
     formData.id = store.record.id;
+    Object.assign(formData, accountResourceFields(!!store.record.id, policy));
     http.post('/api/account/user/', formData)
       .then(() => {
         message.success(t('操作成功'));
@@ -37,6 +43,7 @@ export default observer(function () {
       title={store.record.id ? t('编辑账户') : t('新建账户')}
       onCancel={() => store.formVisible = false}
       confirmLoading={loading}
+      okButtonProps={{disabled: !policyReady}}
       onOk={handleSubmit}>
       <Form form={form} initialValues={store.record} labelCol={{span: 6}} wrapperCol={{span: 14}}>
         <Form.Item required name="username" label={t('登录名')}>
@@ -71,6 +78,7 @@ export default observer(function () {
           <Input placeholder={t('请输入微信Token')}/>
         </Form.Item>
       </Form>
+      {!store.record.is_supper && <ResourcePolicy userId={store.record.id} onChange={setPolicy} onReady={setPolicyReady}/>}
     </Modal>
   )
 })

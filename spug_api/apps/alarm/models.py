@@ -50,6 +50,15 @@ class Alarm(models.Model, ModelMixin):
         ordering = ('-id',)
 
 
+class AlarmResource(models.Model):
+    alarm = models.OneToOneField(Alarm, on_delete=models.CASCADE, related_name='resource_scope')
+    owner = models.ForeignKey(User, on_delete=models.PROTECT)
+    host_ids = models.JSONField(default=list)
+
+    class Meta:
+        db_table = 'alarm_resource_scopes'
+
+
 class Group(models.Model, ModelMixin):
     name = models.CharField(max_length=50)
     desc = models.CharField(max_length=255, null=True)

@@ -1,10 +1,12 @@
 """Durable task commands. Browser input can never supply a dispatch snapshot."""
 import copy
+import hashlib
 import json
 import re
 
 from django.db import transaction
 from django.utils import timezone
+from apps.account import access
 
 from .models import Panel, PanelGroup, PanelTask, PanelTaskTarget, PanelLock
 from .operations import get_operation
@@ -53,20 +55,76 @@ def check_preflight_size(targets):
 
 
 def permission(user, name):
-    if not user.has_perms(['exec.panel.' + name]):
-        raise PermissionError('权限拒绝')
+    return access.require(user, 'exec.panel.' + name)
+
+
+def action_permission(user, operation):
+    current, granted = access.permissions(user)
+    code = 'exec.panel_action.' + operation
+    if not current.is_supper and code not in granted:
+        access.reject(current, '缺少面板操作授权：' + code, codes=[code])
+    return current
+
+
+def task_access(user, task, action='view'):
+    user = permission(user, action)
+    # Always resolve the durable row, including callers holding an old object.
+    task = PanelTask.objects.get(pk=getattr(task, 'pk', task))
+    if not user.is_supper and task.owner_id != user.pk:
+        access.reject(user, '任务不存在或无权访问')
+    if action != 'view':
+        action_permission(user, task.operation)
+    access.require_resources(user, 'panel', list(task.targets.values_list('panel_id', flat=True)), manage=action != 'view')
+    return task
+
+
+def runtime_authorized(task_id, mutating=False):
+    task = PanelTask.objects.get(pk=task_id)
+    user = access.current_user(task.owner_id)
+    # Queued requests must hold the complete current scope before the first
+    # panel is contacted; a revoked sibling target cannot be silently skipped.
+    permission(user, 'create' if task.state == 'preflight_queued' else 'execute')
+    action_permission(user, task.operation)
+    targets = list(task.targets.select_related('panel'))
+    access.require_resources(user, 'panel', [target.panel_id for target in targets], manage=True)
+    for target in targets:
+        revision = target.panel_snapshot.get('api_config_revision')
+        if type(revision) is not int or target.panel.api_config_revision != revision:
+            raise ValueError('API 配置在预检后变化，未发送请求；请创建新预检')
+        # Empty targets validate their own configuration before opening a
+        # preflight client. An unconfigured sibling must fail independently;
+        # every target's frozen revision still participates in this guard.
+        if target.children:
+            configured(target.panel, revision)
+    if task.operation == 'file_upload':
+        from .models import PanelUploadBinding
+        bindings = list(PanelUploadBinding.objects.filter(target__task=task).select_related('bundle'))
+        if len(bindings) != task.targets.count() or any(b.bundle.owner_id != user.pk or b.bundle.state != 'sealed' for b in bindings):
+            raise ValueError('上传文件包归属或封存状态已变化，未发送请求')
+    from apps.schedule.panel_tasks import before_request
+    before_request(task, mutating=mutating)
+    if any(a.get('action') == 'ssl_monitor' for a in task.audit):
+        access.require(user, 'exec.panel.create', 'exec.panel.execute')
+        from apps.monitor.ssl.renewal import panel_runtime_authorized
+        if not panel_runtime_authorized(task.pk, mutating=mutating):
+            raise ValueError('SSL 来源或续签权限已变化，未发送请求')
+    return task
 
 
 def visible(user, queryset=None):
+    user = access.current_user(user)
     queryset = queryset if queryset is not None else PanelTask.objects.all()
-    return queryset if user.has_perms(['exec.panel.manage']) else queryset.filter(owner_id=user.pk)
+    if not user.is_supper:
+        queryset = queryset.filter(owner_id=user.pk)
+    denied = PanelTaskTarget.objects.exclude(panel_id__in=access.scope(user, 'panel').values('pk')).values('task_id')
+    return queryset.exclude(pk__in=denied)
 
 
 def owned(user, task_id, action, lock=False):
     permission(user, action)
     qs = PanelTask.objects.select_for_update() if lock else PanelTask.objects
     try:
-        return visible(user, qs).get(pk=positive_id(task_id))
+        return task_access(user, visible(user, qs).get(pk=positive_id(task_id)), action)
     except PanelTask.DoesNotExist:
         raise PermissionError('任务不存在或无权访问') from None
 
@@ -78,9 +136,10 @@ def configured(panel, revision=None):
         raise ValueError('API 配置在预检后变化，请创建新预检')
 
 
-def safe_panel(panel):
-    return {'id': panel.pk, 'name': panel.name, 'group_id': panel.group_id,
-            'group_name': panel.group.name, 'api_config_revision': panel.api_config_revision,
+def safe_panel(panel, user=None):
+    visible_group = user is None or panel.group_id in access.group_ids(user, 'panel')
+    return {'id': panel.pk, 'name': panel.name, 'group_id': panel.group_id if visible_group else None,
+            'group_name': panel.group.name if visible_group else '', 'api_config_revision': panel.api_config_revision,
             'api_configured': bool(panel.api_base_url and panel.api_key_ciphertext),
             'api_checked': bool(panel.api_checked_at), 'api_version': panel.api_version}
 
@@ -96,13 +155,14 @@ def preflight_prerequisite_error(panel):
     return ''
 
 
-def selected_panels(data):
+def selected_panels(data, user):
     panel_ids, group_ids = data.get('panel_ids', []), data.get('group_ids', [])
     if (not isinstance(panel_ids, list) or not isinstance(group_ids, list)
             or len(panel_ids) > MAX_PANELS or len(group_ids) > MAX_PANELS):
         raise ValueError('单次最多选择 50 个面板或分组')
     ids = {positive_id(v) for v in panel_ids}
     selected = {positive_id(v) for v in group_ids}
+    access.require_groups(user, 'panel', list(selected))
     groups = dict(PanelGroup.objects.values_list('id', 'parent_id'))
     if not selected.issubset(groups):
         raise ValueError('分组不存在')
@@ -116,15 +176,16 @@ def selected_panels(data):
     ids.update(Panel.objects.filter(group_id__in=selected).values_list('id', flat=True))
     if not 1 <= len(ids) <= MAX_PANELS:
         raise ValueError('请选择 1 至 50 个面板')
-    return list(Panel.objects.select_related('group').filter(pk__in=ids).order_by('id'))
+    return list(access.require_resources(user, 'panel', list(ids), manage=True).select_related('group').order_by('id'))
 
 
 def prepare(user, data, retry_parent=None):
-    permission(user, 'create')
+    user = permission(user, 'create')
     bounded(data)
     strict(data, ('operation', 'panel_ids', 'group_ids', 'params', 'params_by_panel'), ('operation',))
     operation = get_operation(data['operation'])
-    panels = selected_panels(data)
+    action_permission(user, operation.code)
+    panels = selected_panels(data, user)
     if operation.code == 'file_upload':
         return prepare_upload(user, data, panels, operation, retry_parent)
     if ('params' in data) == ('params_by_panel' in data):
@@ -207,9 +268,153 @@ def required_acks(targets):
     return sorted(codes)
 
 
+def validate_execution_policy(value):
+    strict(value, ('batch_size', 'failure_threshold'), ('batch_size', 'failure_threshold'))
+    size, threshold = value['batch_size'], value['failure_threshold']
+    if type(size) is not int or not 1 <= size <= 10 or type(threshold) is not int or not 1 <= threshold <= size:
+        raise ValueError('每批须为 1 至 10 个面板，失败阈值须为 1 至每批面板数')
+    return {'batch_size': size, 'failure_threshold': threshold}
+
+
+def batch_failed_target(task, target):
+    baseline = task.execution_policy.get('failure_baseline', {}).get(str(target.pk), 0)
+    if task.operation == 'file_upload':
+        # The aggregate child intentionally includes failed preflight files;
+        # execution failures are only new failures above the frozen file count.
+        return target.summary.get('upload', {}).get('failed', 0) > baseline
+    return (target.state == 'failed' or any(c['state'] == 'failed' and c['snapshot'].get('state') == 'ready'
+                                          for c in target.children)
+            or target.summary.get('upload', {}).get('failed', 0) > baseline)
+
+
+def current_batch_targets(task, targets):
+    policy = task.execution_policy
+    start = (policy['index'] - 1) * policy['batch_size']
+    ids = policy['target_ids'][start:start + policy['batch_size']]
+    return [target for target in targets if target.pk in ids]
+
+
+def verified_deployment(task, target, child):
+    remote = child.get('result', {}).get('remote', {})
+    verification = child.get('deploy_verification', {})
+    return (task.operation in ('ssl_apply', 'ssl_renew') and not task.cancel_requested
+            and target.state in ('remote', 'running') and child['state'] == 'remote'
+            and remote.get('next_action') == 'deploy' and not remote.get('ambiguous')
+            and not child.get('uncertain_provenance') and verification.get('token')
+            and verification.get('remote') == remote
+            and any(intent['phase'] == 'apply' for intent in child['intents'])
+            and not any(intent['phase'] == 'deploy' for intent in child['intents']))
+
+
+def deployment_observation(targets):
+    # Target state changes remote -> running at claim, while all persisted
+    # outcome envelopes remain fixed until a result or a write intent changes.
+    observed = [{'target_id': target.pk, 'children': target.children, 'summary': target.summary}
+                for target in targets]
+    return hashlib.sha256(json.dumps(observed, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()
+
+
+def deployment_authorized(task, target, child, targets=None):
+    authorization = task.execution_policy.get('deployment')
+    if not authorization or not verified_deployment(task, target, child):
+        return False
+    targets = list(task.targets.all()) if targets is None else targets
+    current = current_batch_targets(task, targets)
+    return (target.pk in [value.pk for value in current]
+            and authorization['target_id'] == target.pk and authorization['child_key'] == child['snapshot']['key']
+            and authorization['verification'] == child['deploy_verification']['token']
+            and authorization['observation'] == deployment_observation(current)
+            and not any(value.state in ACTIVE and value.pk != target.pk for value in current))
+
+
+def invalidate_deployment(task, targets):
+    """Caller owns task row; changed outcomes require a fresh read-only check."""
+    authorization = task.execution_policy.get('deployment')
+    if not authorization:
+        return
+    selected = next((target for target in targets if target.pk == authorization['target_id']), None)
+    child = next((value for value in selected.children if value['snapshot']['key'] == authorization['child_key']), None) if selected else None
+    if child and deployment_authorized(task, selected, child, targets):
+        return
+    task.execution_policy.pop('deployment')
+    task.save(update_fields=['execution_policy', 'updated_at'])
+    if child and child.pop('deploy_verification', None):
+        # All writers serialize on task first. Explicitly lock this sibling
+        # before updating it, preserving the task -> target order on MariaDB.
+        task.targets.select_for_update().get(pk=selected.pk)
+        selected.save(update_fields=['children', 'updated_at'])
+
+
+def batch_status(task, targets=None):
+    """GET task/list batch contract; reads never admit or continue work.
+
+    enabled=false denotes legacy execution. Otherwise index is 1-based, total
+    counts runnable batches, pending counts later targets, remaining_in_batch
+    counts queued current targets, and state is running/paused/tripped/completed
+    or cancelled. active/unresolved disable ordinary POST continue; tripped requires its
+    exact boolean acknowledge=true. failure_count counts execution-failed panels.
+    deployable lists fixed SSL children verified read-only as ready for deploy;
+    POST continue {acknowledge:true,deploy:{target_id,child_key}} authorizes exactly
+    one new deployment phase, without admitting any other target or batch.
+
+    The frozen target_ids contain only runnable targets, excluding preflight-only
+    failures and terminal/empty previews. refresh never admits another batch.
+    """
+    policy = task.execution_policy
+    if not policy:
+        return {'enabled': False}
+    targets = list(task.targets.all()) if targets is None else targets
+    ids, size, index = policy['target_ids'], policy['batch_size'], policy['index']
+    current_ids = ids[(index - 1) * size:index * size]
+    current = [target for target in targets if target.pk in current_ids]
+    failed = [t.pk for t in current if batch_failed_target(task, t)]
+    unresolved = any(t.state in ('remote', 'uncertain') or any(c['state'] in ('remote', 'uncertain') for c in t.children)
+                     for t in current)
+    active = any(t.state in ACTIVE for t in current)
+    finished = bool(current) and all(t.state in TERMINAL | {'completed'} for t in current)
+    pending = max(0, len(ids) - index * size)
+    new_failures = set(failed) - set(policy.get('acknowledged_failure_ids', []))
+    tripped = unresolved or len(new_failures) >= policy['failure_threshold']
+    state = policy['state']
+    if task.cancel_requested:
+        state = 'cancelled'
+    elif finished and not pending:
+        state = 'completed'
+    elif tripped:
+        state = 'tripped'
+    elif finished:
+        state = 'paused' if state != 'tripped' else state
+    reason = ('存在远端处理中或待核实结果，请先只读核验或人工判定' if unresolved else
+              '本批失败达到阈值，核对结果并明确确认后才能继续' if state == 'tripped' and tripped else
+              '本批曾出现待核实结果，请核对后明确确认继续' if state == 'tripped' else
+              '本批已结束，请核对结果后继续下一批' if state == 'paused' else '')
+    deployable = []
+    if not active and not task.cancel_requested and not policy.get('deployment'):
+        deployable = [{'target_id': t.pk, 'child_key': child['snapshot']['key'],
+                       'panel_name': t.panel_snapshot.get('name', ''), 'label': child['snapshot'].get('label', '')}
+                      for t in current for child in t.children if verified_deployment(task, t, child)]
+    return {'enabled': True, 'index': index, 'total': (len(ids) + size - 1) // size,
+            'state': state, 'pending': pending, 'remaining_in_batch': sum(t.state == 'queued' for t in current),
+            'batch_size': size, 'failure_threshold': policy['failure_threshold'], 'failure_count': len(failed),
+            'active': active, 'unresolved': unresolved, 'finished': finished,
+            'requires_acknowledgement': state == 'tripped', 'pause_reason': reason, 'deployable': deployable,
+            'deployment_pending': bool(policy.get('deployment'))}
+
+
+def batch_allows(task, target, targets=None):
+    if not task.execution_policy:
+        return True
+    policy = task.execution_policy
+    status = batch_status(task, targets)
+    start = (policy['index'] - 1) * policy['batch_size']
+    return status['state'] == 'running' and target.pk in policy['target_ids'][start:start + policy['batch_size']]
+
+
 def refresh_task(task):
     """Caller holds the task row lock; every writer uses task -> target lock order."""
-    states = list(task.targets.values_list('state', flat=True))
+    targets = list(task.targets.all())
+    invalidate_deployment(task, targets)
+    states = [t.state for t in targets]
     if any(s == 'uncertain' for s in states):
         task.state = 'uncertain'
     elif any(s in ('remote', 'reconciling') for s in states):
@@ -224,7 +429,12 @@ def refresh_task(task):
         task.state = 'cancelled'
     else:
         task.state = 'completed'
-    task.save(update_fields=['state', 'updated_at'])
+    if task.execution_policy:
+        batch = batch_status(task, targets)
+        task.execution_policy = {**task.execution_policy, 'state': batch['state']}
+        if not task.cancel_requested and batch['state'] in ('paused', 'tripped'):
+            task.state = 'paused'
+    task.save(update_fields=['state', 'execution_policy', 'updated_at'])
 
 
 def settle_target(target):
@@ -249,13 +459,16 @@ def audit(task, user, action, **values):
     task.save(update_fields=['audit', 'updated_at'])
 
 
-def start(user, task_id, data):
-    strict(data, ('acknowledgements',), ('acknowledgements',))
+def start(user, task_id, data, *, scheduled=False):
+    strict(data, ('acknowledgements', 'execution_policy'), ('acknowledgements',))
+    policy = validate_execution_policy(data['execution_policy']) if 'execution_policy' in data else {}
     codes = data['acknowledgements']
     if not isinstance(codes, list) or len(codes) > len(ACK_CODES) or any(not isinstance(c, str) for c in codes):
         raise ValueError('确认项格式无效')
     with transaction.atomic():
         task = owned(user, task_id, 'execute', lock=True)
+        if not scheduled and any(a.get('action') == 'schedule' for a in task.audit):
+            raise ValueError('此任务由任务计划协调器预检并启动，请到任务计划查看结果')
         if task.state != 'prepared' or task.cancel_requested:
             raise ValueError('任务尚未完成预检或已提交，请刷新')
         targets = list(task.targets.select_for_update().select_related('panel'))
@@ -268,12 +481,75 @@ def start(user, task_id, data):
             if target.state == 'prepared':
                 configured(target.panel, target.panel_snapshot['api_config_revision'])
         task.acknowledgements = sorted(codes)
-        task.save(update_fields=['acknowledgements', 'updated_at'])
-        audit(task, user, 'start', acknowledgements=sorted(codes))
+        if policy:
+            runnable = [t.pk for t in targets if t.state == 'prepared' and any(c['state'] == 'ready' for c in t.children)]
+            if not runnable:
+                raise ValueError('没有待执行项目，请重新预检')
+            task.execution_policy = {**policy, 'target_ids': runnable, 'index': 1, 'state': 'running',
+                'acknowledged_failure_ids': [], 'failure_baseline': {
+                    str(t.pk): t.summary.get('upload', {}).get('failed', 0) for t in targets if t.pk in runnable}}
+        task.save(update_fields=['acknowledgements', 'execution_policy', 'updated_at'])
+        audit(task, user, 'start', acknowledgements=sorted(codes), execution_policy=policy)
         for target in targets:
             if target.state == 'prepared':
+                if policy and target.pk not in runnable:
+                    settle_target(target)
+                    continue
                 target.state = 'queued'
                 target.save(update_fields=['state', 'updated_at'])
+        refresh_task(task)
+    return task
+
+
+def continue_batch(user, task_id, data):
+    strict(data, ('acknowledge', 'deploy'))
+    if 'acknowledge' in data and type(data['acknowledge']) is not bool:
+        raise ValueError('继续确认须为布尔值')
+    with transaction.atomic():
+        task = owned(user, task_id, 'execute', lock=True)
+        # Match every worker/writer: task first, then targets. Never lock a target
+        # through a joined task query (MariaDB can otherwise reverse lock order).
+        targets = list(task.targets.select_for_update().order_by('id'))
+        if not task.execution_policy or task.cancel_requested:
+            raise ValueError('任务未启用分批或已取消')
+        status = batch_status(task, targets)
+        if 'deploy' in data:
+            strict(data['deploy'], ('target_id', 'child_key'), ('target_id', 'child_key'))
+            if data.get('acknowledge') is not True or status['active'] or task.execution_policy.get('deployment'):
+                raise ValueError('请在调用结束后明确确认当前证书部署阶段')
+            requested = data['deploy']
+            current = current_batch_targets(task, targets)
+            target = next((value for value in current if value.pk == positive_id(requested['target_id'])), None)
+            child = next((value for value in target.children if value['snapshot']['key'] == requested['child_key']), None) if target else None
+            if not child or not verified_deployment(task, target, child):
+                raise ValueError('当前子项尚未只读核实可部署，或已下发过部署阶段')
+            task.execution_policy = {**task.execution_policy, 'deployment': {
+                'target_id': target.pk, 'child_key': child['snapshot']['key'],
+                'verification': child['deploy_verification']['token'], 'observation': deployment_observation(current)}}
+            task.save(update_fields=['execution_policy', 'updated_at'])
+            audit(task, user, 'continue_deploy', target_id=target.pk, child_key=child['snapshot']['key'], acknowledge=True)
+            refresh_task(task)
+            return task
+        if status['active'] or status['unresolved']:
+            raise ValueError('本批仍在调用、远端处理中或待核实，请先核验结果')
+        if status['state'] not in ('paused', 'tripped'):
+            raise ValueError('任务当前没有可继续的批次')
+        if status['requires_acknowledgement'] and data.get('acknowledge') is not True:
+            raise ValueError('本批已熔断，请明确确认核对结果后继续')
+        policy = dict(task.execution_policy)
+        start_index = (policy['index'] - 1) * policy['batch_size']
+        ids = policy['target_ids'][start_index:start_index + policy['batch_size']]
+        if status['finished']:
+            if not status['pending']:
+                raise ValueError('没有尚未执行的批次')
+            policy['index'] += 1
+            policy['acknowledged_failure_ids'] = []
+        else:
+            policy['acknowledged_failure_ids'] = [t.pk for t in targets if t.pk in ids and batch_failed_target(task, t)]
+        policy['state'] = 'running'
+        task.execution_policy = policy
+        task.save(update_fields=['execution_policy', 'updated_at'])
+        audit(task, user, 'continue', batch_index=policy['index'], acknowledge=data.get('acknowledge', False))
         refresh_task(task)
     return task
 
@@ -334,7 +610,7 @@ def resolve(user, task_id, data):
         if not isinstance(data[name], str) or not data[name].strip() or len(data[name]) > 2000:
             raise ValueError('必须填写原因和核验依据')
     with transaction.atomic():
-        task = PanelTask.objects.select_for_update().get(pk=positive_id(task_id))
+        task = owned(user, task_id, 'manage', lock=True)
         target = task.targets.select_for_update().get(pk=positive_id(data['target_id']))
         if target.state in ACTIVE:
             raise ValueError('调用仍在执行，不能人工覆盖')
@@ -358,6 +634,8 @@ def resolve(user, task_id, data):
 
 def retry(user, task_id):
     source = owned(user, task_id, 'create')
+    if any(a.get('action') == 'ssl_monitor' for a in source.audit):
+        raise ValueError('SSL 监控派生任务请返回 SSL 监控重新预检，保留续签来源授权')
     if source.operation == 'file_upload':
         values = source.params_by_panel
         return prepare(user, {'operation': source.operation,
@@ -383,15 +661,25 @@ def safe_tree(value):
     return value if value is None or type(value) in (str, int, float, bool) else None
 
 
-def task_view(task, detail=True):
+def task_view(task, detail=True, user=None):
+    if user is not None:
+        task = task_access(user, task)
     data = {'id': task.pk, 'operation': task.operation, 'owner_id': task.owner_id, 'state': task.state,
             'retry_parent_id': task.retry_parent_id, 'cancel_requested': task.cancel_requested,
             'acknowledgements': task.acknowledgements, 'created_at': task.created_at.isoformat(),
-            'updated_at': task.updated_at.isoformat()}
+            'updated_at': task.updated_at.isoformat(), 'batch': batch_status(task),
+            'execution_policy': {key: task.execution_policy[key] for key in ('batch_size', 'failure_threshold')
+                                 if key in task.execution_policy}}
     if detail:
         targets = list(task.targets.all())
+        groups = access.group_ids(user, 'panel') if user is not None else None
+        def snapshot(target):
+            panel = copy.deepcopy(target.panel_snapshot)
+            if groups is not None and panel.get('group_id') not in groups:
+                panel.update(group_id=None, group_name='')
+            return panel
         data.update(required_acknowledgements=required_acks(targets), audit=task.audit,
-                    targets=[{'id': t.pk, 'panel': t.panel_snapshot, 'state': t.state,
+                    targets=[{'id': t.pk, 'panel': snapshot(t), 'state': t.state,
                               'message': t.message, 'summary': t.summary,
                               'children': t.children} for t in targets])
     return safe_tree(data)

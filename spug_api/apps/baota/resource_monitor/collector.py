@@ -1,5 +1,6 @@
 """Whitelist-only metrics and a killable local worker for network wall deadlines."""
 import json
+from libs.worker_authorization import current_authorizer, exchange
 import math
 from pathlib import Path
 import re
@@ -225,7 +226,11 @@ def run_worker(payload):
         remaining = TOTAL_TIMEOUT - (time.monotonic() - started)
         if remaining <= 0:
             raise subprocess.TimeoutExpired('resource monitor worker', TOTAL_TIMEOUT)
-        output, _ = child.communicate(wire, timeout=remaining)
+        authorize = current_authorizer()
+        if authorize:
+            output = exchange(child, payload, authorize, remaining, MAX_OUTPUT_BYTES)
+        else:
+            output, _ = child.communicate(wire, timeout=remaining)
         finished = True  # communicate also waits/reaps the worker.
         if child.returncode != 0 or len(output) > MAX_OUTPUT_BYTES:
             raise CollectorError('collection_failed')
@@ -238,9 +243,13 @@ def run_worker(payload):
         if not isinstance(metrics, dict) or set(metrics) != set(empty_metrics()):
             raise CollectorError('invalid_response')
         return metrics
+    except PermissionError:
+        raise
     except subprocess.TimeoutExpired:
         raise CollectorError('timeout') from None
     except CollectorError:
+        raise
+    except PermissionError:
         raise
     except Exception:
         raise CollectorError('collection_failed') from None
@@ -264,6 +273,8 @@ def collect_panel(panel):
         return run_worker(payload)
     except CollectorError:
         raise
+    except PermissionError:
+        raise
     except Exception:
         raise CollectorError('collection_failed') from None
 
@@ -275,6 +286,8 @@ def collect_host(host):
         return run_worker({'kind': 'host', 'hostname': host.hostname, 'port': host.port or 22,
                            'username': host.username, 'private_key': host.private_key})
     except CollectorError:
+        raise
+    except PermissionError:
         raise
     except Exception:
         raise CollectorError('collection_failed') from None

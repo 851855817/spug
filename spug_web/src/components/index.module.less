@@ -1,6 +1,6 @@
 .searchForm {
   padding: 24px 24px 0 24px;
-  background-color: #fff;
+  background-color: var(--kops-surface);
   border-radius: 2px;
   margin-bottom: 16px;
 
@@ -31,7 +31,7 @@
   text-align: center;
 
   span {
-    color: rgba(0, 0, 0, .45);
+    color: var(--kops-muted);
     display: inline-block;
     line-height: 22px;
     margin-bottom: 4px;
@@ -44,7 +44,7 @@
   }
 
   em {
-    background-color: #e8e8e8;
+    background-color: var(--kops-border);
     position: absolute;
     height: 56px;
     width: 1px;
@@ -54,8 +54,8 @@
 }
 
 .tableCard {
-  border: 1px solid #f0f0f0;
-  background: #fff;
+  border: 1px solid var(--kops-border);
+  background: var(--kops-surface);
   border-radius: 2px;
   padding: 24px;
 
@@ -116,7 +116,7 @@
     }
 
     :global(.ant-checkbox-wrapper):hover {
-      background: rgba(0, 0, 0, 0.025)
+      background: var(--kops-subtle)
     }
   }
 }
@@ -130,13 +130,13 @@
   height: 48px;
   width: calc(100% - 208px);
   padding: 0 24px;
-  background: #fff;
+  background: var(--kops-surface);
 
   .left {
     flex: 1;
 
     span {
-      color: #1890ff;
+      color: var(--kops-primary);
       font-weight: 600;
     }
   }
@@ -145,8 +145,8 @@
 .breadcrumb {
   margin: -24px -24px 24px -24px;
   padding: 16px 24px;
-  background: #fff;
-  border-bottom: 1px solid #e8e8e8;
+  background: var(--kops-surface);
+  border-bottom: 1px solid var(--kops-border);
 
   .title {
     display: flex;
@@ -159,13 +159,13 @@
 
 .appSelector {
   display: flex;
-  background-color: #fff;
+  background-color: var(--kops-surface);
   padding: 16px 0;
   min-height: 500px;
 
   .left {
     flex: 220px;
-    border-right: 1px solid #e8e8e8;
+    border-right: 1px solid var(--kops-border);
     overflow: hidden;
   }
 
@@ -179,7 +179,7 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 24px;
-    color: rgba(0, 0, 0, .85);
+    color: var(--kops-text);
     font-weight: 500;
     font-size: 20px;
     line-height: 28px;
@@ -198,11 +198,11 @@
     align-items: center;
     padding: 12px 16px;
     margin-bottom: 8px;
-    background: #fafafa;
+    background: var(--kops-raised);
     border-radius: 2px;
 
     :global(.anticon) {
-      color: #1890ff;
+      color: var(--kops-primary);
       margin-right: 16px;
     }
 
@@ -216,12 +216,12 @@
 
   .appItem:hover {
     cursor: pointer;
-    background: #e6f7ff;
+    background: var(--kops-selected);
   }
 
   .tips {
     margin-top: 32px;
-    color: #888;
+    color: var(--kops-muted);
   }
 }
 
@@ -248,7 +248,7 @@
   }
 
   .title {
-    color: #434e59;
+    color: var(--kops-text);
     font-size: 72px;
     font-weight: 600;
     line-height: 72px;
@@ -256,7 +256,7 @@
   }
 
   .desc {
-    color: rgba(0, 0, 0, .45);
+    color: var(--kops-muted);
     font-size: 20px;
     line-height: 28px;
     margin-bottom: 16px;

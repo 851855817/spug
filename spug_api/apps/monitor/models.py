@@ -53,3 +53,7 @@ class Detection(models.Model, ModelMixin):
     class Meta:
         db_table = 'detections'
         ordering = ('-id',)
+
+
+from .ssl.models import (SSLSource, SSLCertificate, SSLJob, SSLLease, SSLReminder,
+                         SSLReminderPreference)  # noqa: E402,F401

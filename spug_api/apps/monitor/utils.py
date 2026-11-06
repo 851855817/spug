@@ -2,7 +2,10 @@
 # Copyright: (c) <spug.dev@gmail.com>
 # Released under the AGPL-3.0 License.
 from django.db import close_old_connections
-from apps.alarm.models import Alarm
+from apps.alarm.models import Alarm, AlarmResource
+from apps.monitor import resources
+from apps.account import access
+from django.db import transaction
 from apps.monitor.models import Detection
 from apps.schedule.models import Task
 from apps.schedule.scheduler import Scheduler
@@ -24,30 +27,46 @@ def seconds_to_human(seconds):
 
 
 def _record_alarm(det, target, duration, status):
-    Alarm.objects.create(
+    with transaction.atomic():
+        alarm = Alarm.objects.create(
         name=det.name,
         type=det.get_type_display(),
         target=target,
         status=status,
         duration=duration,
         notify_grp=det.notify_grp,
-        notify_mode=det.notify_mode)
+            notify_mode=det.notify_mode)
+        AlarmResource.objects.create(alarm=alarm, owner_id=det.created_by_id,
+            host_ids=sorted(resources.host_ids(det)))
+    return alarm
 
 
 def handle_notify(task_id, target, is_ok, out, fault_times):
     close_old_connections()
     det = Detection.objects.get(pk=task_id)
+    def authorize():
+        current = Detection.objects.get(pk=task_id, is_active=True)
+        if (current.created_by_id, current.targets, current.type) != (det.created_by_id, det.targets, det.type):
+            access.reject(det.created_by_id, '监控配置已变化')
+        return resources.runtime(current.created_by_id, current)
+    authorize()
     duration = seconds_to_human(det.rate * fault_times * 60)
     event = '2' if is_ok else '1'
     _record_alarm(det, target, duration, event)
     grp = json.loads(det.notify_grp)
-    notify = Notification(grp, event, target, det.name, out, duration)
+    notify = Notification(grp, event, target, det.name, out, duration,
+        user=det.created_by_id, host_ids=sorted(resources.host_ids(det)),
+        permission='monitor.monitor.view', authorize=authorize)
     notify.dispatch_monitor(json.loads(det.notify_mode))
 
 
 def handle_trigger_event(task_id, target):
+    detection = Detection.objects.get(pk=task_id, is_active=True)
+    resources.runtime(detection.created_by_id, detection)
     query = dict(is_active=True, trigger='monitor', trigger_args__regex=fr'[^0-9]{task_id}[^0-9]')
     for item in Task.objects.filter(**query):
+        if item.created_by_id != detection.created_by_id:
+            continue
         targets = []
         for t in json.loads(item.targets):
             if t == 'monitor':

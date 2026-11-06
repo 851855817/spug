@@ -1,3 +1,27 @@
+.monitor { background: var(--kops-surface); padding-top: 24px; margin-bottom: 12px; border: 1px solid var(--kops-border);
+  &:empty { display: none; }
+}
+.todo {
+  :global(.ant-card-body) { max-height: 440px; min-height: 234px; overflow: auto; padding-top: 0; }
+}
+.todoGroup { border-bottom: 1px solid var(--kops-border); padding: 12px 0 6px; }
+.todoHeading { display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  > a { font-weight: 500; }
+  > span[role=alert] { color: var(--kops-error); font-size: 12px; }
+}
+.todoItem { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; color: var(--kops-text);
+  &:hover { background: var(--kops-selected); }
+  b { font-weight: 400; }
+  small { display: block; color: var(--kops-muted); font-size: 12px; }
+}
+.todoName { min-width: 0; overflow-wrap: anywhere; }
+.todoRow { display: flex; align-items: center; gap: 8px;
+  > a { flex: 1; min-width: 0; }
+  > button { flex-shrink: 0; }
+}
+.todoDue { flex-shrink: 0; text-align: right; font-size: 12px; }
+.todoHint { margin-top: 10px; font-size: 12px; color: var(--kops-muted); }
+
 .notice {
   :global(.ant-card-body) {
     height: 234px;
@@ -18,7 +42,7 @@
   }
 
   .title:hover {
-    color: #1890ff
+    color: var(--kops-primary)
   }
 
   .badge {
@@ -28,7 +52,7 @@
   .date {
     display: inline-block;
     font-size: 12px;
-    color: #999;
+    color: var(--kops-muted);
   }
 
   .add {
@@ -38,14 +62,14 @@
     margin-top: 8px;
     height: 35px;
     border-radius: 2px;
-    border: 1px dashed #d9d9d9;
+    border: 1px dashed var(--kops-border);
     font-size: 12px;
     cursor: pointer;
   }
 
   .add:hover {
-    border: 1px dashed #1890ff;
-    color: #1890ff;
+    border: 1px dashed var(--kops-primary);
+    color: var(--kops-primary);
   }
 
   .item {
@@ -58,7 +82,7 @@
 
     :global(.anticon) {
       cursor: pointer;
-      color: #1890ff;
+      color: var(--kops-primary);
     }
   }
 }
@@ -73,7 +97,7 @@
   .add {
     cursor: pointer;
     height: 167px;
-    border: 1px dashed #d9d9d9;
+    border: 1px dashed var(--kops-border);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -81,16 +105,16 @@
   }
 
   .add:hover {
-    border: 1px dashed #1890ff;
-    color: #1890ff;
+    border: 1px dashed var(--kops-primary);
+    color: var(--kops-primary);
   }
 
   :global(.ant-card) {
     height: 167px;
-    background-color: #fdfdfd;
+    background-color: var(--kops-raised);
 
     :global(.ant-card-actions) {
-      background-color: #fafafa;
+      background-color: var(--kops-raised);
     }
 
     :global(.ant-card-meta-description) {
@@ -111,22 +135,22 @@
     height: 32px;
     padding: 8px;
     font-size: 16px;
-    color: rgba(0, 0, 0, .45);
+    color: var(--kops-muted);
     cursor: pointer;
   }
 
   .icon:hover {
-    color: #ff4d4f;
+    color: var(--kops-error);
   }
 }
 
 .minusIcon {
   font-size: 26px;
-  color: #a6a6a6;
+  color: var(--kops-muted);
 }
 
 .minusIcon:hover {
-  color: #ff4d4f;
+  color: var(--kops-error);
 }
 
 .imgExample {

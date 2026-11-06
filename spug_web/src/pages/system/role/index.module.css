@@ -4,7 +4,7 @@
 
 .table {
   width: 100%;
-  border: 1px solid #dfdfdf;
+  border: 1px solid var(--kops-border);
 }
 
 .table :global(.ant-checkbox-group) {
@@ -12,8 +12,8 @@
 }
 
 .table th {
-  background-color: #fafafa;
-  color: #404040;
+  background-color: var(--kops-raised);
+  color: var(--kops-text);
   font-size: 18px;
   font-weight: 500;
   padding: 5px 15px;
@@ -35,7 +35,7 @@
 }
 
 .delIcon:hover {
-  color: #f5222d;
+  color: var(--kops-error);
 }
 
 .roleUser :global(.ant-popover-inner-content) {

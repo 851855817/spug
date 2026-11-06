@@ -8,6 +8,8 @@ from libs.utils import AttrDict, human_datetime
 from libs.validators import ip_validator
 from apps.host.models import HostExtend
 from apps.setting.utils import AppSetting
+from apps.account import access
+from apps.account.utils import AuthorizedSSH
 from collections import defaultdict
 from datetime import datetime, timezone
 from concurrent import futures
@@ -186,7 +188,9 @@ def fetch_tencent_instances(ak, ac, region_id, page_number=1):
     return data
 
 
-def fetch_host_extend(ssh):
+def fetch_host_extend(ssh, authorize=None):
+    if authorize is not None:
+        ssh = AuthorizedSSH(ssh, authorize)
     public_ip_address = set()
     private_ip_address = set()
     response = {'disk': [], 'os_name': 'unknown'}
@@ -282,15 +286,19 @@ def fetch_host_extend(ssh):
     return response
 
 
-def batch_sync_host(token, hosts, password=None):
-    private_key, public_key = AppSetting.get_ssh_key()
+def batch_sync_host(token, hosts, password=None, user_id=None, permission='host.host.verify'):
     threads, latest_exception, rds = [], None, get_redis_connection()
+    hosts = list(hosts)
+    if user_id is not None:
+        access.require(user_id, permission)
+        access.require_resources(user_id, 'host', [h.pk for h in hosts], manage=True)
     max_workers = max(10, os.cpu_count() * 5)
     with futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         for host in hosts:
             if hasattr(host, 'password'):
                 password = host.password
-            t = executor.submit(_sync_host_extend, host, private_key, public_key, password)
+            t = executor.submit(_sync_authorized_host, host, password, user_id, permission,
+                                [h.pk for h in hosts])
             t.host = host
             threads.append(t)
         for t in futures.as_completed(threads):
@@ -299,17 +307,41 @@ def batch_sync_host(token, hosts, password=None):
                 rds.rpush(token, json.dumps({'key': t.host.id, 'status': 'fail', 'message': f'{exception}'}))
             else:
                 rds.rpush(token, json.dumps({'key': t.host.id, 'status': 'ok'}))
-                t.host.is_verified = True
-                t.host.save()
         rds.expire(token, 60)
 
 
-def _sync_host_extend(host, private_key=None, public_key=None, password=None, ssh=None):
+def _sync_authorized_host(host, password, user_id, permission, host_ids=None):
+    def authorize():
+        if user_id is not None:
+            access.require(user_id, permission)
+            access.require_resources(user_id, 'host', host_ids or [host.pk], manage=True)
+    authorize()
+    private_key = public_key = None
+    if not host.pkey:
+        if host.created_by.is_supper:
+            private_key, public_key = AppSetting.get_ssh_key()
+        elif password:
+            private_key, public_key = SSH.generate_key()
+        else:
+            raise ValueError('请提供独立 SSH 密钥或登录密码')
+    result = _sync_host_extend(host, private_key, public_key, password, authorize=authorize)
+    authorize()
+    host.is_verified = True
+    if not host.pkey and not host.created_by.is_supper:
+        host.pkey = private_key
+    host.save(update_fields=['is_verified', 'pkey'])
+    return result
+
+
+def _sync_host_extend(host, private_key=None, public_key=None, password=None, ssh=None, authorize=None):
+    authorize = authorize or (lambda: None)
+    authorize()
     if not ssh:
         kwargs = host.to_dict(selects=('hostname', 'port', 'username'))
-        with _get_ssh(kwargs, host.pkey, private_key, public_key, password) as ssh:
-            return _sync_host_extend(host, ssh=ssh)
-    form = AttrDict(fetch_host_extend(ssh))
+        with _get_ssh(kwargs, host.pkey, private_key, public_key, password, authorize=authorize) as ssh:
+            return _sync_host_extend(host, ssh=ssh, authorize=authorize)
+    form = AttrDict(fetch_host_extend(ssh, authorize=authorize))
+    authorize()
     form.disk = json.dumps(form.disk)
     form.public_ip_address = json.dumps(form.public_ip_address)
     form.private_ip_address = json.dumps(form.private_ip_address)
@@ -323,14 +355,23 @@ def _sync_host_extend(host, private_key=None, public_key=None, password=None, ss
     return extend
 
 
-def _get_ssh(kwargs, pkey=None, private_key=None, public_key=None, password=None):
+def _get_ssh(kwargs, pkey=None, private_key=None, public_key=None, password=None, authorize=None):
+    authorize = authorize or (lambda: None)
+    authorize()
     try:
-        ssh = SSH(pkey=pkey or private_key, **kwargs)
+        ssh = SSH(pkey=pkey or private_key, authorize=authorize, **kwargs)
         ssh.get_client()
+        authorize()
         return ssh
     except AuthenticationException as e:
         if password:
-            with SSH(password=str(password), **kwargs) as ssh:
+            authorize()
+            with SSH(password=str(password), authorize=authorize, **kwargs) as ssh:
+                authorize()
                 ssh.add_public_key(public_key)
-            return _get_ssh(kwargs, private_key)
+            return _get_ssh(kwargs, private_key, authorize=authorize)
         raise e
+    except access.AccessDenied:
+        if ssh.client:
+            ssh.client.close()
+        raise

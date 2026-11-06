@@ -18,7 +18,7 @@ export default function ResourceMonitorSwitch({id, canEdit, name}) {
     <Switch size="small" aria-label={`${name || ''}监控`} checked={source?.enabled === true}
       disabled={!canEdit || !monitor?.enabled || !source} loading={!!monitor?.saving[id]}
       onChange={enabled => monitor.save(id, enabled)}/>
-    {error && <small role="alert" style={{display: 'block', color: '#cf1322'}}>保存失败，请重试</small>}
-    {monitor?.loadError && <small role="alert" style={{display: 'block', color: '#cf1322'}}>状态加载失败，请刷新</small>}
+    {error && <small role="alert" style={{display: 'block', color: 'var(--kops-error)'}}>保存失败，请重试</small>}
+    {monitor?.loadError && <small role="alert" style={{display: 'block', color: 'var(--kops-error)'}}>状态加载失败，请刷新</small>}
   </span>;
 }

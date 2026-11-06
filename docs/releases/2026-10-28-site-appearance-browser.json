@@ -1,0 +1,33 @@
+{
+  "revision": "df34e1a68535937f47ad7256f6914dd0897e1a54",
+  "real_headless_browser": true,
+  "palette_ids": [
+    "classic-blue",
+    "jade",
+    "indigo",
+    "graphite",
+    "night"
+  ],
+  "checked_routes": [
+    "/home",
+    "/host",
+    "/baota",
+    "/exec/panel",
+    "/exec/sites",
+    "/host/expiry",
+    "/monitor/servers",
+    "/system/role",
+    "/system/health",
+    "/ssh",
+    "/"
+  ],
+  "all_five_key_pages": true,
+  "second_window_passive_sync_ms": 60589,
+  "server_shared_sync": true,
+  "light_restored": true,
+  "isolated_preview": true,
+  "night_modal": true,
+  "narrow_login": true,
+  "runtime_exceptions": [],
+  "customer_requests": "mocked"
+}
