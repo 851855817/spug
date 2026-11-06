@@ -54,7 +54,7 @@ python manage.py resource_permissions --apply --actor-id <活跃管理员ID>
 
 拒绝日志独立于数据库事务追加，避免额度回滚丢失记录。生产进程设置 `KOPS_RESOURCE_AUDIT_LOG=/data/logs/resource-access.log`，目录保存在持久卷；使用 `deploy/account-resources/resource-audit.logrotate` 的轮转配置。日志只记录 ID、动作码、时间及安全元数据。文件默认权限 0600，父目录新建为 0700。
 
-宿主机 `/etc/logrotate.d/kops-resource-audit` 的实际日志路径从容器 `/data` 的可写 bind mount 推导，不假定宿主机也使用 `/data`。维护前保存既有配置与属主／权限；配对备份完成后安装 root:root、0644 的精确配置，用 `logrotate --debug --state /dev/null` 校验，不执行轮转。每日轮转，保留 14 份、延迟压缩、0600 新文件；回退保留日志和此配置。已有同名配置内容不符或为符号链接时，预检拒绝进入维护。
+宿主机 `/etc/logrotate.d/kops-resource-audit` 的实际日志路径从已确认的容器 `/data` 持久卷推导，不假定宿主机也使用 `/data`。当前为 `spug_spug-data` 本地 Docker 命名卷；发布合同固定其名称、可写挂载和实际目录，并另外核对 volume inspect 的本地驱动、挂载点、范围及空选项。拒绝来源漂移、子挂载遮蔽、路径穿越或符号链接。维护前保存既有轮转配置与属主／权限；配对备份完成后安装 root:root、0644 的精确配置，用 `logrotate --debug --state /dev/null` 校验，不执行轮转。每日轮转，保留 14 份、延迟压缩、0600 新文件；回退保留日志和此配置。已有同名配置内容不符或为符号链接时，预检拒绝进入维护。
 
 ## 候选绑定与证据
 
@@ -68,9 +68,13 @@ python deploy/account-resources/stage.py --prepared "$STAGE" --scope "$SCOPE" --
 
 `scope.json` 固定相对生产的 157 个运行时文件（104 API、53 UI）、全量候选与旧 API 源码及发布工具 SHA。`stage.py` 要求候选和发布工具已提交且干净，生成精确热覆盖、完整候选镜像源码、完整旧版回退源码、45 个迁移文件／包标记、两个 Dockerfile 与所有文件摘要。不同 API 根原本存在的附加文件独立保存，不强迫两个根相等。公共 API 目录仅允许已观测路径 `apps/baota/data/official_api_catalog.json` 的精确 CRLF 原件 SHA `4ae982653156d0b46c1885fdba4d50c47cb58cc31188214ae4ad97b0d831ddf8`；无通用换行豁免。
 
-真实 MariaDB 演练在本地独立容器完成；数据库仅允许 `baota-ci-db/baota_ci`。将最终 stage 的 `source/spug_api` 挂为工作目录，将 stage 挂为 `/prepared`，将其 `source/deploy/account-resources` 挂为 `/utilities`，用包含实际依赖的固定运行镜像执行 `/utilities/rehearsal.py`。演练先创建 67 表／24 迁移与非空合成旧数据，再增加 9 表／4 迁移，验证旧数据与历史、只读影响清单、普通／停用账号初始化、既有策略保留、幂等、旧历史 ORM 读取和不完整迁移拒绝。收集 `/tmp/resource-rehearsal.json`，其中 `revision` 必须是最终 SHA、`provisional` 必须为 false。临时数据库不放在生产主机。
+历史迁移源码也分别记录两个根的实际存在状态与 SHA：运行目录 `/data/spug/spug_api` 包含全部 24 份已应用迁移，原始 `/opt` 目录只保留其中一份 SSL 迁移。预检精确验证这一区别，新增或缺失原件都拒绝；不在热覆盖时补写 `/opt` 的旧迁移。候选与关闭回退镜像均另外保留完整迁移历史，供未来容器启动使用。
+
+真实 MariaDB 演练在本地独立容器完成；数据库仅允许 `baota-ci-db/baota_ci`，最终发布演练使用与现网一致的 MariaDB 10.11.19、utf8mb4 和 utf8mb4_unicode_ci。将最终 stage 的 `source/spug_api` 挂为工作目录，将 stage 挂为 `/prepared`，将其 `source/deploy/account-resources` 挂为 `/utilities`，用包含实际依赖的固定运行镜像执行 `/utilities/rehearsal.py`。演练先创建 67 表／24 迁移与非空合成旧数据，再增加 9 表／4 迁移，验证旧数据与历史、只读影响清单、普通／停用账号初始化、既有策略保留、幂等、旧历史 ORM 读取和不完整迁移拒绝。收集实际成功进程打印的完整 proof；`/tmp/resource-rehearsal.json` 位于 tmpfs 时会随容器停止消失。其中 `revision` 必须是最终 SHA、`provisional` 必须为 false。临时数据库不放在生产主机。
 
 两个发布镜像从实际生产 `spug-baota:d48d73b` 构建，不能把页面 SHA 前缀当作旧镜像标签。固定旧镜像 ID 为 `sha256:752af29ea640270dc857178beebdde7a2ff8ac25ad1016b139f49e4e79388ce6`。逐个镜像执行以下检查；只挂探针，无源码挂载、网络或数据库：
+
+现网 Compose 另固定为 `spug-baota:4739172`。它与当前容器的镜像来源分开校验；只替换这一条明确匹配的 Compose 镜像记录，数据库镜像和其他配置保持原件。
 
 该基础镜像有 8 个服务段，现网后来增加了 `spug-ops-worker`。候选和回退镜像都先核验精确的旧 8 服务集合，再补入与仓库既有 `ops-worker.ini` 一致的公开配置，最后核验完整 9 服务；任何额外或其他缺失服务均拒绝构建。回退仅 Redis 可自动启动，不能因原镜像缺少该段而漏关执行器。
 

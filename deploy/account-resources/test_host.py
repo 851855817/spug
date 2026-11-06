@@ -1,4 +1,5 @@
 import importlib.util
+import copy
 from pathlib import Path
 import subprocess
 import sys
@@ -21,10 +22,12 @@ class HostContractTests(unittest.TestCase):
 
     def test_compose_uses_observed_image_tag_and_preserves_other_bytes(self):
         module = self.module()
-        text = 'services:\n  spug:\n    image: spug-baota:d48d73b # existing\n    ports: [8080:80]\n'
+        text = 'services:\n  spug:\n    image: spug-baota:4739172 # existing\n    ports: [8080:80]\n'
         actual = module.next_compose(text, 'a' * 40)
-        self.assertEqual(actual, text.replace('spug-baota:d48d73b', 'spug-baota:aaaaaaa'))
-        with self.assertRaises(Exception): module.next_compose(text.replace('d48d73b', '4739172'), 'a' * 40)
+        self.assertEqual(actual, text.replace('spug-baota:4739172', 'spug-baota:aaaaaaa'))
+        with self.assertRaises(Exception): module.next_compose(text.replace('4739172', 'd48d73b'), 'a' * 40)
+        with self.assertRaises(Exception): module.next_compose(text + 'image: spug-baota:4739172\n', 'a' * 40)
+        self.assertEqual(module.contract.BASELINE['image_tag'], 'spug-baota:d48d73b')
 
     def test_startup_plan_is_four_frozen_migrations_and_no_production_generation(self):
         module = self.module()
@@ -54,7 +57,7 @@ class HostContractTests(unittest.TestCase):
         host.write_compose = saved.append
         host.validate_compose = lambda: None
         host.patch_entrypoint = lambda: None
-        host.restore({'compose': 'image: spug-baota:d48d73b\n'}, True)
+        host.restore({'compose': 'image: spug-baota:4739172\n'}, True)
         self.assertEqual(saved, ['image: spug-baota:resource-rollback-aaaaaaa\n'])
 
     def test_maintenance_closes_all_eight_and_persists_gate_before_stopping(self):
@@ -94,14 +97,43 @@ class HostContractTests(unittest.TestCase):
             host.hold_entrypoint()
             self.assertNotIn('python3 manage.py migrate', path.read_text())
 
-    def test_audit_rotation_follows_only_the_actual_persistent_data_bind(self):
+    def volume_facts(self):
+        source = '/var/lib/docker/volumes/spug_spug-data/_data'
+        mount = {'Destination': '/data', 'Type': 'volume', 'Name': 'spug_spug-data', 'Source': source, 'RW': True}
+        volume = {'Name': 'spug_spug-data', 'Driver': 'local', 'Mountpoint': source, 'Scope': 'local', 'Options': None}
+        return mount, volume
+
+    def test_audit_rotation_follows_only_the_exact_persistent_local_named_volume(self):
         module = self.module()
         template = (HERE / 'resource-audit.logrotate').read_text()
-        mounts = [{'Destination': '/data', 'Type': 'bind', 'Source': '/srv/spug-data', 'RW': True}]
-        self.assertEqual(module.audit_rotation(mounts, template), template.replace('/data/logs/', '/srv/spug-data/logs/'))
-        for changed in ([], mounts * 2, [dict(mounts[0], Type='volume')],
-                        [dict(mounts[0], RW=False)], [dict(mounts[0], Source='/srv/../etc')]):
-            with self.subTest(mounts=changed), self.assertRaises(Exception): module.audit_rotation(changed, template)
+        mount, volume = self.volume_facts()
+        mounts = [mount]
+        self.assertEqual(module.audit_rotation(mounts, template, volume),
+                         template.replace('/data/logs/', mount['Source'] + '/logs/'))
+        for changed in ([], mounts * 2, [dict(mount, Type='bind')], [dict(mount, Name='other')],
+                        [dict(mount, RW=False)], [dict(mount, Source='/srv/../etc')],
+                        mounts + [dict(mount, Destination='/data/logs')]):
+            with self.subTest(mounts=changed), self.assertRaises(Exception): module.audit_rotation(changed, template, volume)
+
+    def test_rotation_requires_volume_inspection_identity_driver_scope_and_no_options(self):
+        module = self.module()
+        mount, volume = self.volume_facts()
+        template = (HERE / 'resource-audit.logrotate').read_text()
+        for key, value in (('Name', 'other'), ('Driver', 'nfs'), ('Scope', 'global'),
+                           ('Mountpoint', '/var/lib/other'), ('Options', {'type': 'nfs'}), ('Options', {})):
+            with self.subTest(key=key, value=value), self.assertRaises(Exception):
+                module.audit_rotation([mount], template, dict(volume, **{key: value}))
+
+    def test_storage_path_rejects_symlink_parents_before_rotation(self):
+        module = self.module()
+        path = mock.Mock()
+        path.is_dir.return_value = True
+        path.is_symlink.return_value = False
+        path.parents = [mock.Mock()]
+        path.parents[0].is_symlink.return_value = True
+        with self.assertRaises(Exception): module.verify_storage_path(path)
+        path.parents[0].is_symlink.return_value = False
+        module.verify_storage_path(path)
 
     def test_rotation_install_is_backed_up_exact_and_debug_checked_without_rotating(self):
         module = self.module()
@@ -144,10 +176,17 @@ class HostContractTests(unittest.TestCase):
         module = self.module()
         expected = {'apps/' + node.split('/')[0] + '/migrations/' + node.split('/')[1] + '.py': proof['sha256']
                     for node, proof in module.contract.BASELINE['migration_graph'].items()}
-        module.verify_live_history({'api': [dict(expected), dict(expected)]})
-        changed = [dict(expected), dict(expected)]
-        changed[1][next(iter(expected))] = 'f' * 64
-        with self.assertRaises(Exception): module.verify_live_history({'api': changed})
+        opt = {'apps/monitor/migrations/0002_ssl_monitor.py': expected['apps/monitor/migrations/0002_ssl_monitor.py']}
+        roots = [opt, dict(expected)]
+        module.verify_live_history({'api': roots})
+        for mode in ('changed-opt', 'added-opt', 'missing-data', 'changed-data', 'swapped-roots'):
+            changed = copy.deepcopy(roots)
+            if mode == 'changed-opt': changed[0][next(iter(opt))] = 'f' * 64
+            if mode == 'added-opt': changed[0]['apps/account/migrations/0001_initial.py'] = expected['apps/account/migrations/0001_initial.py']
+            if mode == 'missing-data': changed[1].pop(next(iter(expected)))
+            if mode == 'changed-data': changed[1][next(iter(expected))] = 'f' * 64
+            if mode == 'swapped-roots': changed.reverse()
+            with self.subTest(mode=mode), self.assertRaises(Exception): module.verify_live_history({'api': changed})
 
     def test_runtime_config_rewrites_only_eight_programs_and_injects_persistent_audit(self):
         module = self.module()

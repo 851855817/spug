@@ -34,26 +34,44 @@ BACKEND = tuple(name for name in SERVICES if name != 'nginx')
 AUDIT_PATH = '/data/logs/resource-access.log'
 
 
-def audit_rotation(mounts, template):
-    data = [value for value in mounts if value.get('Destination') == '/data']
-    require(len(data) == 1 and data[0].get('Type') == 'bind' and data[0].get('RW') is True,
-            'resource-persistent-data-bind-invalid')
+def audit_rotation(mounts, template, volume):
+    data = [value for value in mounts if value.get('Destination') in ('/', '/data')
+            or value.get('Destination', '').startswith('/data/')]
+    expected_mount, expected_volume = contract.BASELINE['data_mount'], contract.BASELINE['data_volume']
+    require(len(data) == 1 and set(expected_mount) <= set(data[0]) and data[0].get('RW') is True and
+            {key: data[0][key] for key in expected_mount} == expected_mount,
+            'resource-persistent-data-volume-invalid')
+    require(set(expected_volume) <= set(volume) and
+            {key: volume[key] for key in expected_volume} == expected_volume,
+            'resource-local-volume-inspection-mismatch')
     source = data[0].get('Source', '')
     require(re.fullmatch(r'/[A-Za-z0-9_./-]+', source) and '..' not in PurePosixPath(source).parts
-            and str(PurePosixPath(source)) == source and source != '/', 'resource-data-bind-path-invalid')
+            and str(PurePosixPath(source)) == source and source != '/' and
+            volume['Mountpoint'] == source, 'resource-data-volume-path-invalid')
     require(template.count(AUDIT_PATH) == 1, 'resource-rotation-template-invalid')
     return template.replace(AUDIT_PATH, source + '/logs/resource-access.log')
 
 
+def verify_storage_path(path):
+    require(path.is_dir() and not any(value.is_symlink() for value in (path, *path.parents)),
+            'resource-data-storage-path-linked-or-missing')
+
+
 def verify_live_history(files):
-    expected = {'apps/' + node.split('/')[0] + '/migrations/' + node.split('/')[1] + '.py': proof['sha256']
-                for node, proof in contract.BASELINE['migration_graph'].items()}
-    require(len(files['api']) == 2 and all(all(root.get(name) == value for name, value in expected.items())
-                                        for root in files['api']), 'resource-live-migration-source-drift')
+    graph = {'apps/' + node.split('/')[0] + '/migrations/' + node.split('/')[1] + '.py': proof['sha256']
+             for node, proof in contract.BASELINE['migration_graph'].items()}
+    expected = contract.BASELINE['migration_source_roots']
+    roots = base.RUNTIME_ROOTS['api']
+    require(set(expected) == set(roots) and all(set(expected[root]) == set(graph) and
+            all(value is None or value == graph[name] for name, value in expected[root].items()) for root in roots),
+            'resource-migration-source-baseline-invalid')
+    require(len(files['api']) == len(roots) and all(all(actual.get(name) == value
+            for name, value in expected[root].items()) for root, actual in zip(roots, files['api'])),
+            'resource-live-migration-source-drift')
 
 
 def next_compose(text, revision, rollback=False):
-    tag = contract.BASELINE['image_tag']
+    tag = contract.BASELINE['compose_image_tag']
     target = 'spug-baota:' + ('resource-rollback-' if rollback else '') + revision[:7]
     pattern = re.compile(r'(?m)^([ \t]*image:[ \t]*)' + re.escape(tag) + r'([ \t]*(?:#[^\r\n]*)?)(\r?)$')
     require(base.valid_revision(revision) and len(list(pattern.finditer(text))) == 1 and text.count(tag) == 1,
@@ -87,7 +105,10 @@ class ResourceHost(base.DockerHost):
 
     def preflight_rotation(self):
         mounts = json.loads(self.run(['docker', 'inspect', '--format', '{{json .Mounts}}', 'spug']))
-        self.rotation_text = audit_rotation(mounts, (self.stage / 'resource-audit.logrotate').read_text())
+        volume = json.loads(self.run(['docker', 'volume', 'inspect', '--format', '{{json .}}',
+                                     contract.BASELINE['data_volume']['Name']]))
+        self.rotation_text = audit_rotation(mounts, (self.stage / 'resource-audit.logrotate').read_text(), volume)
+        verify_storage_path(Path(volume['Mountpoint']))
         self.rotation_original = self.rotation_state()
         if self.rotation_original['present']:
             require(self.rotation_original == self.expected_rotation(), 'resource-existing-rotation-unexpected')
