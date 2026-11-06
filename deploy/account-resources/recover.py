@@ -5,6 +5,7 @@ The original stage and checks remain immutable. A separately reviewed bundle
 supplies the narrow, independently rehearsed schema metadata correction.
 """
 import configparser
+from contextlib import contextmanager
 import copy
 from datetime import datetime
 import hashlib
@@ -13,11 +14,12 @@ import io
 import json
 import os
 from pathlib import Path
+import signal
 import sys
 
 CANDIDATE = '15d69eef7d73abd5078a3cf5e38411d4da9a15a1'
 SCOPE_SHA = '74acac949f9403c6701bcffda6c390be61baee7a34f4bb65466289e46ee50925'
-PROFILE = 'account-resources-display-size-recovery-v1'
+PROFILE = 'account-resources-display-size-recovery-v2'
 
 
 def require(ok, reason):
@@ -32,6 +34,25 @@ def load(name, path):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def recovery_probe(stable, legacy):
+    # Only this timed recovery uses a shorter prospective window. All active
+    # jobs, leases, queues, credentials and business guards remain identical.
+    anchor = 'horizon = now + timedelta(minutes=15)'
+    require(legacy.count(anchor) == 1, 'recovery-idle-window-anchor')
+    return stable.build_probe(legacy.replace(anchor, 'horizon = now + timedelta(minutes=5)'))
+
+
+@contextmanager
+def deadline():
+    def expired(signum, frame): raise TimeoutError('recovery-time-budget-exceeded')
+    previous = signal.signal(signal.SIGALRM, expired)
+    signal.alarm(120)
+    try: yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 def validate_initialization(before, after, proof, impact_before, impact_now, rows, tables):
@@ -69,18 +90,21 @@ def continue_candidate(host, baseline, upgraded):
     report = {'published': False, 'maintenance_closed': True, 'recovery_profile': PROFILE}
     step = 'recovery-evidence'
     try:
-        host.save('resource-recovery-evidence.json', host.recovery_evidence)
-        host.save('resource-impact-after.json', host.impact())
-        step = 'ui-overlay'; host.overlay_ui()
-        host.verify_candidate(baseline, upgraded)
-        step = 'future-compose'; host.compose_candidate()
-        step = 'backend-start'; host.start_candidate()
-        host.verify_candidate(baseline, upgraded)
-        step = 'open-ingress'; host.open()
-        host.verify_open(baseline, upgraded)
-        step = 'resume-health'; host.resume_health()
-        report.update(published=True, maintenance_closed=False)
-        host.record(report)
+        with deadline():
+            host.save('resource-recovery-evidence.json', host.recovery_evidence)
+            host.save('resource-impact-after.json', host.impact())
+            step = 'ui-overlay'; host.overlay_ui()
+            host.verify_candidate(baseline, upgraded)
+            step = 'future-compose'; host.compose_candidate()
+            step = 'backend-start'
+            require(host.fingerprint() == upgraded, 'recovery-start-window-or-data-drift')
+            host.start_candidate()
+            host.verify_candidate(baseline, upgraded)
+            step = 'open-ingress'; host.open()
+            host.verify_open(baseline, upgraded)
+            step = 'resume-health'; host.resume_health()
+            report.update(published=True, maintenance_closed=False)
+            host.record(report)
         return report
     except BaseException:
         report.update(published=False, failure=step)
@@ -165,7 +189,7 @@ def prepare(bundle, manifest_sha):
     host.rotation_original = json.loads((backup / 'resource-audit-rotation-original.json').read_text())
     host.rotation_installed = host.rotation_backed_up = True
     host.verify_rotation()
-    host.preservation_probe = stable.build_probe((stage / 'fingerprint.py').read_text())
+    host.preservation_probe = recovery_probe(stable, (stage / 'fingerprint.py').read_text())
     host.checks = copy.deepcopy(host.checks)
     host.checks['rehearsal'] = proof
     upgraded = host.fingerprint()
@@ -194,7 +218,8 @@ print(json.dumps({'policies':list(AccountResourcePolicy.objects.order_by('pk').v
     host.recovery_evidence = {'profile': PROFILE, 'manifest_sha256': manifest_sha,
         'candidate_revision': CANDIDATE, 'stable_rehearsal_sha256': manifest['files']['rehearsal.json'],
         'derived_empty_additions': True, 'derived_snapshot_sha256': sha(json.dumps(host.added, sort_keys=True).encode()),
-        'old_business_preserved': True, 'initialization_rows_verified': True, 'ddl_or_initialization_repeated': False}
+        'old_business_preserved': True, 'initialization_rows_verified': True, 'ddl_or_initialization_repeated': False,
+        'prospective_ssl_window_minutes': 5, 'continuation_deadline_seconds': 120}
     return host, baseline, upgraded
 
 

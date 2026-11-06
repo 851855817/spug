@@ -1,6 +1,8 @@
 """Recovery-only checks; no Docker, database or production paths are accessed."""
+import ast
 import copy
-from contextlib import contextmanager, redirect_stdout
+from contextlib import contextmanager, nullcontext, redirect_stdout
+from datetime import datetime, timedelta, timezone
 import importlib.util
 import io
 import json
@@ -20,10 +22,13 @@ TABLES = {
 }
 
 
-def recovery():
+def recovery(real_deadline=False):
     spec = importlib.util.spec_from_file_location('resource_recovery_tested', HERE / 'recover.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    # SIGALRM is Linux-only. Test its implementation separately below, while
+    # controller tests retain the real controller and isolate only the clock.
+    if not real_deadline: module.deadline = nullcontext
     return module
 
 
@@ -156,6 +161,7 @@ class ClosedHost:
         self.recovery_evidence = {'verified': True}
         self.stage = Path('/unused-test-stage')
         self.recorded = []
+        self.snapshot = {}
 
     def action(self, name):
         if self.guard: self.guard()
@@ -166,6 +172,7 @@ class ClosedHost:
 
     def save(self, name, value): self.action('save:' + name)
     def impact(self): self.action('impact'); return {'mode': 'report'}
+    def fingerprint(self): self.action('fingerprint'); return copy.deepcopy(self.snapshot)
     def overlay_ui(self): self.action('ui')
     def verify_candidate(self, *args): self.action('verify-candidate')
     def compose_candidate(self): self.action('compose')
@@ -194,6 +201,7 @@ class RecoveryContinuationTests(unittest.TestCase):
 
     def test_success_only_continues_ui_compose_and_start_after_verified_evidence(self):
         host = ClosedHost()
+        host.snapshot = {'after': True}
         result = recovery().continue_candidate(host, {'before': True}, {'after': True})
         self.assertTrue(result['published'])
         self.assertFalse(result['maintenance_closed'])
@@ -201,6 +209,7 @@ class RecoveryContinuationTests(unittest.TestCase):
         self.assertTrue(host.backend_running and host.health_running)
         self.assertLess(host.events.index('save:resource-recovery-evidence.json'), host.events.index('ui'))
         self.assertLess(host.events.index('verify-candidate'), host.events.index('compose'))
+        self.assertEqual(host.events[host.events.index('start') - 1], 'fingerprint')
         self.assertLess(host.events.index('verify-open'), host.events.index('resume-health'))
         self.assertEqual(host.events[-1], 'record')
         self.assert_no_repeated_destructive_work(host)
@@ -208,7 +217,7 @@ class RecoveryContinuationTests(unittest.TestCase):
     def test_every_continuation_failure_closes_ingress_workers_and_health(self):
         for failure in ('save:resource-recovery-evidence.json', 'impact',
                         'save:resource-impact-after.json', 'ui', 'verify-candidate:1',
-                        'compose', 'start', 'verify-candidate:2', 'open', 'verify-open',
+                        'compose', 'fingerprint', 'start', 'verify-candidate:2', 'open', 'verify-open',
                         'resume-health', 'record:1'):
             with self.subTest(failure=failure):
                 host = ClosedHost({failure})
@@ -229,6 +238,144 @@ class RecoveryContinuationTests(unittest.TestCase):
         self.assertEqual(host.counts['open'], 1)
         self.assertEqual(host.events[-2:], ['close', 'record'])
         self.assert_no_repeated_destructive_work(host)
+
+    def test_fresh_start_snapshot_drift_closes_without_starting_workers(self):
+        host = ClosedHost()
+        host.snapshot = {'changed': True}
+        result = recovery().continue_candidate(host, {}, {})
+        self.assertFalse(result['published'])
+        self.assertTrue(result['maintenance_closed'])
+        self.assertEqual(result['failure'], 'backend-start')
+        self.assertNotIn('start', host.events)
+        self.assertNotIn('open', host.events)
+        self.assertIn('close', host.events)
+        self.assert_no_repeated_destructive_work(host)
+
+
+class MemoryRows:
+    """Evaluate the actual SSL guard against in-memory job/lease/source rows."""
+    def __init__(self, rows): self.rows = list(rows)
+    @staticmethod
+    def matches(row, conditions):
+        for key, expected in conditions.items():
+            field, _, operation = key.partition('__')
+            actual = getattr(row, field)
+            if operation == 'in': matched = actual in expected
+            elif operation == 'gt': matched = actual > expected
+            else: matched = actual == expected
+            if not matched: return False
+        return True
+    def filter(self, **conditions):
+        return MemoryRows(row for row in self.rows if self.matches(row, conditions))
+    def exclude(self, **conditions):
+        return MemoryRows(row for row in self.rows if not self.matches(row, conditions))
+    def exists(self): return bool(self.rows)
+    def __iter__(self): return iter(self.rows)
+
+
+class RecoveryProbeTests(unittest.TestCase):
+    def fixtures(self):
+        module = recovery()
+        stable = module.load('recovery_probe_schema_test', HERE / 'schema.py')
+        legacy = (HERE.parent / 'upgrade-review/fingerprint.py').read_text()
+        return module, stable, legacy
+
+    def ssl_guard(self):
+        module, stable, legacy = self.fixtures()
+        probe = module.recovery_probe(stable, legacy)
+        function = next(node for node in ast.parse(probe).body
+                        if isinstance(node, ast.FunctionDef) and node.name == 'ssl_idle')
+        namespace = {'timedelta': timedelta}
+        exec(compile(ast.Module(body=[function], type_ignores=[]), '<isolated-ssl-guard>', 'exec'), namespace)
+        return namespace['ssl_idle']
+
+    def test_probe_changes_only_the_unique_prospective_window_and_keeps_every_other_guard(self):
+        module, stable, legacy = self.fixtures()
+        expected = stable.build_probe(legacy).replace(
+            'horizon = now + timedelta(minutes=15)', 'horizon = now + timedelta(minutes=5)')
+        actual = module.recovery_probe(stable, legacy)
+        self.assertEqual(actual, expected)
+        compile(actual, '<recovery-probe>', 'exec')
+        self.assertEqual(legacy.count('horizon = now + timedelta(minutes=15)'), 1)
+        for altered in (legacy.replace('horizon = now + timedelta(minutes=15)', 'horizon = now'),
+                        legacy + '\nhorizon = now + timedelta(minutes=15)\n'):
+            with self.subTest(altered=altered[-60:]), self.assertRaisesRegex(ValueError, 'recovery-idle-window-anchor'):
+                module.recovery_probe(stable, altered)
+
+    def test_five_minute_guard_still_rejects_due_sources_active_jobs_and_live_leases(self):
+        guard = self.ssl_guard()
+        now = datetime(2026, 11, 6, 15, 0, tzinfo=timezone.utc)
+        def registry(due_minutes=10, jobs=(), leases=(), last_attempt=True):
+            source = SimpleNamespace(enabled=True, interval_hours=1,
+                last_attempt_at=now - timedelta(hours=1) + timedelta(minutes=due_minutes)
+                                if last_attempt else None)
+            models = {'SSLJob': MemoryRows(SimpleNamespace(**row) for row in jobs),
+                      'SSLLease': MemoryRows(SimpleNamespace(**row) for row in leases),
+                      'SSLSource': MemoryRows([source])}
+            return SimpleNamespace(get_model=lambda app, name: SimpleNamespace(objects=models[name]))
+        self.assertTrue(guard(registry(), now))
+        self.assertTrue(guard(registry(due_minutes=5.01), now))
+        for due in (-1, 0, 4.99, 5):
+            with self.subTest(due=due): self.assertFalse(guard(registry(due_minutes=due), now))
+        self.assertFalse(guard(registry(last_attempt=False), now))
+        for state in ('queued', 'running', 'prepared', 'uncertain'):
+            with self.subTest(state=state):
+                self.assertFalse(guard(registry(jobs=[{'state': state, 'verify_requested': False}]), now))
+        self.assertFalse(guard(registry(jobs=[{'state': 'completed', 'verify_requested': True}]), now))
+        self.assertFalse(guard(registry(leases=[{'expires_at': now + timedelta(seconds=1), 'token': 'active'}]), now))
+        self.assertTrue(guard(registry(leases=[{'expires_at': now, 'token': 'active'}]), now))
+
+
+class SignalClock:
+    SIGALRM = 14
+    def __init__(self):
+        self.previous = object()
+        self.handler, self.armed, self.events = self.previous, 0, []
+    def signal(self, signum, handler):
+        previous, self.handler = self.handler, handler
+        self.events.append(('signal', signum, handler))
+        return previous
+    def alarm(self, seconds):
+        self.armed = seconds
+        self.events.append(('alarm', seconds))
+    def expire(self): self.handler(self.SIGALRM, None)
+
+
+class RecoveryDeadlineTests(unittest.TestCase):
+    def test_deadline_arms_exactly_120_seconds_then_cancels_and_restores_handler(self):
+        module, clock = recovery(real_deadline=True), SignalClock()
+        with mock.patch.object(module, 'signal', clock):
+            with module.deadline():
+                self.assertEqual(clock.armed, 120)
+                self.assertTrue(callable(clock.handler))
+            self.assertEqual(clock.armed, 0)
+            self.assertIs(clock.handler, clock.previous)
+        self.assertEqual([event for event in clock.events if event[0] == 'alarm'],
+                         [('alarm', 120), ('alarm', 0)])
+
+    def test_timeout_at_each_opening_stage_cancels_clock_before_closing(self):
+        for at in ('ui', 'start', 'verify-open', 'record'):
+            with self.subTest(at=at):
+                module, clock, host = recovery(real_deadline=True), SignalClock(), ClosedHost()
+                original_action = host.action
+                expired = []
+                def action(name):
+                    if name == 'close': self.assertEqual(clock.armed, 0)
+                    original_action(name)
+                    if name == at and not expired:
+                        expired.append(True)
+                        clock.expire()
+                host.action = action
+                with mock.patch.object(module, 'signal', clock):
+                    result = module.continue_candidate(host, {}, {})
+                self.assertEqual(expired, [True])
+                self.assertFalse(result['published'])
+                self.assertTrue(result['maintenance_closed'])
+                self.assertTrue(host.closed)
+                self.assertFalse(host.backend_running or host.health_running)
+                self.assertEqual(clock.armed, 0)
+                self.assertIs(clock.handler, clock.previous)
+                self.assertEqual(host.counts['close'], 1)
 
 
 class MainLockTests(unittest.TestCase):
