@@ -1,0 +1,49 @@
+{
+  "revision": "ceba780a386aabcbed3b8f1344be96e98690fb0a",
+  "previous_revision": "f72d157c451ec6821a85c6f66e5bc1e3c22509cf",
+  "published": true,
+  "backup": "/opt/spug/backups/20261106-104807-before-upgrade-ceba780-8200a483",
+  "enabled_host_sources_without_snapshot": 0,
+  "initial_failure_status_not_misreported": true,
+  "fixed_diagnostics_available": true,
+  "cached_ssl_listing_rows": 20,
+  "cached_certificate_stats": {
+    "total": 20,
+    "normal": 5,
+    "expiring": 0,
+    "expired": 4,
+    "error": 11
+  },
+  "read_only_local_database": true,
+  "paired_backup_valid": true,
+  "business_and_schema_unchanged": true,
+  "preservation_objects": 69,
+  "ssl_table_counts_preserved": {
+    "monitor_ssl_certificates": 20,
+    "monitor_ssl_jobs": 59,
+    "monitor_ssl_leases": 2,
+    "monitor_ssl_reminder_preferences": 4,
+    "monitor_ssl_reminders": 8,
+    "monitor_ssl_sources": 4
+  },
+  "complete_api_trees_preserved_except_visibility_modules": true,
+  "api_overlay_paths": [
+    "apps/monitor/ssl/service.py",
+    "apps/monitor/ssl/urls.py",
+    "apps/monitor/ssl/views.py"
+  ],
+  "api_tree_sizes": [
+    247,
+    287
+  ],
+  "api_and_ui_receipts_valid": true,
+  "services_running": 9,
+  "original_preserved_pids": true,
+  "health_checks_ok": 15,
+  "health_timer": "active",
+  "internal_http": 200,
+  "server_https": 200,
+  "compiled_release_binding": true,
+  "original_license": true,
+  "public_https": 200
+}
