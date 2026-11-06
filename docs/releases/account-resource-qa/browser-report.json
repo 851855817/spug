@@ -1,0 +1,269 @@
+{
+  "mocked_api_only": true,
+  "real_browser": true,
+  "assertions": [
+    "A sees own and explicitly shared records, no B private record",
+    "Read sharing cannot edit, sign in or enable monitoring despite action permissions",
+    "Exhausted unified quota disables creation",
+    "Focus refresh applies revoked manage grant to an already open page",
+    "Revocation also disables saving an already open panel editor",
+    "B remains isolated and stale superuser cache does not grant write actions",
+    "Administrator sees saved effective permissions, assigned resources and used quota",
+    "Effective preview distinguishes personally owned and administrator-assigned resources",
+    "Saving unrelated account fields preserves existing quota and grants",
+    "Explicit zero quota is submitted as zero",
+    "Explicit unlimited quota is submitted as null",
+    "Administrator can change one assigned resource to manage without rewriting the quota",
+    "New ordinary account starts with zero server quota",
+    "Only recognized loopback fixture requests; no customer operations or runtime exceptions"
+  ],
+  "screenshots": [
+    "A-scope-and-readonly.png",
+    "admin-account-resource-policy.png"
+  ],
+  "requests": [
+    {
+      "actor": "A",
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "actor": "A",
+      "method": "GET",
+      "path": "/api/account/resources/"
+    },
+    {
+      "actor": "A",
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "actor": "A",
+      "method": "GET",
+      "path": "/api/baota/"
+    },
+    {
+      "actor": "A",
+      "method": "GET",
+      "path": "/api/baota/group/"
+    },
+    {
+      "actor": "A",
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "actor": "A",
+      "method": "GET",
+      "path": "/api/baota/monitor/sources/"
+    },
+    {
+      "actor": "A",
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "actor": "A",
+      "method": "GET",
+      "path": "/api/account/resources/"
+    },
+    {
+      "actor": "B",
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "actor": "B",
+      "method": "GET",
+      "path": "/api/account/resources/"
+    },
+    {
+      "actor": "B",
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "actor": "B",
+      "method": "GET",
+      "path": "/api/baota/"
+    },
+    {
+      "actor": "B",
+      "method": "GET",
+      "path": "/api/baota/group/"
+    },
+    {
+      "actor": "B",
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "actor": "B",
+      "method": "GET",
+      "path": "/api/baota/monitor/sources/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/resources/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/role/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/user/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/resources/"
+    },
+    {
+      "actor": "admin",
+      "method": "POST",
+      "path": "/api/account/user/",
+      "data": {
+        "username": "A",
+        "nickname": "员工 A",
+        "role_ids": [
+          1
+        ],
+        "id": 1
+      }
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/resources/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/user/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/resources/"
+    },
+    {
+      "actor": "admin",
+      "method": "POST",
+      "path": "/api/account/user/",
+      "data": {
+        "username": "A",
+        "nickname": "员工 A",
+        "role_ids": [
+          1
+        ],
+        "id": 1,
+        "server_limit": 0
+      }
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/resources/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/user/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/resources/"
+    },
+    {
+      "actor": "admin",
+      "method": "POST",
+      "path": "/api/account/user/",
+      "data": {
+        "username": "A",
+        "nickname": "员工 A",
+        "role_ids": [
+          1
+        ],
+        "id": 1,
+        "server_limit": null
+      }
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/resources/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/user/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/resources/"
+    },
+    {
+      "actor": "admin",
+      "method": "POST",
+      "path": "/api/account/user/",
+      "data": {
+        "username": "A",
+        "nickname": "员工 A",
+        "role_ids": [
+          1
+        ],
+        "id": 1,
+        "resource_grants": [
+          {
+            "kind": "panel",
+            "id": 3,
+            "level": "manage"
+          }
+        ]
+      }
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/resources/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/user/"
+    },
+    {
+      "actor": "admin",
+      "method": "GET",
+      "path": "/api/account/resources/"
+    }
+  ],
+  "blocked_outbound": [],
+  "unexpected_api": [],
+  "runtime_errors": [],
+  "passed": true,
+  "fixture": "http://127.0.0.1:61618",
+  "build_asset": "/static/js/main.d8675d58.chunk.js",
+  "build_sha256": "75d0b1ed5f0538646db4c46aa8f14fe926c6b52467bc1c98ef7a9a606b588c27"
+}

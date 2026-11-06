@@ -17,9 +17,11 @@ class PanelWorkspaceReleaseTests(_Base):
 
     def test_navigation_has_one_panel_entry_and_hidden_legacy_operations_route(self):
         routes = (Path(__file__).parents[2] / 'spug_web/src/routes.js').read_text(encoding='utf8')
-        self.assertIn("{hidden: true, auth: 'admin', path: '/exec/operations', component: LegacyOperations}", routes)
+        # The compatibility route remains hidden; its new permission allows an
+        # authorized operator to open their own scoped historical results.
+        self.assertIn("{hidden: true, auth: 'ops.job.view', path: '/exec/operations', component: LegacyOperations}", routes)
         self.assertNotIn("title: t('运维作业')", routes)
-        self.assertIn("auth: 'exec.panel.view|admin', path: '/exec/panel'", routes)
+        self.assertIn("auth: 'exec.panel.view|ops.job.view', path: '/exec/panel'", routes)
 
     def test_ssl_pending_work_and_leases_block_without_modifying_state(self):
         tree = ast.parse(Path(__file__).with_name('fingerprint.py').read_text(encoding='utf8'))
