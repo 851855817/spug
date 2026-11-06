@@ -1,0 +1,155 @@
+{
+  "apps/account/migrations/0002_account_resources.py": {
+    "dependencies": [
+      [
+        "account",
+        "0001_initial"
+      ],
+      [
+        "baota",
+        "0006_panelinventorylease_panelinventorysnapshot_and_more"
+      ],
+      [
+        "host",
+        "0001_initial"
+      ]
+    ],
+    "operations": [
+      {
+        "expression_sha256": "b0e4d1c16d70640becb126351d615ceaf7ce46f7bf954a618445bb7a0c4fb077",
+        "model": "AccountResourcePolicy",
+        "operation": "CreateModel"
+      },
+      {
+        "expression_sha256": "7222aba31cb454f181bc1c23dcd5e50365779b661f77c76fb15f2e486532578b",
+        "model": "ResourceQuotaLock",
+        "operation": "CreateModel"
+      },
+      {
+        "expression_sha256": "e68cbc4bc4b1865121bf02a1dc116c7c77cdd255794700e580ae4bc99af1820b",
+        "model": "ResourceOwnership",
+        "operation": "CreateModel"
+      },
+      {
+        "expression_sha256": "03daeae827497f8ecc27e355a1506626ff8041789d27452c6327f60bcbf57cd8",
+        "model": "ResourceGroupOwner",
+        "operation": "CreateModel"
+      },
+      {
+        "expression_sha256": "db142a9f93705b841abee7d80d0581673802784ed3f5aaf3314cb18f3ca63d37",
+        "model": "ResourceGrant",
+        "operation": "CreateModel"
+      },
+      {
+        "expression_sha256": "c3b478af9451ed43e22fb91cc349f7ea35f1ec4f29be6ac5f503437f7a475a67",
+        "model": "ResourceAccessAudit",
+        "operation": "CreateModel"
+      },
+      {
+        "expression_sha256": "1dc35e9e8fc1d13999601db46044599d1e7a0dd9bf0c23914c46277ed1a0b9e3",
+        "model": "resourceownership",
+        "operation": "AddConstraint"
+      },
+      {
+        "expression_sha256": "9f8b0a19c5d6f60aa4c7c85d6fc150968d643646698af4ce265ece675cd5ba75",
+        "model": "resourcegroupowner",
+        "operation": "AddConstraint"
+      },
+      {
+        "expression_sha256": "606ac8649c18f3a79a215b298ca03bcb42fe507e85fc863226ea68d3b458823f",
+        "model": "resourcegroupowner",
+        "operation": "AddConstraint"
+      },
+      {
+        "expression_sha256": "fcb698737c69a580594d3459acc34b68a6963d554d9bb5751f1d4053a0742183",
+        "model": "resourcegrant",
+        "operation": "AddConstraint"
+      },
+      {
+        "expression_sha256": "15c4ee4beae331bab01862608ec465d050a220facff160f068a0c99bcde8ce1b",
+        "model": "resourcegrant",
+        "operation": "AddConstraint"
+      },
+      {
+        "expression_sha256": "b2d918db13b2834db95a0305d08af091f4b4a86b4260200d0ad7c917b11c213c",
+        "model": "resourcegrant",
+        "operation": "AddConstraint"
+      },
+      {
+        "expression_sha256": "c19ad3e34164266d3feb8dd764a60fb8fa89d4520a68a2de6b91102cc1af190c",
+        "model": "resourcegrant",
+        "operation": "AddConstraint"
+      }
+    ],
+    "sha256": "e3f0a4adc22a9e642efce506dbe0d9e866357d160d8c95cde0f37f82158aa4b5"
+  },
+  "apps/alarm/migrations/0002_account_resources.py": {
+    "dependencies": [
+      [
+        "account",
+        "0002_account_resources"
+      ],
+      [
+        "alarm",
+        "0001_initial"
+      ]
+    ],
+    "operations": [
+      {
+        "expression_sha256": "8cd3ff53ba87c074043ea3f69d3384cb04da54e704f95b99113b4029a76442db",
+        "model": "AlarmResource",
+        "operation": "CreateModel"
+      }
+    ],
+    "sha256": "2f4f90f4cc00effd3ad0f49c38960c9cf0d633cbfc4dc92f3f80b293817ce68b"
+  },
+  "apps/deploy/migrations/0002_account_resources.py": {
+    "dependencies": [
+      [
+        "account",
+        "0002_account_resources"
+      ],
+      [
+        "app",
+        "0001_initial"
+      ],
+      [
+        "deploy",
+        "0001_initial"
+      ]
+    ],
+    "operations": [
+      {
+        "expression_sha256": "8613a6e6576b74a85915b2f1d3478a310bb92ac008d79edf0e7847ef951f63a2",
+        "model": "DeployUpload",
+        "operation": "CreateModel"
+      }
+    ],
+    "sha256": "089da894f526577b9aabb8e37a4f311740ce66e7832b24e1d493b1bcb5cb36ef"
+  },
+  "apps/notify/migrations/0002_account_resources.py": {
+    "dependencies": [
+      [
+        "account",
+        "0002_account_resources"
+      ],
+      [
+        "notify",
+        "0001_initial"
+      ]
+    ],
+    "operations": [
+      {
+        "expression_sha256": "266fe10bbf9ead616b1a0b19800f69bc0db2a1321c7144f2110dfe96054b6148",
+        "model": "NotifyAudience",
+        "operation": "CreateModel"
+      },
+      {
+        "expression_sha256": "8a510498a42c300acd8775d68d537f24f57cb9f07ac25b5034acade84b64eb53",
+        "model": "notifyaudience",
+        "operation": "AddConstraint"
+      }
+    ],
+    "sha256": "b1747e13736f1307ae0d74fa652ae5b2f27afccb4eedfe17707b090ad2e4623b"
+  }
+}
