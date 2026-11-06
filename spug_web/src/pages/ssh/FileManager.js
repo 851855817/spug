@@ -16,7 +16,7 @@ import {
   EditOutlined
 } from '@ant-design/icons';
 import { AuthButton, Action } from 'components';
-import { http, t, uniqueId, X_TOKEN } from 'libs';
+import { http, t, X_TOKEN } from 'libs';
 import lds from 'lodash';
 import styles from './index.module.less'
 import moment from 'moment';
@@ -146,23 +146,29 @@ class FileManager extends React.Component {
 
   handleUpload = () => {
     this.input.click();
-    this.input.onchange = e => {
-      this.setState({uploading: true, uploadStatus: 'active', percent: 0});
+    this.input.onchange = async e => {
       const file = e.target['files'][0];
+      if (!file) return;
+      const hostId = this.props.id;
+      const path = '/' + this.state.pwd.join('/');
+      this.setState({uploading: true, uploadStatus: 'active', percent: 0});
       const formData = new FormData();
-      const token = uniqueId();
-      this._updatePercent(token);
-      formData.append('file', file);
-      formData.append('id', this.props.id);
-      formData.append('token', token);
-      formData.append('path', '/' + this.state.pwd.join('/'));
       this.input.value = '';
-      http.post('/api/file/object/', formData, {timeout: 600000, onUploadProgress: this._updateLocal})
-        .then(() => {
-          this.setState({uploadStatus: 'success'});
-          this.fetchFiles()
-        }, () => this.setState({uploadStatus: 'exception'}))
-        .finally(() => setTimeout(() => this.setState({uploading: false}), 2000))
+      try {
+        const token = await http.put('/api/file/object/', {id: hostId});
+        this._updatePercent(token);
+        formData.append('file', file);
+        formData.append('id', hostId);
+        formData.append('token', token);
+        formData.append('path', path);
+        await http.post('/api/file/object/', formData, {timeout: 600000, onUploadProgress: this._updateLocal});
+        this.setState({uploadStatus: 'success'});
+        this.fetchFiles();
+      } catch (error) {
+        this.setState({uploadStatus: 'exception'});
+      } finally {
+        setTimeout(() => this.setState({uploading: false}), 2000);
+      }
     }
   };
 

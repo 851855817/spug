@@ -4,28 +4,35 @@
 from django.views.generic import View
 from libs import json_response, JsonParser, Argument, human_datetime, auth
 from apps.host.models import Host, HostExtend
+from apps.account import access
 from apps.host.utils import check_os_type, fetch_host_extend
 import json
 
 
 class ExtendView(View):
-    @auth('host.host.add|host.host.edit')
+    @auth('host.host.verify')
     def get(self, request):
         form, error = JsonParser(
             Argument('host_id', type=int, help='参数错误')
         ).parse(request.GET)
         if error is None:
-            host = Host.objects.filter(pk=form.host_id).first()
+            host = access.require_resources(request.user, 'host', [form.host_id], manage=True).get()
             if not host:
                 return json_response(error='未找到指定主机')
             if not host.is_verified:
                 return json_response(error='该主机还未验证')
-            with host.get_ssh() as ssh:
-                response = fetch_host_extend(ssh)
+            def authorize():
+                access.require(request.user, 'host.host.verify')
+                access.require_resources(request.user, 'host', [form.host_id], manage=True)
+            with host.get_ssh(authorize=authorize) as ssh:
+                authorize()
+                response = fetch_host_extend(ssh, authorize=authorize)
+            access.require(request.user, 'host.host.verify')
+            access.require_resources(request.user, 'host', [form.host_id], manage=True)
             return json_response(response)
         return json_response(error=error)
 
-    @auth('host.host.add|host.host.edit')
+    @auth('host.host.edit')
     def post(self, request):
         form, error = JsonParser(
             Argument('host_id', type=int, help='参数错误'),
@@ -42,7 +49,7 @@ class ExtendView(View):
             Argument('expired_time', required=False)
         ).parse(request.body)
         if error is None:
-            host = Host.objects.filter(pk=form.host_id).first()
+            host = access.require_resources(request.user, 'host', [form.host_id], manage=True).get()
             form.disk = json.dumps(form.disk)
             form.public_ip_address = json.dumps(form.public_ip_address) if form.public_ip_address else '[]'
             form.private_ip_address = json.dumps(form.private_ip_address)

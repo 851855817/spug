@@ -16,8 +16,19 @@ def auth(perm_list):
                 if hasattr(item, 'user'):
                     user = item.user
                     break
-            if user and user.has_perms(codes):
-                return view_func(*args, **kwargs)
+            if user:
+                from apps.account import access
+                try:
+                    current, granted = access.permissions(user)
+                    if current.is_supper or set(codes).intersection(granted):
+                        for item in args[:2]:
+                            if hasattr(item, 'user'):
+                                item.user = current
+                                break
+                        return view_func(*args, **kwargs)
+                    access.reject(current, '权限拒绝', codes=codes)
+                except access.AccessDenied as exc:
+                    return json_response(error=str(exc))
             return json_response(error='权限拒绝')
 
         return wrapper

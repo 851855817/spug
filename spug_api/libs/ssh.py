@@ -11,6 +11,7 @@ from io import StringIO
 from uuid import uuid4
 import time
 import re
+import os
 
 _env_name = re.compile(r'[A-Za-z_][A-Za-z0-9_]*\Z')
 
@@ -32,9 +33,54 @@ kill_tree %s
 '''
 
 
+class _AuthorizedRemote:
+    """Guard actual Paramiko operations, including handles returned by a client."""
+    _handles = {'get_transport', 'open_session', 'invoke_shell', 'open_sftp', 'open', 'file', 'makefile'}
+    _local = {'recv_ready', 'recv_stderr_ready', 'exit_status_ready', 'is_active'}
+
+    def __init__(self, ssh, target):
+        self._ssh, self._target = ssh, target
+
+    def __getattr__(self, name):
+        target = getattr(self._target, name)
+        # These only inspect local state. Revalidate actual reads/writes instead
+        # of flooding an authorization protocol on every readiness poll.
+        if not callable(target) or name == 'close' or name in self._local:
+            return target
+        def call(*args, **kwargs):
+            self._ssh._check_access()
+            result = target(*args, **kwargs)
+            try:
+                self._ssh._check_access()
+            except Exception:
+                # Opening a handle can itself race with revocation; always close it.
+                if name in self._handles and result is not None:
+                    result.close()
+                raise
+            return self._ssh._guard(result) if name in self._handles else result
+        return call
+
+    def __enter__(self):
+        self._ssh._check_access()
+        return self
+
+    def __exit__(self, *args):
+        self._target.close()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self._ssh._check_access()
+        value = next(self._target)
+        self._ssh._check_access()
+        return value
+
+
 class SSH:
     def __init__(self, hostname, port=22, username='root', pkey=None, password=None, default_env=None,
-                 connect_timeout=10, term=None):
+                 connect_timeout=10, term=None, authorize=None):
+        self.authorize = authorize
         self.client = None
         self.is_windows = False
         self.channel = None
@@ -56,6 +102,15 @@ class SSH:
             'look_for_keys': False,
             'banner_timeout': 30
         }
+
+    def _check_access(self):
+        if self.authorize is not None:
+            self.authorize()
+
+    def _guard(self, target):
+        if target is None or self.authorize is None or isinstance(target, _AuthorizedRemote):
+            return target
+        return _AuthorizedRemote(self, target)
 
     @staticmethod
     def generate_key():
@@ -79,11 +134,18 @@ class SSH:
         raise SSHException(f'unsupported or invalid private key: {last_error}')
 
     def get_client(self):
+        self._check_access()
         if self.client is not None:
+            self.client = self._guard(self.client)
             return self.client
-        self.client = SSHClient()
+        self.client = self._guard(SSHClient())
         self.client.set_missing_host_key_policy(AutoAddPolicy)
-        self.client.connect(**self.arguments)
+        try:
+            self.client.connect(**self.arguments)
+        except Exception:
+            self.client.close()
+            self.client = None
+            raise
         return self.client
 
     def ping(self):
@@ -117,7 +179,9 @@ class SSH:
             if not data:
                 break
             output += data
-        return channel.recv_exit_status(), self._decode(output)
+        status = channel.recv_exit_status()
+        self._check_access()
+        return status, self._decode(output)
 
     def exec_command(self, command, environment=None):
         channel = self._get_channel()
@@ -136,6 +200,7 @@ class SSH:
                 exit_code = int(match.group(1))
                 out = out[:match.start()]
                 break
+        self._check_access()
         return exit_code, out
 
     def exec_command_with_stream(self, command, environment=None):
@@ -155,7 +220,9 @@ class SSH:
                 exit_code = int(match.group(1))
                 line = line[:match.start()]
                 break
+            self._check_access()
             yield exit_code, line
+        self._check_access()
         yield exit_code, line
 
     def _win_exec_command_with_stream(self, command, environment=None):
@@ -169,17 +236,51 @@ class SSH:
         stdout = channel.makefile("rb", -1)
         out = stdout.readline()
         while out:
+            self._check_access()
             yield channel.exit_status, self._decode(out)
             out = stdout.readline()
-        yield channel.recv_exit_status(), self._decode(out)
+        status = channel.recv_exit_status()
+        self._check_access()
+        yield status, self._decode(out)
 
     def put_file(self, local_path, remote_path, callback=None):
+        if self.authorize is not None:
+            with open(local_path, 'rb') as fl:
+                return self._put_file(fl, remote_path, callback, os.path.getsize(local_path))
         sftp = self._get_sftp()
         sftp.put(local_path, remote_path, callback=callback, confirm=False)
 
     def put_file_by_fl(self, fl, remote_path, callback=None):
+        if self.authorize is not None:
+            return self._put_file(fl, remote_path, callback, getattr(fl, 'size', 0))
         sftp = self._get_sftp()
         sftp.putfo(fl, remote_path, callback=callback, confirm=False)
+
+    def _put_file(self, fl, remote_path, callback, total):
+        # Paramiko put/putfo perform multiple writes inside one call. Keep every
+        # write synchronous and guarded, so revocation stops the following chunk.
+        sftp = self._get_sftp()
+        remote = sftp.open(remote_path, 'wb')
+        sent = 0
+        try:
+            while True:
+                self._check_access()
+                data = fl.read(32768)
+                self._check_access()
+                if not data:
+                    break
+                if isinstance(data, str):
+                    data = data.encode()
+                for offset in range(0, len(data), 32768):
+                    chunk = data[offset:offset + 32768]
+                    remote.write(chunk)
+                    sent += len(chunk)
+                    if callback:
+                        self._check_access()
+                        callback(sent, total)
+                        self._check_access()
+        finally:
+            remote.close()
 
     def list_dir_attr(self, path):
         sftp = self._get_sftp()
@@ -207,7 +308,9 @@ class SSH:
         return self.pid
 
     def _get_channel(self):
+        self._check_access()
         if self.channel:
+            self.channel = self._guard(self.channel)
             return self.channel
 
         self.get_client()
@@ -239,11 +342,15 @@ class SSH:
                 raise Exception('Wait spug response timeout')
             else:
                 counter += 1
+                if counter % 10 == 0:
+                    self._check_access()
                 time.sleep(0.1)
         return self.channel
 
     def _get_sftp(self):
+        self._check_access()
         if self.sftp:
+            self.sftp = self._guard(self.sftp)
             return self.sftp
 
         self.get_client()
@@ -291,7 +398,8 @@ class SSH:
         return self
 
     def __exit__(self, *args, **kwargs):
-        self.client.close()
+        if self.client is not None:
+            self.client.close()
         self.client = None
         self.channel = None
         self.sftp = None

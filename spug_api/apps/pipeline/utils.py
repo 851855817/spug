@@ -26,6 +26,44 @@ import time
 import os
 
 
+def resource_host_ids(record):
+    """Resolve every host from this exact definition or execution snapshot.
+
+    Display _targets are deliberately insufficient: a transfer also reads its
+    source and a build opens SSH without generating a multi-host display tab.
+    """
+    nodes = json.loads(record.nodes) if isinstance(record.nodes, str) else record.nodes
+    if not isinstance(nodes, list):
+        raise ValueError('流水线节点配置无效')
+    result = set()
+    for node in nodes:
+        if not isinstance(node, dict):
+            raise ValueError('流水线节点配置无效')
+        module = node.get('module')
+        if module in ('ssh_exec', 'data_upload'):
+            targets = node.get('targets')
+        elif module == 'data_transfer':
+            source, destination = node.get('source'), node.get('destination')
+            if not isinstance(source, dict) or not isinstance(destination, dict):
+                raise ValueError('文件分发来源与目标无效')
+            targets = [source.get('target')] + (destination.get('targets') or [])
+        elif module == 'build':
+            targets = [node.get('target')]
+        elif module in ('parameter', 'push_dd', 'push_fs', 'push_wx', 'push_spug'):
+            targets = []
+        else:
+            raise ValueError('流水线包含不支持的节点')
+        if not isinstance(targets, list) or any(type(pk) is not int or pk <= 0 for pk in targets):
+            raise ValueError('流水线主机配置无效')
+        display = node.get('_targets', [])
+        if not isinstance(display, list) or any(not isinstance(item, dict) or
+                type(item.get('id')) is not int or item['id'] <= 0 for item in display):
+            raise ValueError('流水线历史目标清单无效')
+        result.update(item['id'] for item in display)
+        result.update(targets)
+    return result
+
+
 PUSH_MODULES = {
     'push_dd': '钉钉',
     'push_fs': '飞书',

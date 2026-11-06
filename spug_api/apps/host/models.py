@@ -22,11 +22,18 @@ class Host(models.Model, ModelMixin):
 
     @property
     def private_key(self):
-        return self.pkey or AppSetting.get('private_key')
+        if self.pkey:
+            return self.pkey
+        if self.created_by.is_supper:
+            return AppSetting.get('private_key')
+        raise ValueError('请先使用独立 SSH 密钥或登录密码验证主机')
 
-    def get_ssh(self, pkey=None, default_env=None):
+    def get_ssh(self, pkey=None, default_env=None, authorize=None):
+        authorize = authorize if authorize is not None else getattr(self, 'resource_guard', None)
+        if authorize is not None:
+            authorize()
         pkey = pkey or self.private_key
-        return SSH(self.hostname, self.port, self.username, pkey, default_env=default_env)
+        return SSH(self.hostname, self.port, self.username, pkey, default_env=default_env, authorize=authorize)
 
     def to_view(self):
         # 独立密钥只在服务端使用，任何接口都不返回私钥原文

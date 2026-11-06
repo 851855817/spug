@@ -18,7 +18,7 @@ from .models import (User, AccountResourcePolicy, ResourceOwnership, ResourceGra
 logger = logging.getLogger('spug.resource_access')
 
 
-class AccessDenied(ValueError):
+class AccessDenied(ValueError, PermissionError):
     """Safe public error with metadata that never contains request bodies."""
 
 
@@ -123,9 +123,17 @@ def group_ids(user, kind, manage=False):
         return set(groups)
     result = set(ResourceGroupOwner.objects.filter(kind=kind, owner_id=current.pk).values_list('group_id', flat=True))
     if not manage:
-        relation = 'groups__pk' if kind == 'host' else 'group_id'
-        result.update(scope(current, kind).values_list(relation, flat=True))
-        result.discard(None)
+        # A shared host can also belong to confidential teams. Resource grants
+        # do not reveal unrelated group labels or create group write access.
+        if kind == 'host':
+            explicit = {pk for role in current.roles.all() for pk in role.get_group_perms()
+                        if type(pk) is int and pk in groups}
+            while True:
+                added = {pk for pk, parent in groups.items() if parent in explicit} - explicit
+                if not added:
+                    break
+                explicit.update(added)
+            result.update(explicit)
         pending = set(result)
         while pending:
             parents = {groups.get(pk) for pk in pending} - result - {None, 0}
@@ -265,3 +273,14 @@ def require_source(user, key, manage=False):
         raise ValueError('资源来源无效')
     require_resources(user, kind, [int(value)], manage=manage)
     return kind, int(value)
+
+
+def owner_id(kind, resource):
+    """Return explicit ownership, falling back to the preserved creator audit."""
+    pk = getattr(resource, 'pk', resource)
+    owner = ResourceOwnership.objects.filter(**{kind + '_id': pk}).values_list('owner_id', flat=True).first()
+    if owner is not None:
+        return owner
+    if hasattr(resource, 'created_by_id'):
+        return resource.created_by_id
+    return model(kind).objects.filter(pk=pk).values_list('created_by_id', flat=True).first()

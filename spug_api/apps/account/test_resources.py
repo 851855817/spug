@@ -148,9 +148,20 @@ class ResourceAccessTests(TestCase):
         own = Group.objects.create(name='own', parent_id=parent.pk)
         sibling = Group.objects.create(name='sibling', parent_id=parent.pk)
         own.hosts.add(self.host)
+        access.own_group(self.a, 'host', own.pk)
         access.own_group(self.b, 'host', sibling.pk)
         self.assertEqual(access.group_ids(self.a, 'host'), {parent.pk, own.pk})
         self.assertNotIn(parent.pk, access.group_ids(self.a, 'host', manage=True))
+
+    def test_read_grant_does_not_reveal_unassigned_group_labels(self):
+        allowed = Group.objects.create(name='allowed')
+        hidden = Group.objects.create(name='secret-team')
+        self.other.groups.add(allowed, hidden)
+        self.a.roles.add(Role.objects.create(name='labels', group_perms=[allowed.pk]))
+        access.set_policy(self.admin, self.a, 10)
+        access.assign(self.admin, self.a, 'host', [self.other.pk], 'read')
+        self.assertIn(self.other.pk, access.allowed_ids(self.a, 'host'))
+        self.assertEqual(access.group_ids(self.a, 'host'), {allowed.pk})
 
     def test_invalid_resource_ids_and_grant_level_are_rejected(self):
         for ids in ([True], ['1'], [0], [-1]):

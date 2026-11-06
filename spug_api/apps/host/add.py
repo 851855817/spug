@@ -4,10 +4,11 @@
 from libs import json_response, JsonParser, Argument, auth
 from apps.host.models import Host, HostExtend, Group
 from apps.host import utils
+from apps.account import access
 import json
 
 
-@auth('host.host.add')
+@auth('host.host.import')
 def get_regions(request):
     form, error = JsonParser(
         Argument('type', filter=lambda x: x in ('ali', 'tencent'), help='参数错误'),
@@ -26,7 +27,7 @@ def get_regions(request):
     return json_response(error=error)
 
 
-@auth('host.host.add')
+@auth('host.host.import')
 def cloud_import(request):
     form, error = JsonParser(
         Argument('type', filter=lambda x: x in ('ali', 'tencent'), help='参数错误'),
@@ -39,25 +40,36 @@ def cloud_import(request):
         Argument('host_type', filter=lambda x: x in ('public', 'private'), help='请选择连接地址'),
     ).parse(request.body)
     if error is None:
-        group = Group.objects.filter(pk=form.group_id).first()
-        if not group:
-            return json_response(error='未找到指定分组')
+        group = access.require_groups(request.user, 'host', [form.group_id], manage=True).get()
         if form.type == 'ali':
             instances = utils.fetch_ali_instances(form.ak, form.ac, form.region_id)
         else:
             instances = utils.fetch_tencent_instances(form.ak, form.ac, form.region_id)
 
-        host_add_ids = []
+        candidates = []
         for item in instances:
+            item = dict(item)
             instance_id = item['instance_id']
             host_name = item.pop('instance_name')
             public_ips = item['public_ip_address'] or []
             private_ips = item['private_ip_address'] or []
             item['public_ip_address'] = json.dumps(public_ips)
             item['private_ip_address'] = json.dumps(private_ips)
-            if HostExtend.objects.filter(instance_id=instance_id).exists():
-                HostExtend.objects.filter(instance_id=instance_id).update(**item)
-            else:
+            extends = list(HostExtend.objects.filter(instance_id=instance_id))
+            if extends:
+                access.require(request.user, 'host.host.edit')
+                access.require_resources(request.user, 'host', [x.host_id for x in extends], manage=True)
+            candidates.append((item, host_name, public_ips, private_ips, extends))
+        host_add_ids = []
+        with access.quota_guard([request.user.pk], actor=request.user):
+            access.require(request.user, 'host.host.import')
+            access.require_groups(request.user, 'host', [form.group_id], manage=True)
+            for item, host_name, public_ips, private_ips, extends in candidates:
+                if extends:
+                    access.require(request.user, 'host.host.edit')
+                    access.require_resources(request.user, 'host', [x.host_id for x in extends], manage=True)
+                    HostExtend.objects.filter(pk__in=[x.pk for x in extends]).update(**item)
+                    continue
                 if form.host_type == 'public':
                     hostname = public_ips[0] if public_ips else ''
                 else:
@@ -70,7 +82,7 @@ def cloud_import(request):
                     created_by=request.user)
                 HostExtend.objects.create(host=host, **item)
                 host_add_ids.append(host.id)
-        if host_add_ids:
-            group.hosts.add(*host_add_ids)
+            if host_add_ids:
+                group.hosts.add(*host_add_ids)
         return json_response(len(instances))
     return json_response(error=error)
