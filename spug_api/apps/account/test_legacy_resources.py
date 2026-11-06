@@ -1,9 +1,10 @@
 """Legacy entry points must carry the actual actor and all resource targets."""
 import json
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from django.test import TestCase, RequestFactory
+from django.test import TestCase, RequestFactory, override_settings
 from apps.account.models import User, Role
 from apps.host.models import Host
 from apps.exec.models import ExecTemplate
@@ -118,12 +119,15 @@ class LegacyResourceTests(TestCase):
         nodes = [{'id': '1', 'module': 'ssh_exec', 'targets': [self.host.pk], 'command': 'true'}]
         pipe = Pipeline.objects.create(name='own', created_by=self.a, nodes=json.dumps(nodes))
         record = PipeHistory.objects.create(pipeline=pipe, ordinal=1, nodes=json.dumps(nodes), created_by=self.a)
-        executor = pipeline.NodeExecutor(Mock(), 'fixture', nodes, history_id=record.pk)
-        self.addCleanup(executor.helper.clear)
-        self.a.roles.clear()
-        with patch.object(self.host, 'get_ssh') as connect:
-            self.assertFalse(executor._ssh_exec(self.host, AttrDict(nodes[0])))
-        connect.assert_not_called()
+        with tempfile.TemporaryDirectory() as directory, override_settings(DEPLOY_DIR=directory):
+            executor = pipeline.NodeExecutor(Mock(), 'fixture', nodes, history_id=record.pk)
+            self.a.roles.clear()
+            try:
+                with patch.object(Host, 'get_ssh') as connect:
+                    self.assertFalse(executor._ssh_exec(self.host, AttrDict(nodes[0])))
+                connect.assert_not_called()
+            finally:
+                executor.helper.clear()
 
     def test_unattributed_legacy_notifications_are_admin_only(self):
         from apps.notify.models import Notify
