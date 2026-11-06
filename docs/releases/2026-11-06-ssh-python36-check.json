@@ -1,0 +1,30 @@
+{
+  "job_id": 58,
+  "state": "success",
+  "source_counts": {
+    "host:1": 5,
+    "host:2": 4
+  },
+  "certificate_stats": {
+    "normal": 5,
+    "expired": 4,
+    "error": 0,
+    "stale": 0
+  },
+  "all_nine_have_expiry": true,
+  "source_preferences_preserved": true,
+  "old_job_preserved": true,
+  "no_renewal_job_created": true,
+  "revision": "f72d157c451ec6821a85c6f66e5bc1e3c22509cf",
+  "expected_ssl_data_changes_only": true,
+  "changed_tables": [
+    "monitor_ssl_certificates",
+    "monitor_ssl_jobs",
+    "monitor_ssl_leases",
+    "monitor_ssl_reminders",
+    "monitor_ssl_sources",
+    "schema_sha256"
+  ],
+  "backup_and_current_ddl_match_except_auto_increment": true,
+  "all_other_business_and_schema_preserved": true
+}
