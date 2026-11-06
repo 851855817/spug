@@ -117,6 +117,16 @@ class FrozenMigrationTests(unittest.TestCase):
         for image in (candidate, rollback):
             self.assertLessEqual(image.count('COPY '), 2)
 
+    def test_image_copy_preserves_exact_existing_migration_tool_without_opening_tools(self):
+        contract = load(self, 'contract.py')
+        arguments = ('a' * 40, contract.MIGRATIONS, {'apps/account/access.py': 'b' * 64})
+        contract.dockerfiles(*arguments,
+            preserved_api_sha256={'tools/migrate.py': 'c' * 64},
+            rollback_api_sha256={'tools/migrate.py': 'c' * 64})
+        for name in ('tools/other.py', 'tools/migrate.json', 'tools/../migrate.py', '/tools/migrate.py'):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'image-copy-path-invalid'):
+                contract.dockerfiles(*arguments, preserved_api_sha256={name: 'c' * 64})
+
 
 class SchemaPreservationTests(unittest.TestCase):
     def snapshots(self):

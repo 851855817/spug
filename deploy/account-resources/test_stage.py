@@ -65,6 +65,19 @@ class StageFactsTests(unittest.TestCase):
             # A matching stage-files.json cannot alter the external scope's hashes.
             with self.assertRaises(ValueError): stage.validate_source(root, expected)
 
+    def test_materialize_preserves_exact_existing_migration_tool_without_opening_tools(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'source/tools/migrate.py'
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b'existing migration utility')
+            expected = {'tools/migrate.py': stage.sha(source.read_bytes())}
+            stage.materialize(root / 'image', expected, lambda name: source)
+            self.assertEqual(stage.tree(root / 'image'), expected)
+            for index, name in enumerate(('tools/other.py', 'tools/migrate.json', 'tools/../migrate.py', '/tools/migrate.py')):
+                with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'image-source-path-invalid'):
+                    stage.materialize(root / ('rejected-' + str(index)), {name: expected['tools/migrate.py']}, lambda name: source)
+
     def test_image_updates_allow_the_same_reviewed_migration_in_api_and_history(self):
         self.assertEqual(stage.image_updates({'old.py': 'a'}, {'new.py': 'b'}, {'new.py': 'b'}),
                          {'old.py': 'a', 'new.py': 'b'})

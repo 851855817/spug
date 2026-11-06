@@ -64,7 +64,7 @@ def materialize(destination, expected, origin):
     require(not destination.exists(), 'image-source-tree-already-exists')
     data = {}
     for name, expected_sha in expected.items():
-        require((name == 'manage.py' or name.startswith(('apps/', 'libs/', 'consumer/', 'spug/')))
+        require((name in ('manage.py', 'tools/migrate.py') or name.startswith(('apps/', 'libs/', 'consumer/', 'spug/')))
                 and '..' not in Path(name).parts and '\\' not in name, 'image-source-path-invalid')
         path = origin(name)
         require(path.is_file() and not path.is_symlink(), 'image-source-missing-or-linked')

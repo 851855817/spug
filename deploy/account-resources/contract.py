@@ -161,7 +161,7 @@ def dockerfiles(revision, migration_paths, api_sha256, preserved_api_sha256=None
              "sed -i 's/^python3 manage.py updatedb$/python3 manage.py migrate --noinput/' /entrypoint.sh && "
              "! grep -Eq 'updatedb|makemigrations' /entrypoint.sh\n")
     paths = set(api_sha256) | set(migration_paths) | set(preserved_api_sha256 or {}) | set(rollback_api_sha256 or {}) | set(history_sha256 or {})
-    require(all((p == 'manage.py' or re.fullmatch(r'(apps|libs|consumer|spug)/[A-Za-z0-9_./-]+\.(py|json)', p))
+    require(all((p in ('manage.py', 'tools/migrate.py') or re.fullmatch(r'(apps|libs|consumer|spug)/[A-Za-z0-9_./-]+\.(py|json)', p))
                 and '..' not in p.split('/') for p in paths), 'image-copy-path-invalid')
     candidate = (header + 'LABEL org.opencontainers.image.revision="' + revision + '"\n' + patch +
                  'ENV KOPS_RESOURCE_AUDIT_LOG=/data/logs/resource-access.log\n' +
