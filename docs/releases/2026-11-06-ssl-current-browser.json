@@ -1,0 +1,583 @@
+{
+  "fixture": "http://127.0.0.1:62565",
+  "real_headless_browser": true,
+  "fresh_temporary_profile": true,
+  "resolver_blocks_non_loopback": true,
+  "mocked_api_only": true,
+  "assertions": [
+    "disabled and failed source certificate snapshots are absent",
+    "enabled source failure remains explicit",
+    "disabled source history and stale status are not shown",
+    "current result count excludes stale snapshots",
+    "list refresh keeps stale snapshots absent",
+    "expired rows offer individual hiding",
+    "normal rows do not offer hiding",
+    "selected expired certificate is removed while other expired record remains",
+    "personal hiding is independent of reminder",
+    "visible count excludes selected certificate",
+    "hiding persists after full reload",
+    "hidden view exposes restore and correct count",
+    "restored certificate reappears in normal view",
+    "failed save leaves selected certificate visible",
+    "another account still sees hidden certificate",
+    "original account retains its own hidden preference",
+    "dark compact table retains restore action with horizontal scroll",
+    "new certificate cycle reappears automatically",
+    "new cycle is absent from old hidden view",
+    "only recognized cache GETs and mock visibility writes",
+    "hide and restore sequence is exact; failed save did not persist",
+    "all page traffic stays on loopback"
+  ],
+  "runtime_exceptions": [],
+  "console_errors": [],
+  "network_requests": [
+    {
+      "url": "http://127.0.0.1:62565/monitor/ssl",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/css/main.7285c5b0.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/js/2.7605ff44.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/js/main.9d9143e4.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/certificates/41/visibility/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/monitor/ssl",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/css/main.7285c5b0.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/js/2.7605ff44.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/js/main.9d9143e4.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?hidden=1&page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/certificates/41/visibility/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?hidden=1&page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/certificates/41/visibility/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/certificates/41/visibility/",
+      "method": "POST"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/monitor/ssl",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/css/main.7285c5b0.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/js/2.7605ff44.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/js/main.9d9143e4.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/monitor/ssl",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/css/main.7285c5b0.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/js/2.7605ff44.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/js/main.9d9143e4.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/monitor/ssl",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/css/main.7285c5b0.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/js/2.7605ff44.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/js/main.9d9143e4.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?hidden=1&page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/monitor/ssl",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/css/2.88ef4cd8.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/css/main.7285c5b0.chunk.css",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/js/2.7605ff44.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/static/js/main.9d9143e4.chunk.js",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/manifest.json",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/setting/appearance/public/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/notify/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/reminders/?muted=0&page=1&page_size=5",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/setting/user/",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/kops-20261027/favicon.svg",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?hidden=1&page=1&page_size=20",
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:62565/api/monitor/ssl/?page=1&page_size=20",
+      "method": "GET"
+    }
+  ],
+  "blocked_outbound_requests": [],
+  "screenshots": [
+    "docs/releases/ssl-current-shots/01-hide-expired-action.png",
+    "docs/releases/ssl-current-shots/02-hidden-certificate-restore.png",
+    "docs/releases/ssl-current-shots/03-dark-restore-column.png",
+    "docs/releases/ssl-current-shots/04-narrow-filter-controls.png"
+  ],
+  "revision": "0cff37e5750e532fcc0563240c5eea542ff6e0db",
+  "working_tree_dirty": false,
+  "tested_ui_source_sha256": {
+    "src/pages/ssl-monitor/index.js": "1255afa6f1dfbe72cb0a1d62028af8ab45dca6174ea1a90dd09d5f3995bc598f",
+    "src/pages/ssl-monitor/index.module.less": "40625e17e556878d9efc08471d04bb8c654f2d5de888489342befaea39131bcb"
+  },
+  "mock_requests": [
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "POST",
+      "path": "/api/monitor/ssl/certificates/41/visibility/",
+      "hidden": true,
+      "cycle": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "POST",
+      "path": "/api/monitor/ssl/certificates/41/visibility/",
+      "hidden": false,
+      "cycle": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "POST",
+      "path": "/api/monitor/ssl/certificates/41/visibility/",
+      "hidden": true,
+      "cycle": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "method": "POST",
+      "path": "/api/monitor/ssl/certificates/41/visibility/",
+      "hidden": true,
+      "cycle": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/appearance/public/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notify/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/reminders/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/setting/user/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    },
+    {
+      "method": "GET",
+      "path": "/api/monitor/ssl/"
+    }
+  ],
+  "passed": true,
+  "mock_personal_writes": 4,
+  "customer_requests": 0,
+  "build_asset": "/static/js/main.9d9143e4.chunk.js",
+  "build_asset_sha256": "9f9665f90fe4b713f68ff942bfe85d2e1b3ca8b9fc808c68a61025b7fb0c7d58"
+}
