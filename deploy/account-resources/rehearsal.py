@@ -28,6 +28,9 @@ def main():
     spec = importlib.util.spec_from_file_location('resource_contract_rehearsed', utilities / 'contract.py')
     contract = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(contract)
+    schema_spec = importlib.util.spec_from_file_location('resource_schema_rehearsed', utilities / 'schema.py')
+    schema_module = importlib.util.module_from_spec(schema_spec)
+    schema_spec.loader.exec_module(schema_module)
     manifest_path = Path('/prepared/migration-manifest.json')
     manifest = json.loads(manifest_path.read_text())
     facts = contract.validate_migrations({name: Path(name).read_text() for name in manifest['migrations']})
@@ -43,9 +46,11 @@ def main():
                 values = list(model.objects.order_by('pk').values())
                 business[model._meta.db_table] = {'count': len(values), 'digest': digest(values)}
         with connection.cursor() as cursor:
-            schema = {table: digest({'columns': connection.introspection.get_table_description(cursor, table),
-                                     'constraints': connection.introspection.get_constraints(cursor, table)})
-                      for table in sorted(tables)}
+            schema = {}
+            for table in sorted(tables):
+                metadata = {'columns': connection.introspection.get_table_description(cursor, table),
+                            'constraints': connection.introspection.get_constraints(cursor, table)}
+                schema[table] = digest(schema_module.addition_schema(**metadata) if table in contract.TABLES else metadata)
             cursor.execute('SELECT app,name,applied FROM django_migrations ORDER BY app,name')
             migrations = {row[0] + '/' + row[1]: digest(row) for row in cursor.fetchall()}
         return {'schema': schema, 'business': business, 'migrations': migrations}
@@ -104,6 +109,7 @@ def main():
     assert snapshot() == stable, 'repeat initialization changed rows'
     assert all(stable['business'][name] == value for name, value in before['business'].items())
     assert all(stable['schema'][name] == value for name, value in before['schema'].items())
+    assert stable['schema'] == after['schema'], 'initialization changed structural schema metadata'
     assert all(stable['migrations'][name] == value for name, value in before['migrations'].items())
     assert OldHost.objects.get(pk=host.pk).created_by_id == regular.pk
     assert OldPanel.objects.get(pk=panel.pk).created_by_id == regular.pk
@@ -117,6 +123,7 @@ def main():
              'read_only_impact': True, 'idempotent_explicit_initialization': True,
              'nonempty_legacy_preserved': True, 'historical_orm_reads': True,
              'partial_history_refused': True}
+    proof['initialization_schema_stable'] = True
     Path('/tmp/resource-rehearsal.json').write_text(json.dumps(proof, indent=2, sort_keys=True))
     print(json.dumps(proof, sort_keys=True))
 

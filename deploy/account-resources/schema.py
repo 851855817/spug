@@ -1,11 +1,21 @@
 """Retain the existing idle/credential guard and expose all nine additions."""
 import importlib.util
+import inspect
 from pathlib import Path
 
 
 spec = importlib.util.spec_from_file_location('resource_probe_contract', Path(__file__).with_name('contract.py'))
 contract = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(contract)
+
+
+def addition_schema(columns, constraints):
+    # MySQLdb display_size describes SELECT ... LIMIT 1's sample value, so it
+    # changes when an empty table gets its first row. All structural fields stay.
+    fields = ('name', 'type_code', 'display_size', 'internal_size', 'precision', 'scale',
+              'null_ok', 'default', 'collation', 'extra', 'is_unsigned', 'has_json_constraint', 'comment')
+    assert all(getattr(column, '_fields', None) == fields for column in columns), 'Unknown schema metadata shape'
+    return {'columns': [column._replace(display_size=None) for column in columns], 'constraints': constraints}
 
 
 def build_probe(legacy):
@@ -25,14 +35,15 @@ def build_probe(legacy):
     for old, new in substitutions.items():
         contract.require(legacy.count(old) == 1, 'preservation-probe-anchor-mismatch')
         legacy = legacy.replace(old, new)
-    helper = '''
+    helper = inspect.getsource(addition_schema) + '''
 def resource_envelope(business):
     full_schema = {}
     with connection.cursor() as cursor:
         for table in sorted(connection.introspection.table_names()):
-            full_schema[table] = digest({
+            metadata = {
                 'columns': connection.introspection.get_table_description(cursor, table),
-                'constraints': connection.introspection.get_constraints(cursor, table)})
+                'constraints': connection.introspection.get_constraints(cursor, table)}
+            full_schema[table] = digest(addition_schema(**metadata) if table in RESOURCE_ADDITIONS else metadata)
         cursor.execute('SELECT app, name, applied FROM django_migrations ORDER BY app, name')
         migrations = {row[0] + '/' + row[1]: digest(row) for row in cursor.fetchall()}
     # Old runtime ignores added tables. Its retained frozen migration history
